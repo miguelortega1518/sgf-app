@@ -72,7 +72,7 @@ export async function GET() {
     const ws = XLSX.utils.json_to_sheet(data);
 
     const colWidths = Object.keys(data[0] || {}).map(key => ({
-      wch: Math.max(key.length, ...data.map(r => String((r as Record<string, string>)[key] || '').length)).toString().length + 2,
+      wch: Math.max(key.length, ...data.map(r => String((r as Record<string, string>)[key] || '').length)) + 2,
     }));
     ws['!cols'] = colWidths;
 
