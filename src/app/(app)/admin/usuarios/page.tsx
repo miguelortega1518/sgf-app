@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Users, Plus, X, Pencil, KeyRound, Check } from 'lucide-react';
+import { useToast } from '@/components/providers/toast-provider';
 
 type User = {
   id: string;
@@ -25,6 +26,7 @@ const ROLE_STYLES: Record<string, string> = {
 };
 
 export default function UsuariosPage() {
+  const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -57,7 +59,7 @@ export default function UsuariosPage() {
       setShowForm(false);
     } else {
       const data = await res.json();
-      alert(data.error || 'Error al crear usuario');
+      toast(data.error || 'Error al crear usuario', 'error');
     }
     setSaving(false);
   }
@@ -93,14 +95,14 @@ export default function UsuariosPage() {
       setEditingId(null);
     } else {
       const data = await res.json();
-      alert(data.error || 'Error al actualizar');
+      toast(data.error || 'Error al actualizar', 'error');
     }
     setSaving(false);
   }
 
   async function handleResetPassword(id: string) {
     if (!newPassword || newPassword.length < 8) {
-      alert('La contraseña debe tener mínimo 8 caracteres');
+      toast('La contraseña debe tener mínimo 8 caracteres', 'warning');
       return;
     }
     setSaving(true);
@@ -112,10 +114,10 @@ export default function UsuariosPage() {
     if (res.ok) {
       setResetId(null);
       setNewPassword('');
-      alert('Contraseña actualizada');
+      toast('Contraseña actualizada');
     } else {
       const data = await res.json();
-      alert(data.error || 'Error al cambiar contraseña');
+      toast(data.error || 'Error al cambiar contraseña', 'error');
     }
     setSaving(false);
   }

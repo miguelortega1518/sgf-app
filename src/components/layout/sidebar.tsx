@@ -162,7 +162,11 @@ export function Sidebar() {
               </span>
             )}
           </Link>
-          <div className="flex items-center gap-3 px-3 py-2">
+          <Link
+            href="/perfil"
+            className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors"
+            title={collapsed ? 'Mi perfil' : undefined}
+          >
             <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-medium flex items-center justify-center">
               {user.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
             </div>
@@ -172,7 +176,7 @@ export function Sidebar() {
                 <p className="text-xs text-gray-500 truncate">{user.role}</p>
               </div>
             )}
-          </div>
+          </Link>
           <button
             onClick={logout}
             className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-100 w-full"

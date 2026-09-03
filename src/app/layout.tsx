@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { SessionProvider } from '@/components/providers/session-provider';
+import { ToastProvider } from '@/components/providers/toast-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,7 +20,9 @@ export default function RootLayout({
     <html lang="es" className="h-full">
       <body className={`${inter.className} h-full bg-gray-50 text-gray-900 antialiased`}>
         <SessionProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </SessionProvider>
       </body>
     </html>

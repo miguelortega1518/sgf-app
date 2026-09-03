@@ -6,8 +6,9 @@ import { useSession } from '@/lib/hooks/use-session';
 import { formatDateRD } from '@/lib/date-utils';
 import {
   Plus, Users, Calendar, Target, Building2, ChevronDown,
-  ChevronRight, Play, XCircle, CheckCircle2,
+  ChevronRight, Play, XCircle, CheckCircle2, Pencil, Heart,
 } from 'lucide-react';
+import { useToast } from '@/components/providers/toast-provider';
 
 type TaskItem = {
   id: string;
@@ -72,10 +73,15 @@ export default function SpaceDetailPage() {
   const router = useRouter();
   const [data, setData] = useState<SpaceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
   const [showNewTask, setShowNewTask] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [people, setPeople] = useState<{ id: string; name: string }[]>([]);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [editingSpace, setEditingSpace] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editObjective, setEditObjective] = useState('');
+  const [editTargetDate, setEditTargetDate] = useState('');
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/spaces/${id}`);
@@ -106,11 +112,32 @@ export default function SpaceDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     });
-    if (res.ok) fetchData();
+    if (res.ok) { fetchData(); toast(action === 'activar' ? 'Espacio activado' : 'Espacio cerrado'); }
     else {
       const body = await res.json();
       setActionError(body.error || 'Error al cambiar el estado');
     }
+  }
+
+  function startEditingSpace() {
+    if (!data) return;
+    setEditName(data.space.name);
+    setEditObjective(data.space.objective || '');
+    setEditTargetDate(data.space.targetDate || '');
+    setEditingSpace(true);
+  }
+
+  async function saveSpaceEdit() {
+    const res = await fetch(`/api/spaces/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editName,
+        objective: editObjective || null,
+        targetDate: editTargetDate || null,
+      }),
+    });
+    if (res.ok) { setEditingSpace(false); fetchData(); toast('Espacio actualizado'); }
   }
 
   if (loading || !data) {
@@ -142,9 +169,22 @@ export default function SpaceDetailPage() {
         members={members}
         tasks={spaceTasks}
         isAdmin={isAdmin ?? false}
+        canEdit={user?.role !== 'observador' && space.status !== 'cerrado'}
+        editing={editingSpace}
+        editName={editName}
+        editObjective={editObjective}
+        editTargetDate={editTargetDate}
+        onEditName={setEditName}
+        onEditObjective={setEditObjective}
+        onEditTargetDate={setEditTargetDate}
+        onStartEdit={startEditingSpace}
+        onSaveEdit={saveSpaceEdit}
+        onCancelEdit={() => setEditingSpace(false)}
         onActivate={() => handleSpaceAction('activar')}
         onClose={() => handleSpaceAction('cerrar')}
       />
+
+      <HealthUpdatesSection spaceId={space.id} canPost={user?.role !== 'observador' && space.status === 'activo'} />
 
       <div className="flex items-center justify-between mb-4 mt-6">
         <h2 className="text-lg font-medium text-gray-900">
@@ -191,12 +231,27 @@ export default function SpaceDetailPage() {
 }
 
 function SpaceHeader({
-  space, members, tasks, isAdmin, onActivate, onClose,
+  space, members, tasks, isAdmin, canEdit,
+  editing, editName, editObjective, editTargetDate,
+  onEditName, onEditObjective, onEditTargetDate,
+  onStartEdit, onSaveEdit, onCancelEdit,
+  onActivate, onClose,
 }: {
   space: SpaceData['space'];
   members: SpaceData['members'];
   tasks: TaskItem[];
   isAdmin: boolean;
+  canEdit?: boolean;
+  editing: boolean;
+  editName: string;
+  editObjective: string;
+  editTargetDate: string;
+  onEditName: (v: string) => void;
+  onEditObjective: (v: string) => void;
+  onEditTargetDate: (v: string) => void;
+  onStartEdit: () => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
   onActivate: () => void;
   onClose: () => void;
 }) {
@@ -220,54 +275,49 @@ function SpaceHeader({
         </span>
       </div>
 
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{space.name}</h1>
-          {space.objective && (
-            <p className="text-sm text-gray-600 mt-1">{space.objective}</p>
-          )}
-
-          <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
-            <span className="flex items-center gap-1">
-              <Users size={14} />
-              {members.length} miembros
-            </span>
-            {space.targetDate && (
-              <span className="flex items-center gap-1">
-                <Target size={14} />
-                Meta: {formatDateRD(space.targetDate)}
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <Calendar size={14} />
-              {completed}/{total} tareas
-            </span>
+      {editing ? (
+        <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4 mt-2">
+          <input value={editName} onChange={e => onEditName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" autoFocus />
+          <textarea value={editObjective} onChange={e => onEditObjective(e.target.value)} placeholder="Objetivo (opcional)" rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Fecha meta</label>
+            <input type="date" value={editTargetDate} onChange={e => onEditTargetDate(e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-md text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onSaveEdit} disabled={!editName.trim()} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">Guardar</button>
+            <button onClick={onCancelEdit} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
           </div>
         </div>
-
-        {isAdmin && (
-          <div className="flex gap-2">
-            {space.status === 'borrador' && (
-              <button
-                onClick={onActivate}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"
-              >
-                <Play size={14} />
-                Activar
-              </button>
-            )}
-            {space.status === 'activo' && (
-              <button
-                onClick={onClose}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"
-              >
-                <XCircle size={14} />
-                Cerrar ciclo
-              </button>
-            )}
+      ) : (
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-semibold text-gray-900">{space.name}</h1>
+              {canEdit && (
+                <button onClick={onStartEdit} className="text-gray-400 hover:text-blue-600 p-1" title="Editar espacio">
+                  <Pencil size={16} />
+                </button>
+              )}
+            </div>
+            {space.objective && <p className="text-sm text-gray-600 mt-1">{space.objective}</p>}
+            <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+              <span className="flex items-center gap-1"><Users size={14} />{members.length} miembros</span>
+              {space.targetDate && <span className="flex items-center gap-1"><Target size={14} />Meta: {formatDateRD(space.targetDate)}</span>}
+              <span className="flex items-center gap-1"><Calendar size={14} />{completed}/{total} tareas</span>
+            </div>
           </div>
-        )}
-      </div>
+          {isAdmin && (
+            <div className="flex gap-2">
+              {space.status === 'borrador' && (
+                <button onClick={onActivate} className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"><Play size={14} />Activar</button>
+              )}
+              {space.status === 'activo' && (
+                <button onClick={onClose} className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"><XCircle size={14} />Cerrar ciclo</button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4">
@@ -631,5 +681,113 @@ function NewTaskForm({
         </button>
       </div>
     </form>
+  );
+}
+
+const HEALTH_CONFIG = {
+  verde: { label: 'Verde', color: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  amarillo: { label: 'Amarillo', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' },
+  rojo: { label: 'Rojo', color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
+};
+
+type HealthUpdate = {
+  id: string;
+  health: string;
+  content: string;
+  createdAt: string;
+  authorName: string;
+};
+
+function HealthUpdatesSection({ spaceId, canPost }: { spaceId: string; canPost: boolean }) {
+  const [updates, setUpdates] = useState<HealthUpdate[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [health, setHealth] = useState<'verde' | 'amarillo' | 'rojo'>('verde');
+  const [content, setContent] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/spaces/${spaceId}/updates`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setUpdates)
+      .catch(() => {});
+  }, [spaceId]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!content.trim()) return;
+    setSubmitting(true);
+    const res = await fetch(`/api/spaces/${spaceId}/updates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ health, content: content.trim() }),
+    });
+    if (res.ok) {
+      const updated = await fetch(`/api/spaces/${spaceId}/updates`).then(r => r.json());
+      setUpdates(updated);
+      setContent('');
+      setShowForm(false);
+    }
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="mt-6 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+          <Heart size={14} />
+          Actualizaciones de salud
+        </h3>
+        {canPost && (
+          <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+            <Plus size={12} />Publicar
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="bg-gray-50 border rounded-lg p-3 mb-3 space-y-2">
+          <div className="flex gap-2">
+            {(['verde', 'amarillo', 'rojo'] as const).map(h => {
+              const cfg = HEALTH_CONFIG[h];
+              return (
+                <button key={h} type="button" onClick={() => setHealth(h)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                    health === h ? cfg.color + ' border-current' : 'border-gray-200 text-gray-500'
+                  }`}>
+                  <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                  {cfg.label}
+                </button>
+              );
+            })}
+          </div>
+          <textarea value={content} onChange={e => setContent(e.target.value)} placeholder="Describe el estado actual..." rows={2}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+          <div className="flex gap-2">
+            <button type="submit" disabled={submitting || !content.trim()} className="px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50">Publicar</button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-1 text-xs text-gray-600">Cancelar</button>
+          </div>
+        </form>
+      )}
+
+      {updates.length > 0 ? (
+        <div className="space-y-2">
+          {updates.slice(0, 5).map(u => {
+            const cfg = HEALTH_CONFIG[u.health as keyof typeof HEALTH_CONFIG] || HEALTH_CONFIG.verde;
+            return (
+              <div key={u.id} className="bg-white border border-gray-200 rounded-lg px-3 py-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                  <span className="text-xs font-medium text-gray-700">{u.authorName}</span>
+                  <span className="text-xs text-gray-400">{formatDateRD(u.createdAt.slice(0, 10))}</span>
+                </div>
+                <p className="text-sm text-gray-600">{u.content}</p>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400">Sin actualizaciones</p>
+      )}
+    </div>
   );
 }

@@ -8,7 +8,9 @@ import {
   Calendar, User, Building2, Clock, FileText,
   Link as LinkIcon, Image, Paperclip, Trash2, Plus,
   MessageSquare, Send, ShieldAlert, X, AlertTriangle,
+  Pencil, Check, Square, CheckSquare,
 } from 'lucide-react';
+import { useToast } from '@/components/providers/toast-provider';
 
 type TaskDetail = {
   task: {
@@ -80,9 +82,16 @@ export default function TaskDetailPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const { toast } = useToast();
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPriority, setEditPriority] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   async function handleStatusChange(status: string, extra?: Record<string, unknown>) {
     setStatusError(null);
@@ -91,11 +100,36 @@ export default function TaskDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, ...extra }),
     });
-    if (res.ok) fetchData();
+    if (res.ok) { fetchData(); toast('Estado actualizado'); }
     else {
       const body = await res.json();
       setStatusError(body.error || 'Error al cambiar el estado');
     }
+  }
+
+  function startEditing() {
+    if (!data) return;
+    setEditTitle(data.task.title);
+    setEditDescription(data.task.description || '');
+    setEditDueDate(data.task.dueDate || '');
+    setEditPriority(data.task.priority);
+    setEditing(true);
+  }
+
+  async function saveEdit() {
+    setEditSaving(true);
+    const res = await fetch(`/api/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: editTitle,
+        description: editDescription || null,
+        dueDate: editDueDate || null,
+        priority: editPriority,
+      }),
+    });
+    if (res.ok) { setEditing(false); fetchData(); toast('Tarea actualizada'); }
+    setEditSaving(false);
   }
 
   function handleCompleteClick() {
@@ -122,40 +156,86 @@ export default function TaskDetailPage() {
   return (
     <div className="p-6 max-w-3xl">
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">{task.title}</h1>
+        {editing ? (
+          <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <input
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+            <textarea
+              value={editDescription}
+              onChange={e => setEditDescription(e.target.value)}
+              placeholder="Descripción (opcional)"
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Fecha límite</label>
+                <input
+                  type="date"
+                  value={editDueDate}
+                  onChange={e => setEditDueDate(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Prioridad</label>
+                <select
+                  value={editPriority}
+                  onChange={e => setEditPriority(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+                >
+                  <option value="critica">Crítica</option>
+                  <option value="alta">Alta</option>
+                  <option value="normal">Normal</option>
+                  <option value="baja">Baja</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={saveEdit} disabled={editSaving || !editTitle.trim()} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">
+                Guardar
+              </button>
+              <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between">
+              <h1 className="text-xl font-semibold text-gray-900">{task.title}</h1>
+              {user?.role !== 'observador' && task.status !== 'completada' && (
+                <button onClick={startEditing} className="text-gray-400 hover:text-blue-600 p-1" title="Editar tarea">
+                  <Pencil size={16} />
+                </button>
+              )}
+            </div>
 
-        <div className="flex items-center gap-3 mt-3 flex-wrap">
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-            STATUS_COLORS[task.status]
-          }`}>
-            {STATUS_LABELS[task.status]}
-          </span>
-
-          {task.overdue && (
-            <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-              Vencida
-            </span>
-          )}
-
-          <span className="flex items-center gap-1 text-sm text-gray-600">
-            <User size={14} />
-            {task.responsibleName}
-          </span>
-
-          {task.dueDate && (
-            <span className={`flex items-center gap-1 text-sm ${
-              task.overdue ? 'text-red-600' : 'text-gray-600'
-            }`}>
-              <Calendar size={14} />
-              {formatDateRD(task.dueDate)}
-              {task.dueDateOriginal && task.dueDate !== task.dueDateOriginal && (
-                <span className="text-xs text-gray-400 line-through ml-1">
-                  {formatDateRD(task.dueDateOriginal)}
+            <div className="flex items-center gap-3 mt-3 flex-wrap">
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[task.status]}`}>
+                {STATUS_LABELS[task.status]}
+              </span>
+              {task.overdue && (
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Vencida</span>
+              )}
+              <span className="flex items-center gap-1 text-sm text-gray-600">
+                <User size={14} />{task.responsibleName}
+              </span>
+              {task.dueDate && (
+                <span className={`flex items-center gap-1 text-sm ${task.overdue ? 'text-red-600' : 'text-gray-600'}`}>
+                  <Calendar size={14} />{formatDateRD(task.dueDate)}
+                  {task.dueDateOriginal && task.dueDate !== task.dueDateOriginal && (
+                    <span className="text-xs text-gray-400 line-through ml-1">{formatDateRD(task.dueDateOriginal)}</span>
+                  )}
                 </span>
               )}
-            </span>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {task.doneDefinition && (
@@ -263,6 +343,13 @@ export default function TaskDetailPage() {
         />
       )}
 
+      <SubtasksSection
+        taskId={task.id}
+        subtasks={subtasks}
+        canEdit={user?.role !== 'observador' && task.status !== 'completada'}
+        onChanged={fetchData}
+      />
+
       <EvidenceSection
         taskId={task.id}
         evidence={taskEvidence}
@@ -304,6 +391,110 @@ export default function TaskDetailPage() {
             ))}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function SubtasksSection({
+  taskId, subtasks: items, canEdit, onChanged,
+}: {
+  taskId: string;
+  subtasks: TaskDetail['subtasks'];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [newTitle, setNewTitle] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    setAdding(true);
+    const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle.trim() }),
+    });
+    if (res.ok) { setNewTitle(''); onChanged(); }
+    setAdding(false);
+  }
+
+  async function toggleComplete(subtaskId: string, completed: boolean) {
+    await fetch(`/api/tasks/${taskId}/subtasks`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subtaskId, completed: !completed }),
+    });
+    onChanged();
+  }
+
+  async function handleDelete(subtaskId: string) {
+    await fetch(`/api/tasks/${taskId}/subtasks?subtaskId=${subtaskId}`, { method: 'DELETE' });
+    onChanged();
+  }
+
+  const completedCount = items.filter(s => s.completed).length;
+
+  return (
+    <div className="mt-6 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+          <CheckSquare size={14} />
+          Subtareas ({completedCount}/{items.length})
+        </h3>
+      </div>
+
+      {items.length > 0 && (
+        <div className="space-y-1 mb-3">
+          {items.map(sub => (
+            <div key={sub.id} className="flex items-center gap-2 group">
+              <button
+                onClick={() => canEdit && toggleComplete(sub.id, sub.completed)}
+                className={`shrink-0 ${canEdit ? 'cursor-pointer' : 'cursor-default'}`}
+                disabled={!canEdit}
+              >
+                {sub.completed
+                  ? <CheckSquare size={16} className="text-green-500" />
+                  : <Square size={16} className="text-gray-300" />}
+              </button>
+              <span className={`flex-1 text-sm ${sub.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                {sub.title}
+              </span>
+              {canEdit && (
+                <button
+                  onClick={() => handleDelete(sub.id)}
+                  className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canEdit && (
+        <form onSubmit={handleAdd} className="flex gap-2">
+          <input
+            type="text"
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            placeholder="Agregar subtarea..."
+            className="flex-1 px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={adding || !newTitle.trim()}
+            className="px-2.5 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50"
+          >
+            <Plus size={14} />
+          </button>
+        </form>
+      )}
+
+      {items.length === 0 && !canEdit && (
+        <p className="text-xs text-gray-400">Sin subtareas</p>
       )}
     </div>
   );

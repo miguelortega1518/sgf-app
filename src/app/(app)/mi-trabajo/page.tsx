@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSession } from '@/lib/hooks/use-session';
 import { TaskCard } from '@/components/tasks/task-card';
 import { CheckSquare, Square } from 'lucide-react';
+import { useToast } from '@/components/providers/toast-provider';
 
 type TaskItem = {
   id: string;
@@ -31,6 +32,7 @@ type MyWorkData = {
 
 export default function MiTrabajoPage() {
   const { user } = useSession();
+  const { toast } = useToast();
   const [data, setData] = useState<MyWorkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -86,7 +88,7 @@ export default function MiTrabajoPage() {
       fetchData();
     } else {
       const err = await res.json();
-      alert(err.error || 'Error al actualizar');
+      toast(err.error || 'Error al actualizar', 'error');
     }
     setBatchLoading(false);
   }

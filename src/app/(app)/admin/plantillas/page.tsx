@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Plus, FileText, Upload } from 'lucide-react';
+import { useToast } from '@/components/providers/toast-provider';
 import { useRouter } from 'next/navigation';
 
 type TemplateItem = {
@@ -21,6 +22,7 @@ const PERIODICITY_LABELS: Record<string, string> = {
 
 export default function PlantillasPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -51,7 +53,7 @@ export default function PlantillasPage() {
       const data = await res.json();
       router.push(`/admin/plantillas/${data.template.id}`);
     } else {
-      alert('Error al importar el archivo');
+      toast('Error al importar el archivo', 'error');
       setImporting(false);
     }
     e.target.value = '';
