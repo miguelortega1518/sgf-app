@@ -1,0 +1,24 @@
+databases:
+  - name: sgf-db
+    plan: free
+    databaseName: sgf
+    user: sgf_user
+
+services:
+  - type: web
+    name: sgf-app
+    plan: free
+    runtime: node
+    buildCommand: npm install && npm run db:push && npm run db:custom && npm run build
+    startCommand: PORT=$PORT node .next/standalone/server.js
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sgf-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://sgf-app.onrender.com
