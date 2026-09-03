@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, Plus, X } from 'lucide-react';
+import { Building2, Plus, X, Pencil, Check } from 'lucide-react';
 
 type Company = {
   id: string;
@@ -16,6 +16,8 @@ export default function EmpresasPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
 
   useEffect(() => {
     fetch('/api/companies')
@@ -40,6 +42,42 @@ export default function EmpresasPage() {
     } else {
       const data = await res.json();
       alert(data.error || 'Error al crear empresa');
+    }
+    setSaving(false);
+  }
+
+  async function handleToggleActive(company: Company) {
+    const res = await fetch(`/api/companies/${company.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !company.active }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
+    }
+  }
+
+  function startEdit(company: Company) {
+    setEditingId(company.id);
+    setEditName(company.name);
+  }
+
+  async function handleSaveEdit(id: string) {
+    if (!editName.trim()) return;
+    setSaving(true);
+    const res = await fetch(`/api/companies/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editName }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
+      setEditingId(null);
+    } else {
+      const data = await res.json();
+      alert(data.error || 'Error al actualizar');
     }
     setSaving(false);
   }
@@ -108,22 +146,65 @@ export default function EmpresasPage() {
       ) : (
         <div className="space-y-3">
           {companies.map(c => (
-            <div
-              key={c.id}
-              className="bg-white border border-gray-200 rounded-lg p-4"
-            >
+            <div key={c.id} className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">
                     <Building2 size={18} className="text-blue-600" />
                   </div>
-                  <h3 className="font-medium text-gray-900">{c.name}</h3>
+                  {editingId === c.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-medium"
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleSaveEdit(c.id);
+                          if (e.key === 'Escape') setEditingId(null);
+                        }}
+                      />
+                      <button
+                        onClick={() => handleSaveEdit(c.id)}
+                        disabled={saving}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+                        title="Guardar"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 rounded"
+                        title="Cancelar"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <h3 className="font-medium text-gray-900">{c.name}</h3>
+                  )}
                 </div>
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                  c.active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
-                }`}>
-                  {c.active ? 'Activa' : 'Inactiva'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleToggleActive(c)}
+                    className={`text-xs font-medium px-2 py-1 rounded-full cursor-pointer transition-colors ${
+                      c.active
+                        ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                        : 'bg-red-50 text-red-600 hover:bg-red-100'
+                    }`}
+                  >
+                    {c.active ? 'Activa' : 'Inactiva'}
+                  </button>
+                  {editingId !== c.id && (
+                    <button
+                      onClick={() => startEdit(c)}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                      title="Editar nombre"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
