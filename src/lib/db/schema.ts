@@ -207,6 +207,7 @@ export const tasks = pgTable('tasks', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('idx_task_responsible_due').on(t.responsibleId, t.dueDate),
+  index('idx_task_reviewer').on(t.reviewerId),
   index('idx_task_space_status').on(t.spaceId, t.status),
   index('idx_task_company_space').on(t.companyId, t.spaceId),
 ]);
@@ -219,7 +220,9 @@ export const subtasks = pgTable('subtasks', {
   order: integer('order').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('idx_subtask_task').on(t.taskId),
+]);
 
 export const taskDependencies = pgTable('task_dependencies', {
   taskId: uuid('task_id').notNull().references(() => tasks.id),
@@ -247,6 +250,7 @@ export const comments = pgTable('comments', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   editedAt: timestamp('edited_at', { withTimezone: true }),
 }, (t) => [
+  index('idx_comment_task').on(t.taskId),
   check('chk_comment_target', sql`
     (${t.taskId} IS NOT NULL AND ${t.spaceId} IS NULL) OR
     (${t.taskId} IS NULL AND ${t.spaceId} IS NOT NULL)
@@ -260,7 +264,9 @@ export const evidence = pgTable('evidence', {
   type: evidenceTypeEnum('type').notNull(),
   uploadedBy: uuid('uploaded_by').notNull().references(() => persons.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('idx_evidence_task').on(t.taskId),
+]);
 
 export const auditLog = pgTable('audit_log', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -272,7 +278,9 @@ export const auditLog = pgTable('audit_log', {
   newValue: text('new_value'),
   reason: text('reason'),
   timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('idx_audit_task').on(t.taskId),
+]);
 
 export const notifications = pgTable('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -285,7 +293,9 @@ export const notifications = pgTable('notifications', {
   read: boolean('read').notNull().default(false),
   emailSent: boolean('email_sent').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('idx_notification_recipient').on(t.recipientId),
+]);
 
 // ─── Type exports ─────────────────────────────────────
 

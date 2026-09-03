@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react';
 
 const NAV_ITEMS = [
   { href: '/mi-trabajo', label: 'Mi trabajo', icon: CheckSquare, roles: ['admin', 'miembro', 'observador'] },
+  { href: '/mi-equipo', label: 'Mi equipo', icon: Users, roles: ['admin', 'miembro'] },
   { href: '/panorama', label: 'Panorama', icon: LayoutDashboard, roles: ['admin'] },
   { href: '/espacios', label: 'Espacios', icon: FolderOpen, roles: ['admin', 'miembro', 'observador'] },
 ] as const;
