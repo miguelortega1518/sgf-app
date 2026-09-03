@@ -6,9 +6,11 @@ import { persons } from './db/schema';
 import { eq } from 'drizzle-orm';
 import type { Person } from './db/schema';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'dev-secret'
-);
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+const JWT_SECRET = new TextEncoder().encode(jwtSecret);
 const COOKIE_NAME = 'sgf-session';
 const SESSION_DURATION = 60 * 60 * 24 * 7; // 7 días
 

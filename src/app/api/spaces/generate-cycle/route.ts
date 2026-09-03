@@ -84,81 +84,85 @@ export async function POST(req: NextRequest) {
     const maxDays = Math.max(...tplTasks.map(t => t.businessDayLimit), 0);
     const targetDate = addBusinessDays(anchorDate, maxDays, holidaySet);
 
-    const [space] = await db.insert(spaces).values({
-      name: spaceName,
-      type: 'recurrente',
-      spaceTemplateId: input.spaceTemplateId,
-      period: input.period,
-      anchorDate,
-      objective: `${spaceName} — generado desde plantilla "${template.name}"`,
-      ownerId: input.ownerId,
-      status: 'borrador',
-      targetDate,
-      openDate: anchorDate,
-      templateSnapshot: {
-        templateId: template.id,
-        templateName: template.name,
-        generatedAt: new Date().toISOString(),
-        taskCount: tplTasks.filter(t => t.applies).length,
-      },
-    }).returning();
-
-    const responsibleIds = new Set<string>();
-    responsibleIds.add(input.ownerId);
-
-    const templateIdToTaskId = new Map<string, string>();
-
-    for (const tt of tplTasks) {
-      if (!tt.applies) continue;
-
-      const dueDate = addBusinessDays(anchorDate, tt.businessDayLimit, holidaySet);
-      const responsibleId = tt.defaultResponsibleId || input.ownerId;
-      responsibleIds.add(responsibleId);
-
-      const [task] = await db.insert(tasks).values({
-        spaceId: space.id,
-        templateId: tt.id,
-        companyId: tt.companyId,
-        title: tt.taskName,
-        responsibleId,
-        reviewerId: tt.reviewerId ?? null,
-        creatorId: session.id,
-        dueDate,
-        dueDateOriginal: dueDate,
-        requiresApproval: tt.requiresApproval,
-        requiresEvidence: tt.requiresEvidence,
-        doneDefinition: tt.doneDefinition,
-        instructions: tt.instructions,
+    const result = await db.transaction(async (tx) => {
+      const [space] = await tx.insert(spaces).values({
+        name: spaceName,
+        type: 'recurrente',
+        spaceTemplateId: input.spaceTemplateId,
+        period: input.period,
+        anchorDate,
+        objective: `${spaceName} — generado desde plantilla "${template.name}"`,
+        ownerId: input.ownerId,
+        status: 'borrador',
+        targetDate,
+        openDate: anchorDate,
+        templateSnapshot: {
+          templateId: template.id,
+          templateName: template.name,
+          generatedAt: new Date().toISOString(),
+          taskCount: tplTasks.filter(t => t.applies).length,
+        },
       }).returning();
 
-      templateIdToTaskId.set(tt.id, task.id);
-    }
+      const responsibleIds = new Set<string>();
+      responsibleIds.add(input.ownerId);
 
-    for (const dep of tplDeps) {
-      const taskId = templateIdToTaskId.get(dep.templateId);
-      const predecessorId = templateIdToTaskId.get(dep.predecessorId);
-      if (taskId && predecessorId) {
-        await db.insert(taskDependencies).values({ taskId, predecessorId });
+      const templateIdToTaskId = new Map<string, string>();
+
+      for (const tt of tplTasks) {
+        if (!tt.applies) continue;
+
+        const dueDate = addBusinessDays(anchorDate, tt.businessDayLimit, holidaySet);
+        const responsibleId = tt.defaultResponsibleId || input.ownerId;
+        responsibleIds.add(responsibleId);
+
+        const [task] = await tx.insert(tasks).values({
+          spaceId: space.id,
+          templateId: tt.id,
+          companyId: tt.companyId,
+          title: tt.taskName,
+          responsibleId,
+          reviewerId: tt.reviewerId ?? null,
+          creatorId: session.id,
+          dueDate,
+          dueDateOriginal: dueDate,
+          requiresApproval: tt.requiresApproval,
+          requiresEvidence: tt.requiresEvidence,
+          doneDefinition: tt.doneDefinition,
+          instructions: tt.instructions,
+        }).returning();
+
+        templateIdToTaskId.set(tt.id, task.id);
       }
-    }
 
-    const memberValues = Array.from(responsibleIds).map(personId => ({
-      spaceId: space.id,
-      personId,
-      spaceRole: personId === input.ownerId ? 'dueño' as const : 'colaborador' as const,
-    }));
+      for (const dep of tplDeps) {
+        const taskId = templateIdToTaskId.get(dep.templateId);
+        const predecessorId = templateIdToTaskId.get(dep.predecessorId);
+        if (taskId && predecessorId) {
+          await tx.insert(taskDependencies).values({ taskId, predecessorId });
+        }
+      }
 
-    if (memberValues.length > 0) {
-      await db.insert(spaceMembers).values(memberValues);
-    }
+      const memberValues = Array.from(responsibleIds).map(personId => ({
+        spaceId: space.id,
+        personId,
+        spaceRole: personId === input.ownerId ? 'dueño' as const : 'colaborador' as const,
+      }));
 
-    return success({
-      space,
-      tasksGenerated: templateIdToTaskId.size,
-      dependenciesCopied: tplDeps.filter(d =>
-        templateIdToTaskId.has(d.templateId) && templateIdToTaskId.has(d.predecessorId)
-      ).length,
-    }, 201);
+      if (memberValues.length > 0) {
+        await tx.insert(spaceMembers).values(memberValues);
+      }
+
+      return {
+        space,
+        tasksGenerated: templateIdToTaskId.size,
+        dependenciesCopied: tplDeps.filter(d =>
+          templateIdToTaskId.has(d.templateId) && templateIdToTaskId.has(d.predecessorId)
+        ).length,
+      };
+    });
+
+    return success(result, 201);
   } catch (err) {
     return handleError(err);
   }

@@ -37,34 +37,38 @@ export async function POST(req: NextRequest) {
       return error('Solo admin puede crear espacios recurrentes', 403);
     }
 
-    const [space] = await db.insert(spaces).values({
-      name: input.name,
-      type: input.type,
-      objective: input.objective,
-      targetDate: input.targetDate,
-      ownerId: session.id,
-      openDate: todayRD(),
-      status: input.type === 'recurrente' ? 'borrador' : 'activo',
-    }).returning();
+    const space = await db.transaction(async (tx) => {
+      const [s] = await tx.insert(spaces).values({
+        name: input.name,
+        type: input.type,
+        objective: input.objective,
+        targetDate: input.targetDate,
+        ownerId: session.id,
+        openDate: todayRD(),
+        status: input.type === 'recurrente' ? 'borrador' : 'activo',
+      }).returning();
 
-    await db.insert(spaceMembers).values({
-      spaceId: space.id,
-      personId: session.id,
-      spaceRole: 'dueño',
-    });
+      await tx.insert(spaceMembers).values({
+        spaceId: s.id,
+        personId: session.id,
+        spaceRole: 'dueño',
+      });
 
-    if (input.memberIds?.length) {
-      const memberValues = input.memberIds
-        .filter(id => id !== session.id)
-        .map(id => ({
-          spaceId: space.id,
-          personId: id,
-          spaceRole: 'colaborador' as const,
-        }));
-      if (memberValues.length) {
-        await db.insert(spaceMembers).values(memberValues);
+      if (input.memberIds?.length) {
+        const memberValues = input.memberIds
+          .filter(id => id !== session.id)
+          .map(id => ({
+            spaceId: s.id,
+            personId: id,
+            spaceRole: 'colaborador' as const,
+          }));
+        if (memberValues.length) {
+          await tx.insert(spaceMembers).values(memberValues);
+        }
       }
-    }
+
+      return s;
+    });
 
     await logAudit({
       actorId: session.id,
