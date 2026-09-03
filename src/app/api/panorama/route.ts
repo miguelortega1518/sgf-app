@@ -3,7 +3,7 @@ import { spaces, tasks, persons, spaceUpdates } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
-import { eq, and, ne, count, max, desc, sql } from 'drizzle-orm';
+import { eq, and, ne, count, desc, sql, inArray } from 'drizzle-orm';
 
 export async function GET() {
   try {
@@ -30,51 +30,42 @@ export async function GET() {
 
     const spaceIds = activeSpaces.map(s => s.id);
 
-    const spaceStats = await Promise.all(
-      spaceIds.map(async (spaceId) => {
-        const [taskCounts] = await db
+    const taskStats = spaceIds.length > 0
+      ? await db
           .select({
+            spaceId: tasks.spaceId,
             total: count(),
-            completed: count(
-              sql`CASE WHEN ${tasks.status} = 'completada' THEN 1 END`
-            ),
-            overdue: count(
-              sql`CASE WHEN ${tasks.dueDateOriginal} < ${today} AND ${tasks.status} != 'completada' THEN 1 END`
-            ),
-            blocked: count(
-              sql`CASE WHEN ${tasks.status} = 'bloqueada' THEN 1 END`
-            ),
+            completed: count(sql`CASE WHEN ${tasks.status} = 'completada' THEN 1 END`),
+            overdue: count(sql`CASE WHEN ${tasks.dueDateOriginal} < ${today} AND ${tasks.status} != 'completada' THEN 1 END`),
+            blocked: count(sql`CASE WHEN ${tasks.status} = 'bloqueada' THEN 1 END`),
           })
           .from(tasks)
-          .where(and(eq(tasks.spaceId, spaceId), eq(tasks.archived, false)));
+          .where(and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false)))
+          .groupBy(tasks.spaceId)
+      : [];
 
-        const [lastUpdate] = await db
+    const latestUpdates = spaceIds.length > 0
+      ? await db
           .select({
-            createdAt: spaceUpdates.createdAt,
-            health: spaceUpdates.health,
+            spaceId: spaceUpdates.spaceId,
+            createdAt: sql<Date>`MAX(${spaceUpdates.createdAt})`.as('max_created'),
+            health: sql<string>`(array_agg(${spaceUpdates.health} ORDER BY ${spaceUpdates.createdAt} DESC))[1]`.as('latest_health'),
           })
           .from(spaceUpdates)
-          .where(eq(spaceUpdates.spaceId, spaceId))
-          .orderBy(desc(spaceUpdates.createdAt))
-          .limit(1);
+          .where(inArray(spaceUpdates.spaceId, spaceIds))
+          .groupBy(spaceUpdates.spaceId)
+      : [];
 
-        return {
-          spaceId,
-          totalTasks: taskCounts?.total ?? 0,
-          completedTasks: taskCounts?.completed ?? 0,
-          overdueTasks: taskCounts?.overdue ?? 0,
-          blockedTasks: taskCounts?.blocked ?? 0,
-          lastUpdate: lastUpdate?.createdAt ?? null,
-          lastHealth: lastUpdate?.health ?? null,
-        };
-      })
-    );
+    const statsMap = new Map(taskStats.map(s => [s.spaceId, s]));
+    const updatesMap = new Map(latestUpdates.map(u => [u.spaceId, u]));
 
     const enriched = activeSpaces.map(space => {
-      const stats = spaceStats.find(s => s.spaceId === space.id);
+      const stats = statsMap.get(space.id);
+      const lastUpd = updatesMap.get(space.id);
+
       let daysSinceUpdate: number | null = null;
-      if (stats?.lastUpdate) {
-        const lastDate = new Date(stats.lastUpdate);
+      if (lastUpd?.createdAt) {
+        const lastDate = new Date(lastUpd.createdAt);
         const now = new Date();
         daysSinceUpdate = Math.floor(
           (now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -86,7 +77,12 @@ export async function GET() {
 
       return {
         ...space,
-        ...stats,
+        totalTasks: stats?.total ?? 0,
+        completedTasks: stats?.completed ?? 0,
+        overdueTasks: stats?.overdue ?? 0,
+        blockedTasks: stats?.blocked ?? 0,
+        lastUpdate: lastUpd?.createdAt ?? null,
+        lastHealth: lastUpd?.health ?? null,
         daysSinceUpdate,
         noSignal,
       };

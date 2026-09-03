@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { formatDateRD } from '@/lib/date-utils';
 import {
   FolderOpen, AlertTriangle, Lock, RefreshCw,
-  Target, Layers,
+  Target, Layers, TrendingUp, Users, Building2, CheckCircle, Download,
 } from 'lucide-react';
 
 type SpaceRow = {
@@ -24,6 +24,13 @@ type SpaceRow = {
   blockedTasks: number;
   daysSinceUpdate: number | null;
   noSignal: boolean;
+};
+
+type DashboardData = {
+  totals: { total: number; completed: number; overdue: number; blocked: number; completionRate: number };
+  byStatus: { status: string; label: string; count: number; color: string }[];
+  byPerson: { personName: string; total: number; completed: number; overdue: number }[];
+  byCompany: { companyName: string; total: number; completed: number; overdue: number }[];
 };
 
 const TYPE_ICONS: Record<string, typeof RefreshCw> = {
@@ -48,17 +55,22 @@ export default function PanoramaPage() {
   const { user } = useSession();
   const router = useRouter();
   const [spaces, setSpaces] = useState<SpaceRow[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'espacios' | 'kpis'>('espacios');
 
   useEffect(() => {
     if (user && user.role !== 'admin') {
       router.push('/mi-trabajo');
       return;
     }
-    fetch('/api/panorama')
-      .then(r => r.ok ? r.json() : [])
-      .then(setSpaces)
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch('/api/panorama').then(r => r.ok ? r.json() : []),
+      fetch('/api/dashboard').then(r => r.ok ? r.json() : null),
+    ]).then(([spacesData, dashData]) => {
+      setSpaces(spacesData);
+      setDashboard(dashData);
+    }).finally(() => setLoading(false));
   }, [user, router]);
 
   if (loading) {
@@ -74,13 +86,153 @@ export default function PanoramaPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Panorama</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {spaces.length} {spaces.length === 1 ? 'espacio activo' : 'espacios activos'}
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Panorama</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {spaces.length} {spaces.length === 1 ? 'espacio activo' : 'espacios activos'}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <a
+            href="/api/export"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Download size={16} />
+            Excel
+          </a>
+        <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <button
+            onClick={() => setTab('espacios')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              tab === 'espacios' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Espacios
+          </button>
+          <button
+            onClick={() => setTab('kpis')}
+            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              tab === 'kpis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            KPIs
+          </button>
+        </div>
+        </div>
       </div>
 
+      {tab === 'kpis' && dashboard && (
+        <div className="space-y-6 mb-6">
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle size={16} className="text-green-500" />
+                <p className="text-sm text-gray-500">Cumplimiento</p>
+              </div>
+              <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.completionRate}%</p>
+              <p className="text-xs text-gray-400 mt-1">{dashboard.totals.completed} de {dashboard.totals.total}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp size={16} className="text-blue-500" />
+                <p className="text-sm text-gray-500">Total tareas</p>
+              </div>
+              <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.total}</p>
+            </div>
+            <div className={`bg-white border rounded-lg p-4 ${dashboard.totals.overdue > 0 ? 'border-red-300' : 'border-gray-200'}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle size={16} className="text-red-500" />
+                <p className="text-sm text-gray-500">Vencidas</p>
+              </div>
+              <p className={`text-3xl font-semibold ${dashboard.totals.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{dashboard.totals.overdue}</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Lock size={16} className="text-amber-500" />
+                <p className="text-sm text-gray-500">Bloqueadas</p>
+              </div>
+              <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.blocked}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
+                <div className="w-1 h-4 bg-blue-500 rounded" />
+                Por estado
+              </h3>
+              <div className="space-y-2">
+                {dashboard.byStatus.map(s => (
+                  <div key={s.status} className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                    <span className="text-sm text-gray-700 flex-1">{s.label}</span>
+                    <span className="text-sm font-medium text-gray-900">{s.count}</span>
+                    <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${dashboard.totals.total > 0 ? (s.count / dashboard.totals.total) * 100 : 0}%`, backgroundColor: s.color }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
+                <Users size={16} className="text-gray-400" />
+                Por persona
+              </h3>
+              <div className="space-y-2">
+                {dashboard.byPerson.slice(0, 8).map(p => {
+                  const pct = p.total > 0 ? Math.round((p.completed / p.total) * 100) : 0;
+                  return (
+                    <div key={p.personName} className="flex items-center gap-3">
+                      <span className="text-sm text-gray-700 flex-1 truncate">{p.personName}</span>
+                      {p.overdue > 0 && (
+                        <span className="text-[11px] text-red-600 font-medium">{p.overdue} vencidas</span>
+                      )}
+                      <span className="text-xs text-gray-400 w-16 text-right">{pct}% ({p.completed}/{p.total})</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {dashboard.byCompany.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
+                <Building2 size={16} className="text-gray-400" />
+                Por empresa
+              </h3>
+              <div className="grid grid-cols-3 gap-4">
+                {dashboard.byCompany.map(c => {
+                  const pct = c.total > 0 ? Math.round((c.completed / c.total) * 100) : 0;
+                  return (
+                    <div key={c.companyName} className="border border-gray-100 rounded-lg p-3">
+                      <p className="text-sm font-medium text-gray-900 truncate">{c.companyName}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="text-xs text-gray-500 w-8">{pct}%</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+                        <span>{c.completed}/{c.total} completadas</span>
+                        {c.overdue > 0 && <span className="text-red-600">{c.overdue} vencidas</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'espacios' && (
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full">
           <thead>
@@ -183,6 +335,7 @@ export default function PanoramaPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

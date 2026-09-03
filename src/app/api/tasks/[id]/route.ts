@@ -6,6 +6,7 @@ import { canChangeDueDate, canApproveTask } from '@/lib/permissions';
 import { updateTaskSchema, updateTaskStatusSchema } from '@/lib/schemas/task';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
+import { notify } from '@/lib/notify';
 import { isOverdue } from '@/lib/date-utils';
 import { eq, desc } from 'drizzle-orm';
 
@@ -238,6 +239,36 @@ async function handleStatusChange(
     newValue: input.status,
     reason: input.delayReason,
   });
+
+  if (input.status === 'completada' && task.reviewerId && task.reviewerId !== session.id) {
+    notify({
+      recipientId: task.reviewerId,
+      type: 'task_completed',
+      title: `Tarea completada: ${task.title}`,
+      body: 'Una tarea que supervisas ha sido completada.',
+      taskId,
+    }).catch(() => {});
+  }
+
+  if (input.status === 'en_revision' && task.reviewerId) {
+    notify({
+      recipientId: task.reviewerId,
+      type: 'task_review',
+      title: `Tarea en revisión: ${task.title}`,
+      body: 'Una tarea requiere tu aprobación.',
+      taskId,
+    }).catch(() => {});
+  }
+
+  if (input.status === 'bloqueada' && task.responsibleId !== session.id) {
+    notify({
+      recipientId: task.responsibleId,
+      type: 'task_blocked',
+      title: `Tarea bloqueada: ${task.title}`,
+      body: `Bloqueada por: ${input.blockedByArea || 'sin especificar'}`,
+      taskId,
+    }).catch(() => {});
+  }
 
   return success(updated);
 }
