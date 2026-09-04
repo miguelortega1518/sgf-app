@@ -6,7 +6,7 @@ import { useSession } from '@/lib/hooks/use-session';
 import {
   LayoutDashboard, CheckSquare, Users, Building2,
   FolderOpen, Search, LogOut, CalendarDays,
-  Bell, ChevronLeft, ChevronRight, FileText, ScrollText,
+  Bell, ChevronLeft, ChevronRight, FileText, ScrollText, Sun,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { SearchDialog } from './search-dialog';
@@ -24,6 +24,7 @@ const ADMIN_ITEMS = [
   { href: '/admin/usuarios', label: 'Usuarios', icon: Users },
   { href: '/admin/empresas', label: 'Empresas', icon: Building2 },
   { href: '/admin/bitacora', label: 'Bitácora', icon: ScrollText },
+  { href: '/admin/feriados', label: 'Feriados', icon: Sun },
 ] as const;
 
 export function Sidebar() {

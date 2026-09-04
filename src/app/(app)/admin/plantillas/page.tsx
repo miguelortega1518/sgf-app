@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, FileText, Upload } from 'lucide-react';
+import { Plus, FileText, Upload, Copy } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { useRouter } from 'next/navigation';
 
@@ -26,6 +26,7 @@ export default function PlantillasPage() {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/templates')
@@ -57,6 +58,19 @@ export default function PlantillasPage() {
       setImporting(false);
     }
     e.target.value = '';
+  }
+
+  async function handleDuplicate(id: string) {
+    setDuplicating(id);
+    const res = await fetch(`/api/templates/${id}/duplicate`, { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      toast('Plantilla duplicada', 'success');
+      router.push(`/admin/plantillas/${data.id}`);
+    } else {
+      toast('Error al duplicar', 'error');
+    }
+    setDuplicating(null);
   }
 
   if (loading) {
@@ -120,13 +134,23 @@ export default function PlantillasPage() {
                     <span>{t.taskCount} tareas</span>
                   </div>
                 </div>
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                  t.active
-                    ? 'bg-green-50 text-green-700'
-                    : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {t.active ? 'Activa' : 'Inactiva'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={e => { e.preventDefault(); handleDuplicate(t.id); }}
+                    disabled={duplicating === t.id}
+                    className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-gray-100 transition-colors"
+                    title="Duplicar plantilla"
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    t.active
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {t.active ? 'Activa' : 'Inactiva'}
+                  </span>
+                </div>
               </div>
             </a>
           ))}

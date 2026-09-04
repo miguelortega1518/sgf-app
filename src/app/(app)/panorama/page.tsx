@@ -94,13 +94,21 @@ export default function PanoramaPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <a
-            href="/api/export"
-            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <Download size={16} />
-            Excel
-          </a>
+          <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+            <a
+              href="/api/export"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 transition-colors"
+            >
+              <Download size={14} />
+              Excel
+            </a>
+            <a
+              href="/api/export?format=pdf"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 border-l border-gray-200 transition-colors"
+            >
+              PDF
+            </a>
+          </div>
         <div className="flex bg-gray-100 rounded-lg p-0.5">
           <button
             onClick={() => setTab('espacios')}
@@ -162,20 +170,17 @@ export default function PanoramaPage() {
                 <div className="w-1 h-4 bg-blue-500 rounded" />
                 Por estado
               </h3>
-              <div className="space-y-2">
-                {dashboard.byStatus.map(s => (
-                  <div key={s.status} className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                    <span className="text-sm text-gray-700 flex-1">{s.label}</span>
-                    <span className="text-sm font-medium text-gray-900">{s.count}</span>
-                    <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${dashboard.totals.total > 0 ? (s.count / dashboard.totals.total) * 100 : 0}%`, backgroundColor: s.color }}
-                      />
+              <div className="flex items-center gap-6">
+                <DonutChart segments={dashboard.byStatus} completionRate={dashboard.totals.completionRate} />
+                <div className="space-y-2 flex-1">
+                  {dashboard.byStatus.map(s => (
+                    <div key={s.status} className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className="text-sm text-gray-700 flex-1">{s.label}</span>
+                      <span className="text-sm font-semibold text-gray-900">{s.count}</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -184,16 +189,26 @@ export default function PanoramaPage() {
                 <Users size={16} className="text-gray-400" />
                 Por persona
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {dashboard.byPerson.slice(0, 8).map(p => {
                   const pct = p.total > 0 ? Math.round((p.completed / p.total) * 100) : 0;
                   return (
-                    <div key={p.personName} className="flex items-center gap-3">
-                      <span className="text-sm text-gray-700 flex-1 truncate">{p.personName}</span>
-                      {p.overdue > 0 && (
-                        <span className="text-[11px] text-red-600 font-medium">{p.overdue} vencidas</span>
-                      )}
-                      <span className="text-xs text-gray-400 w-16 text-right">{pct}% ({p.completed}/{p.total})</span>
+                    <div key={p.personName}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-700 truncate">{p.personName}</span>
+                        <div className="flex items-center gap-2">
+                          {p.overdue > 0 && (
+                            <span className="text-[10px] text-red-600 font-medium">{p.overdue} venc.</span>
+                          )}
+                          <span className="text-xs text-gray-500">{p.completed}/{p.total}</span>
+                        </div>
+                      </div>
+                      <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
                   );
                 })}
@@ -337,5 +352,55 @@ export default function PanoramaPage() {
       </div>
       )}
     </div>
+  );
+}
+
+function DonutChart({ segments, completionRate }: {
+  segments: { count: number; color: string }[];
+  completionRate: number;
+}) {
+  const size = 140;
+  const strokeWidth = 20;
+  const center = size / 2;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const total = segments.reduce((sum, s) => sum + s.count, 0);
+
+  if (total === 0) return null;
+
+  let cumulativeAngle = -90;
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0">
+      <circle cx={center} cy={center} r={radius} fill="none" stroke="#f3f4f6" strokeWidth={strokeWidth} />
+      {segments.filter(s => s.count > 0).map((segment, i) => {
+        const fraction = segment.count / total;
+        const dashLength = fraction * circumference;
+        const gapLength = circumference - dashLength;
+        const rotation = cumulativeAngle;
+        cumulativeAngle += fraction * 360;
+        return (
+          <circle
+            key={i}
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke={segment.color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${dashLength} ${gapLength}`}
+            transform={`rotate(${rotation} ${center} ${center})`}
+          />
+        );
+      })}
+      <text x={center} y={center - 4} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: '24px', fontWeight: 700, fill: '#111827' }}>
+        {completionRate}%
+      </text>
+      <text x={center} y={center + 16} textAnchor="middle" dominantBaseline="middle"
+        style={{ fontSize: '10px', fill: '#6b7280' }}>
+        cumplimiento
+      </text>
+    </svg>
   );
 }

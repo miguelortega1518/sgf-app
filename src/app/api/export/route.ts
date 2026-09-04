@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth';
@@ -5,6 +6,7 @@ import { handleError } from '@/lib/api-utils';
 import { eq, asc } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
+import PDFDocument from 'pdfkit';
 
 const STATUS_LABELS: Record<string, string> = {
   no_iniciada: 'No iniciada',
@@ -21,9 +23,10 @@ const PRIORITY_LABELS: Record<string, string> = {
   baja: 'Baja',
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     await requireRole('admin');
+    const format = req.nextUrl.searchParams.get('format') || 'xlsx';
 
     const reviewer = alias(persons, 'reviewer');
 
@@ -67,6 +70,60 @@ export async function GET() {
       'Bloqueada por': r.blockedByArea || '',
       'Razón retraso': r.delayReason || '',
     }));
+
+    if (format === 'pdf') {
+      const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margin: 40 });
+      const chunks: Buffer[] = [];
+      doc.on('data', (c: Buffer) => chunks.push(c));
+
+      doc.fontSize(16).text('Reporte de Tareas - SGF', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(9).fillColor('#666').text(
+        `Generado: ${new Date().toISOString().slice(0, 10)}  |  Total: ${data.length} tareas`,
+        { align: 'center' },
+      );
+      doc.moveDown(1);
+
+      const cols = ['Espacio', 'Tarea', 'Responsable', 'Estado', 'Prioridad', 'Fecha límite'];
+      const colW = [120, 180, 100, 70, 60, 80];
+      const startX = 40;
+      let y = doc.y;
+
+      doc.fontSize(8).fillColor('#fff');
+      cols.forEach((col, i) => {
+        const x = startX + colW.slice(0, i).reduce((a, b) => a + b, 0);
+        doc.rect(x, y, colW[i], 16).fill('#374151');
+        doc.fillColor('#fff').text(col, x + 4, y + 4, { width: colW[i] - 8 });
+      });
+      y += 16;
+
+      doc.fillColor('#111');
+      for (const row of data) {
+        if (y > 560) { doc.addPage(); y = 40; }
+        const vals = [row['Espacio'], row['Tarea'], row['Responsable'], row['Estado'], row['Prioridad'], row['Fecha límite']];
+        const even = data.indexOf(row) % 2 === 0;
+        if (even) {
+          doc.rect(startX, y, colW.reduce((a, b) => a + b, 0), 14).fill('#f9fafb');
+        }
+        doc.fillColor('#111').fontSize(7);
+        vals.forEach((val, i) => {
+          const x = startX + colW.slice(0, i).reduce((a, b) => a + b, 0);
+          doc.text(String(val || ''), x + 4, y + 3, { width: colW[i] - 8, height: 12, ellipsis: true });
+        });
+        y += 14;
+      }
+
+      doc.end();
+      await new Promise<void>(resolve => doc.on('end', resolve));
+      const pdfBuf = Buffer.concat(chunks);
+
+      return new Response(pdfBuf, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="sgf-tareas-${new Date().toISOString().slice(0, 10)}.pdf"`,
+        },
+      });
+    }
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);

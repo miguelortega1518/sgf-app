@@ -5,7 +5,7 @@ import { requireSession } from '@/lib/auth';
 import { updateSpaceSchema } from '@/lib/schemas/space';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
-import { eq, and, ne } from 'drizzle-orm';
+import { eq, and, ne, lt, isNotNull } from 'drizzle-orm';
 
 export async function GET(
   _req: NextRequest,
@@ -118,6 +118,7 @@ export async function PATCH(
             and(
               eq(tasks.spaceId, id),
               ne(tasks.status, 'completada'),
+              eq(tasks.archived, false),
             ),
           )
           .limit(1);
@@ -131,9 +132,58 @@ export async function PATCH(
       }
     }
 
+    const setValues: Record<string, unknown> = { ...input };
+    let closeReport = null;
+
+    if (input.status === 'cerrado') {
+      const today = new Date().toISOString().slice(0, 10);
+      setValues.closeDate = today;
+
+      const allTasks = await db
+        .select({
+          dueDate: tasks.dueDate,
+          completedAt: tasks.completedAt,
+          createdAt: tasks.createdAt,
+        })
+        .from(tasks)
+        .where(and(eq(tasks.spaceId, id), eq(tasks.archived, false)));
+
+      const totalTasks = allTasks.length;
+      let onTime = 0;
+      let late = 0;
+      let totalDays = 0;
+      let withDueDate = 0;
+
+      for (const t of allTasks) {
+        if (t.completedAt && t.dueDate) {
+          withDueDate++;
+          const completed = new Date(t.completedAt).toISOString().slice(0, 10);
+          if (completed <= t.dueDate) onTime++;
+          else late++;
+        }
+        if (t.completedAt && t.createdAt) {
+          totalDays += Math.ceil(
+            (new Date(t.completedAt).getTime() - new Date(t.createdAt).getTime()) / 86400000
+          );
+        }
+      }
+
+      closeReport = {
+        totalTasks,
+        onTimeCount: onTime,
+        lateCount: late,
+        onTimeRate: withDueDate > 0 ? Math.round((onTime / withDueDate) * 100) : 100,
+        avgDays: totalTasks > 0 ? Math.round(totalDays / totalTasks) : 0,
+        closedAt: today,
+      };
+
+      const existing = (space.templateSnapshot as Record<string, unknown>) || {};
+      setValues.templateSnapshot = { ...existing, closeReport };
+    }
+
     const [updated] = await db
       .update(spaces)
-      .set(input)
+      .set(setValues)
       .where(eq(spaces.id, id))
       .returning();
 
@@ -148,7 +198,7 @@ export async function PATCH(
       newValue: JSON.stringify(input),
     });
 
-    return success(updated);
+    return success({ ...updated, closeReport });
   } catch (err) {
     return handleError(err);
   }

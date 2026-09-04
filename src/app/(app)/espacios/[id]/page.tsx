@@ -7,7 +7,8 @@ import { formatDateRD } from '@/lib/date-utils';
 import {
   Plus, Users, Calendar, Target, Building2, ChevronDown,
   ChevronRight, Play, XCircle, CheckCircle2, Pencil, Heart,
-  Filter, ClipboardList,
+  Filter, ClipboardList, Flag, MessageSquare, Archive, ArchiveRestore,
+  Trash2,
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
@@ -87,6 +88,10 @@ export default function SpaceDetailPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [closeReport, setCloseReport] = useState<{
+    totalTasks: number; onTimeCount: number; lateCount: number;
+    onTimeRate: number; avgDays: number;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/spaces/${id}`);
@@ -117,11 +122,24 @@ export default function SpaceDetailPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
     });
-    if (res.ok) { fetchData(); toast(action === 'activar' ? 'Espacio activado' : 'Espacio cerrado'); }
-    else {
+    if (res.ok) {
+      const result = await res.json();
+      fetchData();
+      toast(action === 'activar' ? 'Espacio activado' : 'Espacio cerrado');
+      if (result.closeReport) setCloseReport(result.closeReport);
+    } else {
       const body = await res.json();
       setActionError(body.error || 'Error al cambiar el estado');
     }
+  }
+
+  async function handleArchiveTask(taskId: string, archived: boolean) {
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived }),
+    });
+    if (res.ok) { fetchData(); toast(archived ? 'Tarea archivada' : 'Tarea restaurada'); }
   }
 
   function startEditingSpace() {
@@ -283,6 +301,43 @@ export default function SpaceDetailPage() {
           onStatusChange={handleStatusChange}
           spaceClosed={space.status === 'cerrado'}
         />
+      )}
+
+      <MilestonesSection spaceId={space.id} canEdit={user?.role !== 'observador' && space.status !== 'cerrado'} />
+
+      <SpaceCommentsSection spaceId={space.id} canComment={user?.role !== 'observador'} userId={user?.id || ''} isAdmin={isAdmin ?? false} />
+
+      {closeReport && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setCloseReport(null)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reporte de cierre</h3>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-gray-50 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-gray-900">{closeReport.totalTasks}</p>
+                <p className="text-xs text-gray-500">Total tareas</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-green-700">{closeReport.onTimeRate}%</p>
+                <p className="text-xs text-gray-500">A tiempo</p>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-blue-700">{closeReport.onTimeCount}</p>
+                <p className="text-xs text-gray-500">Puntuales</p>
+              </div>
+              <div className={`rounded-lg p-3 text-center ${closeReport.lateCount > 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                <p className={`text-2xl font-bold ${closeReport.lateCount > 0 ? 'text-red-700' : 'text-gray-900'}`}>{closeReport.lateCount}</p>
+                <p className="text-xs text-gray-500">Tardías</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 text-center mb-4">
+              Promedio de completación: <span className="font-medium text-gray-700">{closeReport.avgDays} días</span>
+            </p>
+            <button onClick={() => setCloseReport(null)}
+              className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+              Cerrar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -743,6 +798,252 @@ function NewTaskForm({
         </button>
       </div>
     </form>
+  );
+}
+
+type MilestoneItem = {
+  id: string; name: string; targetDate: string; targetDateOriginal: string;
+  completed: boolean; order: number; taskCount: number;
+};
+
+function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boolean }) {
+  const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const fetchMilestones = useCallback(async () => {
+    const res = await fetch(`/api/spaces/${spaceId}/milestones`);
+    if (res.ok) setMilestones(await res.json());
+  }, [spaceId]);
+
+  useEffect(() => { fetchMilestones(); }, [fetchMilestones]);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    const res = await fetch(`/api/spaces/${spaceId}/milestones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, targetDate }),
+    });
+    if (res.ok) { setName(''); setTargetDate(''); setShowForm(false); fetchMilestones(); toast('Hito creado'); }
+    setSubmitting(false);
+  }
+
+  async function toggleComplete(id: string, completed: boolean) {
+    await fetch(`/api/spaces/${spaceId}/milestones`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ milestoneId: id, completed }),
+    });
+    fetchMilestones();
+  }
+
+  async function handleDelete(id: string) {
+    await fetch(`/api/spaces/${spaceId}/milestones`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ milestoneId: id }),
+    });
+    fetchMilestones();
+    toast('Hito eliminado');
+  }
+
+  return (
+    <div className="mt-8 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+          <Flag size={14} />
+          Hitos
+        </h3>
+        {canEdit && (
+          <button onClick={() => setShowForm(!showForm)} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+            <Plus size={12} />Agregar
+          </button>
+        )}
+      </div>
+      {showForm && (
+        <form onSubmit={handleCreate} className="bg-gray-50 border rounded-lg p-3 mb-3 flex items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-gray-500 mb-1">Nombre</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre del hito"
+              className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm" required />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Fecha meta</label>
+            <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-md text-sm" required />
+          </div>
+          <button type="submit" disabled={submitting}
+            className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50">Crear</button>
+          <button type="button" onClick={() => setShowForm(false)}
+            className="px-3 py-1.5 text-xs text-gray-600">Cancelar</button>
+        </form>
+      )}
+      {milestones.length > 0 ? (
+        <div className="space-y-2">
+          {milestones.map(m => {
+            const today = new Date().toISOString().slice(0, 10);
+            const isPast = !m.completed && m.targetDate < today;
+            return (
+              <div key={m.id} className="bg-white border border-gray-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+                {canEdit ? (
+                  <button onClick={() => toggleComplete(m.id, !m.completed)}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      m.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-blue-500'
+                    }`}>
+                    {m.completed && <CheckCircle2 size={12} />}
+                  </button>
+                ) : (
+                  <Flag size={14} className={m.completed ? 'text-green-500' : 'text-gray-400'} />
+                )}
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm font-medium ${m.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{m.name}</span>
+                  <span className="text-xs text-gray-400 ml-2">{m.taskCount} tareas</span>
+                </div>
+                <span className={`text-xs ${isPast ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                  {formatDateRD(m.targetDate)}
+                </span>
+                {canEdit && (
+                  <button onClick={() => handleDelete(m.id)} className="text-gray-400 hover:text-red-500 p-1">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-center py-4 border border-dashed border-gray-200 rounded-lg">
+          <Flag size={20} className="mx-auto text-gray-300 mb-1" />
+          <p className="text-xs text-gray-400">Sin hitos definidos</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type SpaceComment = {
+  id: string; content: string; authorId: string; authorName: string;
+  createdAt: string; editedAt: string | null;
+};
+
+function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
+  spaceId: string; canComment: boolean; userId: string; isAdmin: boolean;
+}) {
+  const [cmnts, setCmnts] = useState<SpaceComment[]>([]);
+  const [content, setContent] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchComments = useCallback(async () => {
+    const res = await fetch(`/api/spaces/${spaceId}/comments`);
+    if (res.ok) setCmnts(await res.json());
+  }, [spaceId]);
+
+  useEffect(() => { fetchComments(); }, [fetchComments]);
+
+  async function handlePost(e: React.FormEvent) {
+    e.preventDefault();
+    if (!content.trim()) return;
+    setSubmitting(true);
+    const res = await fetch(`/api/spaces/${spaceId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content.trim() }),
+    });
+    if (res.ok) { setContent(''); fetchComments(); }
+    setSubmitting(false);
+  }
+
+  async function handleEdit(commentId: string) {
+    await fetch(`/api/spaces/${spaceId}/comments`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commentId, content: editContent.trim() }),
+    });
+    setEditingId(null);
+    fetchComments();
+  }
+
+  async function handleDelete(commentId: string) {
+    await fetch(`/api/spaces/${spaceId}/comments`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commentId }),
+    });
+    fetchComments();
+  }
+
+  function timeAgo(dateStr: string): string {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'ahora';
+    if (mins < 60) return `hace ${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `hace ${hours}h`;
+    return `hace ${Math.floor(hours / 24)}d`;
+  }
+
+  return (
+    <div className="mt-8">
+      <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-3">
+        <MessageSquare size={14} />
+        Comentarios del espacio
+      </h3>
+
+      {canComment && (
+        <form onSubmit={handlePost} className="mb-4 flex gap-2">
+          <input value={content} onChange={e => setContent(e.target.value)} placeholder="Escribe un comentario..."
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <button type="submit" disabled={submitting || !content.trim()}
+            className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">
+            Enviar
+          </button>
+        </form>
+      )}
+
+      {cmnts.length > 0 ? (
+        <div className="space-y-2">
+          {cmnts.map(c => (
+            <div key={c.id} className="bg-white border border-gray-200 rounded-lg px-4 py-2.5">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-medium text-gray-700">{c.authorName}</span>
+                <span className="text-xs text-gray-400">{timeAgo(c.createdAt)}</span>
+                {c.editedAt && <span className="text-[10px] text-gray-400">(editado)</span>}
+                {(c.authorId === userId || isAdmin) && (
+                  <div className="ml-auto flex gap-1">
+                    <button onClick={() => { setEditingId(c.id); setEditContent(c.content); }}
+                      className="text-gray-400 hover:text-blue-600 p-0.5"><Pencil size={11} /></button>
+                    <button onClick={() => handleDelete(c.id)}
+                      className="text-gray-400 hover:text-red-500 p-0.5"><Trash2 size={11} /></button>
+                  </div>
+                )}
+              </div>
+              {editingId === c.id ? (
+                <div className="flex gap-2 mt-1">
+                  <input value={editContent} onChange={e => setEditContent(e.target.value)}
+                    className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm" autoFocus />
+                  <button onClick={() => handleEdit(c.id)} className="text-xs text-blue-600 font-medium">Guardar</button>
+                  <button onClick={() => setEditingId(null)} className="text-xs text-gray-500">Cancelar</button>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600">{c.content}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-4 border border-dashed border-gray-200 rounded-lg">
+          <MessageSquare size={20} className="mx-auto text-gray-300 mb-1" />
+          <p className="text-xs text-gray-400">Sin comentarios</p>
+        </div>
+      )}
+    </div>
   );
 }
 

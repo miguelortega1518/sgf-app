@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/hooks/use-session';
-import { Plus, RefreshCw, Target, Layers } from 'lucide-react';
+import { Plus, RefreshCw, Target, Layers, Archive } from 'lucide-react';
 
 type SpaceItem = {
   id: string;
@@ -43,6 +43,7 @@ export default function EspaciosPage() {
   const router = useRouter();
   const [spaces, setSpaces] = useState<SpaceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showClosed, setShowClosed] = useState(false);
 
   useEffect(() => {
     fetch('/api/spaces')
@@ -56,7 +57,19 @@ export default function EspaciosPage() {
   return (
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Espacios</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold text-gray-900">Espacios</h1>
+          <button
+            onClick={() => setShowClosed(!showClosed)}
+            className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${
+              showClosed ? 'bg-blue-100 text-blue-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+            }`}
+            title={showClosed ? 'Ocultar cerrados' : 'Mostrar cerrados'}
+          >
+            <Archive size={12} />
+            {showClosed ? 'Cerrados visibles' : 'Mostrar cerrados'}
+          </button>
+        </div>
         {canCreate && (
           <button
             onClick={() => router.push('/espacios/nuevo')}
@@ -74,7 +87,7 @@ export default function EspaciosPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {spaces.map(space => {
+          {spaces.filter(s => showClosed || s.status !== 'cerrado').map(space => {
             const Icon = TYPE_ICONS[space.type] || Layers;
             return (
               <div
