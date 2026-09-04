@@ -15,6 +15,7 @@ const batchSchema = z.object({
 export async function PATCH(req: NextRequest) {
   try {
     const session = await requireSession();
+    if (session.role === 'observador') return error('Sin permisos', 403);
     const body = await req.json();
     const { taskIds, status } = batchSchema.parse(body);
 

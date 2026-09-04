@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { spaceUpdates, spaces, persons } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
+import { stripHtml } from '@/lib/sanitize';
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -59,7 +60,7 @@ export async function POST(
         spaceId,
         authorId: session.id,
         health: input.health,
-        content: input.content,
+        content: stripHtml(input.content),
       })
       .returning();
 

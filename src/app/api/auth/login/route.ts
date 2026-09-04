@@ -3,13 +3,14 @@ import { authenticate, createSession } from '@/lib/auth';
 import { loginSchema } from '@/lib/schemas/auth';
 import { success, error, handleError } from '@/lib/api-utils';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-    const limit = checkRateLimit(ip);
+    const limit = await checkRateLimit(ip);
     if (!limit.allowed) {
-      const retryAfter = Math.ceil((limit.retryAfterMs ?? 60_000) / 1000);
+      logger.warn('rate_limit_exceeded', { ip });
       return error('Demasiados intentos. Intente más tarde.', 429);
     }
 
@@ -18,10 +19,12 @@ export async function POST(req: NextRequest) {
 
     const user = await authenticate(email, password);
     if (!user) {
+      logger.warn('auth_failed', { email, ip });
       return error('Credenciales incorrectas', 401);
     }
 
     await createSession(user);
+    logger.info('auth_success', { userId: user.id, email });
     return success({ user });
   } catch (err) {
     return handleError(err);

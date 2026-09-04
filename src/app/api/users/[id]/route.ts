@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { persons } from '@/lib/db/schema';
-import { requireRole, hashPassword } from '@/lib/auth';
+import { requireRole, hashPassword, invalidateActiveCache } from '@/lib/auth';
 import { updateUserSchema } from '@/lib/schemas/user';
 import { success, error, handleError } from '@/lib/api-utils';
 import { eq } from 'drizzle-orm';
@@ -42,6 +42,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         active: persons.active,
         createdAt: persons.createdAt,
       });
+
+    if (input.active !== undefined) {
+      invalidateActiveCache(id);
+    }
 
     return success(updated);
   } catch (err) {

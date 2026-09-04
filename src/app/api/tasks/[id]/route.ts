@@ -121,6 +121,10 @@ export async function PATCH(
     const [space] = await db.select().from(spaces).where(eq(spaces.id, task.spaceId)).limit(1);
     if (!space) return error('Espacio no encontrado', 404);
 
+    if (session.role === 'observador') {
+      return error('Sin permisos', 403);
+    }
+
     if (body.status !== undefined) {
       const statusInput = updateTaskStatusSchema.parse(body);
       return await handleStatusChange(session, task, space, statusInput, id);

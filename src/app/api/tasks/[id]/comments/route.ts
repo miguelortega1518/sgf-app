@@ -4,6 +4,7 @@ import { comments, tasks } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { canComment } from '@/lib/permissions';
 import { success, error, handleError } from '@/lib/api-utils';
+import { stripHtml } from '@/lib/sanitize';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -38,7 +39,7 @@ export async function POST(
       .values({
         taskId,
         authorId: session.id,
-        content: input.content,
+        content: stripHtml(input.content),
       })
       .returning();
 
@@ -74,7 +75,7 @@ export async function PATCH(
 
     const [updated] = await db
       .update(comments)
-      .set({ content, editedAt: new Date() })
+      .set({ content: stripHtml(content), editedAt: new Date() })
       .where(eq(comments.id, commentId))
       .returning();
 

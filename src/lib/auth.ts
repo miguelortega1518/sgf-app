@@ -21,6 +21,36 @@ export type SessionUser = {
   role: Person['role'];
 };
 
+// Cache for active-user checks (TTL 60s)
+const activeCache = new Map<string, { active: boolean; ts: number }>();
+const ACTIVE_CACHE_TTL = 60_000;
+
+async function isUserActive(userId: string): Promise<boolean> {
+  const cached = activeCache.get(userId);
+  if (cached && Date.now() - cached.ts < ACTIVE_CACHE_TTL) {
+    return cached.active;
+  }
+
+  const [user] = await db
+    .select({ active: persons.active })
+    .from(persons)
+    .where(eq(persons.id, userId))
+    .limit(1);
+
+  const active = user?.active ?? false;
+  activeCache.set(userId, { active, ts: Date.now() });
+
+  // Evict stale entries
+  if (activeCache.size > 500) {
+    const cutoff = Date.now() - ACTIVE_CACHE_TTL;
+    for (const [key, val] of activeCache) {
+      if (val.ts < cutoff) activeCache.delete(key);
+    }
+  }
+
+  return active;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }
@@ -74,6 +104,12 @@ export async function requireSession(): Promise<SessionUser> {
   if (!session) {
     throw new Error('UNAUTHORIZED');
   }
+
+  const active = await isUserActive(session.id);
+  if (!active) {
+    throw new Error('UNAUTHORIZED');
+  }
+
   return session;
 }
 
@@ -113,4 +149,8 @@ export async function authenticate(
     email: user.email,
     role: user.role,
   };
+}
+
+export function invalidateActiveCache(userId: string): void {
+  activeCache.delete(userId);
 }

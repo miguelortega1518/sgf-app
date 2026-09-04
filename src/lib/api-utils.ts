@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
+import { logger } from './logger';
 
 export function success<T>(data: T, status = 200) {
   return NextResponse.json(data, { status });
@@ -21,7 +22,10 @@ export function handleError(err: unknown) {
     if (err.message === 'FORBIDDEN') {
       return error('Sin permisos', 403);
     }
-    console.error(err);
+    logger.error('unhandled_api_error', {
+      message: err.message,
+      stack: err.stack?.split('\n').slice(0, 3).join(' | '),
+    });
     return error('Error interno', 500);
   }
   return error('Error desconocido', 500);

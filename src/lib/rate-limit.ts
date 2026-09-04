@@ -1,28 +1,42 @@
-const attempts = new Map<string, number[]>();
+import { db } from './db';
+import { rateLimits } from './db/schema';
+import { eq } from 'drizzle-orm';
 
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const MAX_ATTEMPTS = 10;
 
-export function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs?: number } {
-  const now = Date.now();
-  const timestamps = attempts.get(ip) ?? [];
+export async function checkRateLimit(ip: string): Promise<{ allowed: boolean; retryAfterMs?: number }> {
+  const now = new Date();
+  const windowCutoff = new Date(now.getTime() - WINDOW_MS);
 
-  const recent = timestamps.filter(t => now - t < WINDOW_MS);
+  const [existing] = await db
+    .select()
+    .from(rateLimits)
+    .where(eq(rateLimits.key, ip))
+    .limit(1);
 
-  if (recent.length >= MAX_ATTEMPTS) {
-    const oldest = recent[0];
-    return { allowed: false, retryAfterMs: WINDOW_MS - (now - oldest) };
+  if (!existing) {
+    await db.insert(rateLimits).values({ key: ip, count: 1, windowStart: now });
+    return { allowed: true };
   }
 
-  recent.push(now);
-  attempts.set(ip, recent);
-
-  if (attempts.size > 10_000) {
-    const cutoff = now - WINDOW_MS;
-    for (const [key, ts] of attempts) {
-      if (ts.every(t => t < cutoff)) attempts.delete(key);
-    }
+  if (existing.windowStart < windowCutoff) {
+    await db
+      .update(rateLimits)
+      .set({ count: 1, windowStart: now })
+      .where(eq(rateLimits.key, ip));
+    return { allowed: true };
   }
+
+  if (existing.count >= MAX_ATTEMPTS) {
+    const retryAfterMs = WINDOW_MS - (now.getTime() - existing.windowStart.getTime());
+    return { allowed: false, retryAfterMs };
+  }
+
+  await db
+    .update(rateLimits)
+    .set({ count: existing.count + 1 })
+    .where(eq(rateLimits.key, ip));
 
   return { allowed: true };
 }

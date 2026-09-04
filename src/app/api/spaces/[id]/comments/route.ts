@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { comments, persons } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
+import { stripHtml } from '@/lib/sanitize';
 import { eq, desc } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -48,7 +49,7 @@ export async function POST(
     const [comment] = await db.insert(comments).values({
       spaceId: id,
       authorId: session.id,
-      content,
+      content: stripHtml(content),
     }).returning();
 
     return success(comment, 201);
@@ -71,7 +72,7 @@ export async function PATCH(req: NextRequest) {
     if (existing.authorId !== session.id && session.role !== 'admin') return error('Sin permisos', 403);
 
     const [updated] = await db.update(comments)
-      .set({ content, editedAt: new Date() })
+      .set({ content: stripHtml(content), editedAt: new Date() })
       .where(eq(comments.id, commentId))
       .returning();
     return success(updated);
