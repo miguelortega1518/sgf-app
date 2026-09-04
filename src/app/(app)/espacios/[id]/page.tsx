@@ -8,7 +8,7 @@ import {
   Plus, Users, Calendar, Target, Building2, ChevronDown,
   ChevronRight, Play, XCircle, CheckCircle2, Pencil, Heart,
   Filter, ClipboardList, Flag, MessageSquare, Archive, ArchiveRestore,
-  Trash2,
+  Trash2, CircleCheck, AlertTriangle, CircleX,
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
@@ -407,8 +407,8 @@ function SpaceHeader({
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold text-gray-900">{space.name}</h1>
               {canEdit && (
-                <button onClick={onStartEdit} className="text-gray-400 hover:text-blue-600 p-1" title="Editar espacio">
-                  <Pencil size={16} />
+                <button onClick={onStartEdit} className="text-gray-400 hover:text-blue-600 p-1" title="Editar espacio" aria-label="Editar espacio">
+                  <Pencil size={16} aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -908,8 +908,8 @@ function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boo
                   {formatDateRD(m.targetDate)}
                 </span>
                 {canEdit && (
-                  <button onClick={() => handleDelete(m.id)} className="text-gray-400 hover:text-red-500 p-1">
-                    <Trash2 size={12} />
+                  <button onClick={() => handleDelete(m.id)} className="text-gray-400 hover:text-red-500 p-1" aria-label={`Eliminar hito ${m.name}`}>
+                    <Trash2 size={12} aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -1018,9 +1018,9 @@ function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
                 {(c.authorId === userId || isAdmin) && (
                   <div className="ml-auto flex gap-1">
                     <button onClick={() => { setEditingId(c.id); setEditContent(c.content); }}
-                      className="text-gray-400 hover:text-blue-600 p-0.5"><Pencil size={11} /></button>
+                      className="text-gray-400 hover:text-blue-600 p-0.5" aria-label="Editar comentario"><Pencil size={11} aria-hidden="true" /></button>
                     <button onClick={() => handleDelete(c.id)}
-                      className="text-gray-400 hover:text-red-500 p-0.5"><Trash2 size={11} /></button>
+                      className="text-gray-400 hover:text-red-500 p-0.5" aria-label="Eliminar comentario"><Trash2 size={11} aria-hidden="true" /></button>
                   </div>
                 )}
               </div>
@@ -1048,9 +1048,9 @@ function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
 }
 
 const HEALTH_CONFIG = {
-  verde: { label: 'Verde', color: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
-  amarillo: { label: 'Amarillo', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500' },
-  rojo: { label: 'Rojo', color: 'bg-red-100 text-red-700', dot: 'bg-red-500' },
+  verde: { label: 'En buen estado', color: 'bg-green-100 text-green-700', dot: 'bg-green-500', Icon: CircleCheck },
+  amarillo: { label: 'Requiere atención', color: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500', Icon: AlertTriangle },
+  rojo: { label: 'Crítico', color: 'bg-red-100 text-red-700', dot: 'bg-red-500', Icon: CircleX },
 };
 
 type HealthUpdate = {
@@ -1112,12 +1112,13 @@ function HealthUpdatesSection({ spaceId, canPost }: { spaceId: string; canPost: 
           <div className="flex gap-2">
             {(['verde', 'amarillo', 'rojo'] as const).map(h => {
               const cfg = HEALTH_CONFIG[h];
+              const HIcon = cfg.Icon;
               return (
                 <button key={h} type="button" onClick={() => setHealth(h)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
                     health === h ? cfg.color + ' border-current' : 'border-gray-200 text-gray-500'
                   }`}>
-                  <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                  <HIcon size={12} aria-hidden="true" />
                   {cfg.label}
                 </button>
               );
@@ -1136,10 +1137,12 @@ function HealthUpdatesSection({ spaceId, canPost }: { spaceId: string; canPost: 
         <div className="space-y-2">
           {updates.slice(0, 5).map(u => {
             const cfg = HEALTH_CONFIG[u.health as keyof typeof HEALTH_CONFIG] || HEALTH_CONFIG.verde;
+            const HIcon = cfg.Icon;
             return (
               <div key={u.id} className="bg-white border border-gray-200 rounded-lg px-3 py-2.5">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                  <HIcon size={14} className={cfg.color.split(' ')[1]} aria-hidden="true" />
+                  <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
                   <span className="text-xs font-medium text-gray-700">{u.authorName}</span>
                   <span className="text-xs text-gray-400">{formatDateRD(u.createdAt.slice(0, 10))}</span>
                 </div>

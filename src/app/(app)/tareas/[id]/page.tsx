@@ -220,8 +220,8 @@ export default function TaskDetailPage() {
             <div className="flex items-start justify-between">
               <h1 className="text-xl font-semibold text-gray-900">{task.title}</h1>
               {user?.role !== 'observador' && task.status !== 'completada' && (
-                <button onClick={startEditing} className="text-gray-400 hover:text-blue-600 p-1" title="Editar tarea">
-                  <Pencil size={16} />
+                <button onClick={startEditing} className="text-gray-400 hover:text-blue-600 p-1" title="Editar tarea" aria-label="Editar tarea">
+                  <Pencil size={16} aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -653,9 +653,10 @@ function EvidenceSection({
                   <button
                     onClick={() => handleDelete(ev.id)}
                     className="text-gray-400 hover:text-red-500 ml-2 shrink-0"
-                    title="Eliminar"
+                    title="Eliminar evidencia"
+                    aria-label="Eliminar evidencia"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={14} aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -880,12 +881,12 @@ function CommentsSection({
                   {canModify && editingId !== c.id && (
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => { setEditingId(c.id); setEditContent(c.content); }}
-                        className="text-gray-400 hover:text-blue-600 p-0.5" title="Editar">
-                        <Pencil size={12} />
+                        className="text-gray-400 hover:text-blue-600 p-0.5" title="Editar" aria-label="Editar comentario">
+                        <Pencil size={12} aria-hidden="true" />
                       </button>
                       <button onClick={() => handleDelete(c.id)}
-                        className="text-gray-400 hover:text-red-500 p-0.5" title="Eliminar">
-                        <Trash2 size={12} />
+                        className="text-gray-400 hover:text-red-500 p-0.5" title="Eliminar" aria-label="Eliminar comentario">
+                        <Trash2 size={12} aria-hidden="true" />
                       </button>
                     </div>
                   )}

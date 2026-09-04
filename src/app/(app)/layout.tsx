@@ -30,9 +30,12 @@ export default function AppLayout({
   if (!user) return null;
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex bg-[var(--bg-primary)]">
+      <a href="#main-content" className="skip-link">
+        Saltar al contenido principal
+      </a>
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main id="main-content" className="flex-1 overflow-y-auto pl-0 md:pl-0" tabIndex={-1}>
         {children}
       </main>
     </div>

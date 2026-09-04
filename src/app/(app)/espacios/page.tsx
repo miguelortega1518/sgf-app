@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useSession } from '@/lib/hooks/use-session';
 import { Plus, RefreshCw, Target, Layers, Archive } from 'lucide-react';
 
@@ -58,7 +59,7 @@ export default function EspaciosPage() {
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold text-gray-900">Espacios</h1>
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Espacios</h1>
           <button
             onClick={() => setShowClosed(!showClosed)}
             className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${
@@ -90,20 +91,20 @@ export default function EspaciosPage() {
           {spaces.filter(s => showClosed || s.status !== 'cerrado').map(space => {
             const Icon = TYPE_ICONS[space.type] || Layers;
             return (
-              <div
+              <Link
                 key={space.id}
-                onClick={() => router.push(`/espacios/${space.id}`)}
-                className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm cursor-pointer transition-shadow flex items-center gap-4"
+                href={`/espacios/${space.id}`}
+                className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-4 hover:shadow-sm transition-shadow flex items-center gap-4"
               >
-                <Icon size={20} className="text-gray-400 shrink-0" />
+                <Icon size={20} className="text-[var(--text-muted)] shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900">{space.name}</span>
+                    <span className="text-sm font-medium text-[var(--text-primary)]">{space.name}</span>
                     {space.period && (
-                      <span className="text-xs text-gray-400">{space.period}</span>
+                      <span className="text-xs text-[var(--text-muted)]">{space.period}</span>
                     )}
                   </div>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-[var(--text-secondary)]">
                     {TYPE_LABELS[space.type]}
                   </span>
                 </div>
@@ -112,7 +113,7 @@ export default function EspaciosPage() {
                 }`}>
                   {STATUS_LABELS[space.status] || space.status}
                 </span>
-              </div>
+              </Link>
             );
           })}
           {spaces.length === 0 && (

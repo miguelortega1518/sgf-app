@@ -17,8 +17,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className="h-full">
-      <body className={`${inter.className} h-full bg-gray-50 text-gray-900 antialiased`}>
+    <html lang="es" className="h-full" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){
+            try {
+              var t = localStorage.getItem('sgf-theme');
+              if (t === 'dark') document.documentElement.classList.add('dark');
+              else if (t === 'light') document.documentElement.classList.add('light');
+            } catch(e){}
+          })();
+        `}} />
+      </head>
+      <body className={`${inter.className} h-full bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased`}>
         <SessionProvider>
           <ToastProvider>
             {children}

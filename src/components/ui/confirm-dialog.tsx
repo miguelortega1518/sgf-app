@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useFocusTrap } from '@/lib/hooks/use-focus-trap';
 
 type Props = {
   title: string;
@@ -16,18 +17,27 @@ export function ConfirmDialog({
   title, message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar',
   variant = 'default', onConfirm, onCancel,
 }: Props) {
+  const trapRef = useFocusTrap(true);
+
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-lg p-5 w-full max-w-sm mx-4">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onCancel}>
+      <div
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        className="bg-[var(--bg-card)] rounded-xl shadow-lg p-5 w-full max-w-sm mx-4"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
+          <h3 id="confirm-dialog-title" className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
+          <button onClick={onCancel} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]" aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
-        <p className="text-sm text-gray-600 mb-5">{message}</p>
+        <p className="text-sm text-[var(--text-secondary)] mb-5">{message}</p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">
+          <button onClick={onCancel} className="px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
             {cancelLabel}
           </button>
           <button
