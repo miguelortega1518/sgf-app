@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { tasks, spaces, evidence, subtasks, comments, persons, auditLog } from '@/lib/db/schema';
+import { tasks, spaces, evidence, subtasks, comments, persons, auditLog, taskDependencies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { canChangeDueDate, canApproveTask } from '@/lib/permissions';
 import { updateTaskSchema, updateTaskStatusSchema } from '@/lib/schemas/task';
@@ -31,6 +31,12 @@ export async function GET(
       .from(persons)
       .where(eq(persons.id, task.responsibleId));
 
+    const [space] = await db
+      .select({ name: spaces.name })
+      .from(spaces)
+      .where(eq(spaces.id, task.spaceId))
+      .limit(1);
+
     const taskSubtasks = await db
       .select()
       .from(subtasks)
@@ -46,6 +52,7 @@ export async function GET(
         id: comments.id,
         content: comments.content,
         createdAt: comments.createdAt,
+        editedAt: comments.editedAt,
         authorName: persons.name,
         authorId: comments.authorId,
       })
@@ -69,16 +76,30 @@ export async function GET(
       .where(eq(auditLog.taskId, id))
       .orderBy(desc(auditLog.timestamp));
 
+    const predecessors = await db
+      .select({ id: tasks.id, title: tasks.title, status: tasks.status })
+      .from(taskDependencies)
+      .innerJoin(tasks, eq(taskDependencies.predecessorId, tasks.id))
+      .where(eq(taskDependencies.taskId, id));
+
+    const successors = await db
+      .select({ id: tasks.id, title: tasks.title, status: tasks.status })
+      .from(taskDependencies)
+      .innerJoin(tasks, eq(taskDependencies.taskId, tasks.id))
+      .where(eq(taskDependencies.predecessorId, id));
+
     return success({
       task: {
         ...task,
         overdue: isOverdue(task.dueDateOriginal, task.status),
         responsibleName: responsible?.name,
+        spaceName: space?.name,
       },
       subtasks: taskSubtasks,
       evidence: taskEvidence,
       comments: taskComments,
       audit: taskAudit,
+      dependencies: { predecessors, successors },
     });
   } catch (err) {
     return handleError(err);

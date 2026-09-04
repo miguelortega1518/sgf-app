@@ -33,16 +33,23 @@ export function Sidebar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/notifications')
-      .then(r => r.ok ? r.json() : [])
+  const fetchUnreadCount = useCallback(() => {
+    fetch('/api/notifications?countOnly=true')
+      .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (Array.isArray(data)) {
-          setUnreadCount(data.filter((n: { read: boolean }) => !n.read).length);
-        }
+        if (data?.unreadCount !== undefined) setUnreadCount(data.unreadCount);
       })
       .catch(() => {});
-  }, [pathname]);
+  }, []);
+
+  useEffect(() => {
+    fetchUnreadCount();
+  }, [pathname, fetchUnreadCount]);
+
+  useEffect(() => {
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchUnreadCount]);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {

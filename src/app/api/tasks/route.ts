@@ -6,7 +6,7 @@ import { canCreateAndAssignTask } from '@/lib/permissions';
 import { createTaskSchema } from '@/lib/schemas/task';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
-import { eq, and, or, ne, isNull, asc } from 'drizzle-orm';
+import { eq, and, asc, ilike } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,10 +14,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const spaceId = searchParams.get('spaceId');
     const responsibleId = searchParams.get('responsibleId');
+    const status = searchParams.get('status');
+    const priority = searchParams.get('priority');
+    const search = searchParams.get('search');
 
     const conditions = [eq(tasks.archived, false)];
     if (spaceId) conditions.push(eq(tasks.spaceId, spaceId));
     if (responsibleId) conditions.push(eq(tasks.responsibleId, responsibleId));
+    if (status) conditions.push(eq(tasks.status, status as typeof tasks.status.enumValues[number]));
+    if (priority) conditions.push(eq(tasks.priority, priority as typeof tasks.priority.enumValues[number]));
+    if (search) conditions.push(ilike(tasks.title, `%${search}%`));
 
     const result = await db
       .select()

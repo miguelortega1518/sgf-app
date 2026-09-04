@@ -8,9 +8,13 @@ import {
   Calendar, User, Building2, Clock, FileText,
   Link as LinkIcon, Image, Paperclip, Trash2, Plus,
   MessageSquare, Send, ShieldAlert, X, AlertTriangle,
-  Pencil, Check, Square, CheckSquare,
+  Pencil, Check, Square, CheckSquare, GitBranch,
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
+import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import Link from 'next/link';
+
+type DepTask = { id: string; title: string; status: string };
 
 type TaskDetail = {
   task: {
@@ -25,6 +29,7 @@ type TaskDetail = {
     responsibleId: string;
     reviewerId: string | null;
     spaceId: string;
+    spaceName?: string;
     companyId: string | null;
     blockedByArea: string | null;
     blockedSince: string | null;
@@ -38,8 +43,9 @@ type TaskDetail = {
   };
   subtasks: { id: string; title: string; completed: boolean }[];
   evidence: { id: string; urlOrFile: string; type: string; uploadedBy: string }[];
-  comments: { id: string; content: string; authorName: string; createdAt: string }[];
+  comments: { id: string; content: string; authorName: string; authorId: string; createdAt: string; editedAt: string | null }[];
   audit: { id: string; action: string; actorName: string; previousValue: string | null; newValue: string | null; reason: string | null; timestamp: string }[];
+  dependencies: { predecessors: DepTask[]; successors: DepTask[] };
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -151,10 +157,15 @@ export default function TaskDetailPage() {
     );
   }
 
-  const { task, subtasks, evidence: taskEvidence, comments, audit } = data;
+  const { task, subtasks, evidence: taskEvidence, comments, audit, dependencies } = data;
 
   return (
     <div className="p-6 max-w-3xl">
+      <Breadcrumbs items={[
+        { label: 'Espacios', href: '/espacios' },
+        { label: task.spaceName || 'Espacio', href: `/espacios/${task.spaceId}` },
+        { label: task.title },
+      ]} />
       <div className="mb-6">
         {editing ? (
           <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -359,10 +370,20 @@ export default function TaskDetailPage() {
         onChanged={fetchData}
       />
 
+      <DependenciesSection
+        taskId={task.id}
+        spaceId={task.spaceId}
+        dependencies={dependencies}
+        canEdit={user?.role !== 'observador' && task.status !== 'completada'}
+        onChanged={fetchData}
+      />
+
       <CommentsSection
         taskId={task.id}
         comments={comments}
         canComment={user?.role !== 'observador'}
+        userId={user?.id}
+        isAdmin={user?.role === 'admin'}
         onChanged={fetchData}
       />
 
@@ -648,16 +669,140 @@ function EvidenceSection({
   );
 }
 
+function DependenciesSection({
+  taskId, spaceId, dependencies, canEdit, onChanged,
+}: {
+  taskId: string;
+  spaceId: string;
+  dependencies: TaskDetail['dependencies'];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [spaceTasks, setSpaceTasks] = useState<{ id: string; title: string }[]>([]);
+  const [selectedPred, setSelectedPred] = useState('');
+
+  async function loadSpaceTasks() {
+    const res = await fetch(`/api/tasks?spaceId=${spaceId}`);
+    if (res.ok) {
+      const list = await res.json();
+      setSpaceTasks(list.filter((t: { id: string }) => t.id !== taskId));
+    }
+    setAdding(true);
+  }
+
+  async function handleAdd() {
+    if (!selectedPred) return;
+    await fetch(`/api/tasks/${taskId}/dependencies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ predecessorId: selectedPred }),
+    });
+    setAdding(false);
+    setSelectedPred('');
+    onChanged();
+  }
+
+  async function handleRemove(predecessorId: string) {
+    await fetch(`/api/tasks/${taskId}/dependencies?predecessorId=${predecessorId}`, { method: 'DELETE' });
+    onChanged();
+  }
+
+  const hasDeps = dependencies.predecessors.length > 0 || dependencies.successors.length > 0;
+
+  if (!hasDeps && !canEdit) return null;
+
+  return (
+    <div className="mt-6 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+          <GitBranch size={14} />
+          Dependencias
+        </h3>
+        {canEdit && !adding && (
+          <button onClick={loadSpaceTasks} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+            <Plus size={12} />Agregar
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="bg-gray-50 border rounded-lg p-3 mb-3 space-y-2">
+          <select value={selectedPred} onChange={e => setSelectedPred(e.target.value)}
+            className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm">
+            <option value="">Seleccionar tarea predecesora...</option>
+            {spaceTasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+          <div className="flex gap-2">
+            <button onClick={handleAdd} disabled={!selectedPred}
+              className="px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50">Agregar</button>
+            <button onClick={() => setAdding(false)} className="px-3 py-1 text-xs text-gray-600">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {dependencies.predecessors.length > 0 && (
+        <div className="mb-2">
+          <p className="text-xs text-gray-500 mb-1">Depende de:</p>
+          <div className="space-y-1">
+            {dependencies.predecessors.map(dep => (
+              <div key={dep.id} className="flex items-center gap-2 group">
+                <Link href={`/tareas/${dep.id}`} className="text-sm text-blue-600 hover:underline flex-1 truncate">
+                  {dep.title}
+                </Link>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[dep.status]}`}>
+                  {STATUS_LABELS[dep.status]}
+                </span>
+                {canEdit && (
+                  <button onClick={() => handleRemove(dep.id)}
+                    className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100">
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {dependencies.successors.length > 0 && (
+        <div>
+          <p className="text-xs text-gray-500 mb-1">Bloquea a:</p>
+          <div className="space-y-1">
+            {dependencies.successors.map(dep => (
+              <div key={dep.id} className="flex items-center gap-2">
+                <Link href={`/tareas/${dep.id}`} className="text-sm text-blue-600 hover:underline flex-1 truncate">
+                  {dep.title}
+                </Link>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[dep.status]}`}>
+                  {STATUS_LABELS[dep.status]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hasDeps && <p className="text-xs text-gray-400">Sin dependencias</p>}
+    </div>
+  );
+}
+
 function CommentsSection({
-  taskId, comments: items, canComment, onChanged,
+  taskId, comments: items, canComment, userId, isAdmin, onChanged,
 }: {
   taskId: string;
   comments: TaskDetail['comments'];
   canComment: boolean;
+  userId?: string;
+  isAdmin?: boolean;
   onChanged: () => void;
 }) {
+  const { toast } = useToast();
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -673,6 +818,21 @@ function CommentsSection({
       onChanged();
     }
     setSubmitting(false);
+  }
+
+  async function handleEdit(commentId: string) {
+    if (!editContent.trim()) return;
+    const res = await fetch(`/api/tasks/${taskId}/comments`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commentId, content: editContent.trim() }),
+    });
+    if (res.ok) { setEditingId(null); onChanged(); toast('Comentario actualizado'); }
+  }
+
+  async function handleDelete(commentId: string) {
+    const res = await fetch(`/api/tasks/${taskId}/comments?commentId=${commentId}`, { method: 'DELETE' });
+    if (res.ok) { onChanged(); toast('Comentario eliminado'); }
   }
 
   return (
@@ -704,17 +864,50 @@ function CommentsSection({
 
       {items.length > 0 ? (
         <div className="space-y-3">
-          {items.map(c => (
-            <div key={c.id} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-medium text-gray-700">{c.authorName}</span>
-                <span className="text-xs text-gray-400">
-                  {toTimestampRD(new Date(c.createdAt))}
-                </span>
+          {items.map(c => {
+            const canModify = c.authorId === userId || isAdmin;
+
+            return (
+              <div key={c.id} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 group">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-gray-700">{c.authorName}</span>
+                    <span className="text-xs text-gray-400">
+                      {toTimestampRD(new Date(c.createdAt))}
+                    </span>
+                    {c.editedAt && <span className="text-[10px] text-gray-400 italic">editado</span>}
+                  </div>
+                  {canModify && editingId !== c.id && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => { setEditingId(c.id); setEditContent(c.content); }}
+                        className="text-gray-400 hover:text-blue-600 p-0.5" title="Editar">
+                        <Pencil size={12} />
+                      </button>
+                      <button onClick={() => handleDelete(c.id)}
+                        className="text-gray-400 hover:text-red-500 p-0.5" title="Eliminar">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {editingId === c.id ? (
+                  <div className="space-y-2">
+                    <textarea value={editContent} onChange={e => setEditContent(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={2} autoFocus />
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEdit(c.id)} disabled={!editContent.trim()}
+                        className="px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 disabled:opacity-50">Guardar</button>
+                      <button onClick={() => setEditingId(null)}
+                        className="px-2 py-1 text-xs text-gray-600">Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">{c.content}</p>
+                )}
               </div>
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">{c.content}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <p className="text-xs text-gray-400">Sin comentarios</p>

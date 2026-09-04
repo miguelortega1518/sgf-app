@@ -103,7 +103,13 @@ export default function EspaciosPage() {
             );
           })}
           {spaces.length === 0 && (
-            <p className="text-center text-gray-500 py-8 text-sm">No hay espacios creados</p>
+            <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg">
+              <Layers size={40} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500">No hay espacios creados</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Crea un espacio para organizar tareas de tu equipo
+              </p>
+            </div>
           )}
         </div>
       )}

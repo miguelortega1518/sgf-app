@@ -7,8 +7,10 @@ import { formatDateRD } from '@/lib/date-utils';
 import {
   Plus, Users, Calendar, Target, Building2, ChevronDown,
   ChevronRight, Play, XCircle, CheckCircle2, Pencil, Heart,
+  Filter, ClipboardList,
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
+import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 
 type TaskItem = {
   id: string;
@@ -82,6 +84,9 @@ export default function SpaceDetailPage() {
   const [editName, setEditName] = useState('');
   const [editObjective, setEditObjective] = useState('');
   const [editTargetDate, setEditTargetDate] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/spaces/${id}`);
@@ -156,8 +161,20 @@ export default function SpaceDetailPage() {
   const isAdmin = user?.role === 'admin';
   const canAddTask = user?.role !== 'observador';
 
+  const filteredTasks = spaceTasks.filter(t => {
+    if (filterStatus && t.status !== filterStatus) return false;
+    if (filterPriority && t.priority !== filterPriority) return false;
+    return true;
+  });
+
+  const activeFilters = (filterStatus ? 1 : 0) + (filterPriority ? 1 : 0);
+
   return (
     <div className="p-6 max-w-6xl">
+      <Breadcrumbs items={[
+        { label: 'Espacios', href: '/espacios' },
+        { label: space.name },
+      ]} />
       {actionError && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center justify-between">
           <span>{actionError}</span>
@@ -190,16 +207,57 @@ export default function SpaceDetailPage() {
         <h2 className="text-lg font-medium text-gray-900">
           Tareas ({spaceTasks.filter(t => t.status !== 'completada').length} pendientes)
         </h2>
-        {canAddTask && space.status !== 'cerrado' && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowNewTask(!showNewTask)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+            onClick={() => setShowFilters(!showFilters)}
+            className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+              activeFilters > 0
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
           >
-            <Plus size={14} />
-            Nueva tarea
+            <Filter size={14} />
+            Filtros{activeFilters > 0 && ` (${activeFilters})`}
           </button>
-        )}
+          {canAddTask && space.status !== 'cerrado' && (
+            <button
+              onClick={() => setShowNewTask(!showNewTask)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={14} />
+              Nueva tarea
+            </button>
+          )}
+        </div>
       </div>
+
+      {showFilters && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 flex items-center gap-3 flex-wrap">
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white">
+            <option value="">Todos los estados</option>
+            <option value="no_iniciada">No iniciada</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="en_revision">En revisión</option>
+            <option value="completada">Completada</option>
+            <option value="bloqueada">Bloqueada</option>
+          </select>
+          <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white">
+            <option value="">Todas las prioridades</option>
+            <option value="critica">Crítica</option>
+            <option value="alta">Alta</option>
+            <option value="normal">Normal</option>
+            <option value="baja">Baja</option>
+          </select>
+          {activeFilters > 0 && (
+            <button onClick={() => { setFilterStatus(''); setFilterPriority(''); }}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      )}
 
       {showNewTask && (
         <NewTaskForm
@@ -213,13 +271,13 @@ export default function SpaceDetailPage() {
 
       {isRecurrente ? (
         <GroupedByCompanyView
-          tasks={spaceTasks}
+          tasks={filteredTasks}
           onStatusChange={handleStatusChange}
           spaceClosed={space.status === 'cerrado'}
         />
       ) : (
         <FlatTaskList
-          tasks={spaceTasks}
+          tasks={filteredTasks}
           spaceName={space.name}
           spaceType={space.type}
           onStatusChange={handleStatusChange}
@@ -572,7 +630,11 @@ function FlatTaskList({
           );
         })}
         {activeTasks.length === 0 && (
-          <p className="text-sm text-gray-500 py-4 text-center">No hay tareas pendientes</p>
+          <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-lg">
+            <ClipboardList size={32} className="mx-auto text-gray-300 mb-2" />
+            <p className="text-sm text-gray-500">No hay tareas pendientes</p>
+            <p className="text-xs text-gray-400 mt-1">Todas las tareas han sido completadas o aún no se han creado</p>
+          </div>
         )}
       </div>
 
@@ -786,7 +848,10 @@ function HealthUpdatesSection({ spaceId, canPost }: { spaceId: string; canPost: 
           })}
         </div>
       ) : (
-        <p className="text-xs text-gray-400">Sin actualizaciones</p>
+        <div className="text-center py-4 border border-dashed border-gray-200 rounded-lg">
+          <Heart size={20} className="mx-auto text-gray-300 mb-1" />
+          <p className="text-xs text-gray-400">Sin actualizaciones de salud</p>
+        </div>
       )}
     </div>
   );

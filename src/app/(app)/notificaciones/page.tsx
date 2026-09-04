@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bell, Check, CheckCheck, FileText, FolderOpen } from 'lucide-react';
 import Link from 'next/link';
+import { Pagination } from '@/components/ui/pagination';
 
 type Notification = {
   id: string;
@@ -37,14 +38,31 @@ export default function NotificacionesPage() {
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  const fetchNotifs = useCallback(async (p: number) => {
+    try {
+      const res = await fetch(`/api/notifications?page=${p}&limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        setNotifs(data.data || []);
+        setTotalPages(data.totalPages || 1);
+        setTotal(data.total || 0);
+      }
+    } catch {}
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    fetch('/api/notifications')
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setNotifs(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    fetchNotifs(page);
+  }, [page, fetchNotifs]);
+
+  useEffect(() => {
+    const interval = setInterval(() => fetchNotifs(page), 30000);
+    return () => clearInterval(interval);
+  }, [page, fetchNotifs]);
 
   const markAsRead = useCallback(async (ids: string[]) => {
     const unreadIds = ids.filter(id => notifs.find(n => n.id === id && !n.read));
@@ -124,56 +142,62 @@ export default function NotificacionesPage() {
           <p className="text-gray-500 text-sm">
             {filter === 'unread' ? 'No tienes notificaciones sin leer' : 'No tienes notificaciones'}
           </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Las notificaciones aparecerán aquí cuando haya actividad en tus tareas
+          </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(n => {
-            const config = TYPE_CONFIG[n.type] || { label: n.type, color: 'text-gray-700', bg: 'bg-gray-50' };
-            const href = n.taskId ? `/tareas/${n.taskId}` : n.spaceId ? `/espacios/${n.spaceId}` : null;
-            const content = (
-              <div
-                className={`bg-white rounded-lg border p-4 transition-colors ${
-                  n.read ? 'border-gray-200' : 'border-blue-200 bg-blue-50/30'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 p-1.5 rounded-lg ${config.bg}`}>
-                    {n.taskId ? <FileText size={16} className={config.color} /> : <FolderOpen size={16} className={config.color} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${config.bg} ${config.color}`}>
-                        {config.label}
-                      </span>
-                      <span className="text-xs text-gray-400">{timeAgo(n.createdAt)}</span>
-                      {!n.read && <span className="w-2 h-2 bg-blue-500 rounded-full" />}
+        <>
+          <div className="space-y-2">
+            {filtered.map(n => {
+              const config = TYPE_CONFIG[n.type] || { label: n.type, color: 'text-gray-700', bg: 'bg-gray-50' };
+              const href = n.taskId ? `/tareas/${n.taskId}` : n.spaceId ? `/espacios/${n.spaceId}` : null;
+              const content = (
+                <div
+                  className={`bg-white rounded-lg border p-4 transition-colors ${
+                    n.read ? 'border-gray-200' : 'border-blue-200 bg-blue-50/30'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`mt-0.5 p-1.5 rounded-lg ${config.bg}`}>
+                      {n.taskId ? <FileText size={16} className={config.color} /> : <FolderOpen size={16} className={config.color} />}
                     </div>
-                    <p className="text-sm font-medium text-gray-900 truncate">{n.title}</p>
-                    {n.body && <p className="text-xs text-gray-500 mt-0.5 truncate">{n.body}</p>}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${config.bg} ${config.color}`}>
+                          {config.label}
+                        </span>
+                        <span className="text-xs text-gray-400">{timeAgo(n.createdAt)}</span>
+                        {!n.read && <span className="w-2 h-2 bg-blue-500 rounded-full" />}
+                      </div>
+                      <p className="text-sm font-medium text-gray-900 truncate">{n.title}</p>
+                      {n.body && <p className="text-xs text-gray-500 mt-0.5 truncate">{n.body}</p>}
+                    </div>
+                    {!n.read && (
+                      <button
+                        onClick={e => { e.preventDefault(); e.stopPropagation(); markAsRead([n.id]); }}
+                        className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-gray-100"
+                        title="Marcar como leída"
+                      >
+                        <Check size={14} />
+                      </button>
+                    )}
                   </div>
-                  {!n.read && (
-                    <button
-                      onClick={e => { e.preventDefault(); e.stopPropagation(); markAsRead([n.id]); }}
-                      className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-gray-100"
-                      title="Marcar como leída"
-                    >
-                      <Check size={14} />
-                    </button>
-                  )}
                 </div>
-              </div>
-            );
-
-            if (href) {
-              return (
-                <Link key={n.id} href={href} onClick={() => !n.read && markAsRead([n.id])} className="block hover:opacity-90">
-                  {content}
-                </Link>
               );
-            }
-            return <div key={n.id}>{content}</div>;
-          })}
-        </div>
+
+              if (href) {
+                return (
+                  <Link key={n.id} href={href} onClick={() => !n.read && markAsRead([n.id])} className="block hover:opacity-90">
+                    {content}
+                  </Link>
+                );
+              }
+              return <div key={n.id}>{content}</div>;
+            })}
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
     </div>
   );
