@@ -7,7 +7,7 @@ import {
   LayoutDashboard, CheckSquare, Users, Building2,
   FolderOpen, Search, LogOut, CalendarDays,
   Bell, ChevronLeft, ChevronRight, FileText, ScrollText, Sun,
-  Menu, X, Moon,
+  Menu, X, Moon, FileBarChart,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { SearchDialog } from './search-dialog';
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/panorama', label: 'Panorama', icon: LayoutDashboard, roles: ['admin', 'miembro', 'observador'] },
   { href: '/espacios', label: 'Espacios', icon: FolderOpen, roles: ['admin', 'miembro', 'observador'] },
   { href: '/calendario', label: 'Calendario', icon: CalendarDays, roles: ['admin', 'miembro', 'observador'] },
+  { href: '/reportes', label: 'Reportes', icon: FileBarChart, roles: ['admin', 'miembro'] },
 ] as const;
 
 const ADMIN_ITEMS = [
