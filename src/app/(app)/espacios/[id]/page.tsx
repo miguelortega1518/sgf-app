@@ -42,6 +42,8 @@ type SpaceData = {
     period: string | null;
     anchorDate: string | null;
     ownerName: string;
+    leaderId: string | null;
+    leaderName: string | null;
     spaceTemplateId: string | null;
   };
   members: { personId: string; spaceRole: string; name: string }[];
@@ -85,6 +87,7 @@ export default function SpaceDetailPage() {
   const [editName, setEditName] = useState('');
   const [editObjective, setEditObjective] = useState('');
   const [editTargetDate, setEditTargetDate] = useState('');
+  const [editLeaderId, setEditLeaderId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -147,6 +150,7 @@ export default function SpaceDetailPage() {
     setEditName(data.space.name);
     setEditObjective(data.space.objective || '');
     setEditTargetDate(data.space.targetDate || '');
+    setEditLeaderId(data.space.leaderId || '');
     setEditingSpace(true);
   }
 
@@ -158,6 +162,7 @@ export default function SpaceDetailPage() {
         name: editName,
         objective: editObjective || null,
         targetDate: editTargetDate || null,
+        leaderId: editLeaderId || null,
       }),
     });
     if (res.ok) { setEditingSpace(false); fetchData(); toast('Espacio actualizado'); }
@@ -203,15 +208,18 @@ export default function SpaceDetailPage() {
         space={space}
         members={members}
         tasks={spaceTasks}
+        people={people}
         isAdmin={isAdmin ?? false}
         canEdit={user?.role !== 'observador' && space.status !== 'cerrado'}
         editing={editingSpace}
         editName={editName}
         editObjective={editObjective}
         editTargetDate={editTargetDate}
+        editLeaderId={editLeaderId}
         onEditName={setEditName}
         onEditObjective={setEditObjective}
         onEditTargetDate={setEditTargetDate}
+        onEditLeaderId={setEditLeaderId}
         onStartEdit={startEditingSpace}
         onSaveEdit={saveSpaceEdit}
         onCancelEdit={() => setEditingSpace(false)}
@@ -344,24 +352,27 @@ export default function SpaceDetailPage() {
 }
 
 function SpaceHeader({
-  space, members, tasks, isAdmin, canEdit,
-  editing, editName, editObjective, editTargetDate,
-  onEditName, onEditObjective, onEditTargetDate,
+  space, members, tasks, people, isAdmin, canEdit,
+  editing, editName, editObjective, editTargetDate, editLeaderId,
+  onEditName, onEditObjective, onEditTargetDate, onEditLeaderId,
   onStartEdit, onSaveEdit, onCancelEdit,
   onActivate, onClose,
 }: {
   space: SpaceData['space'];
   members: SpaceData['members'];
   tasks: TaskItem[];
+  people: { id: string; name: string }[];
   isAdmin: boolean;
   canEdit?: boolean;
   editing: boolean;
   editName: string;
   editObjective: string;
   editTargetDate: string;
+  editLeaderId: string;
   onEditName: (v: string) => void;
   onEditObjective: (v: string) => void;
   onEditTargetDate: (v: string) => void;
+  onEditLeaderId: (v: string) => void;
   onStartEdit: () => void;
   onSaveEdit: () => void;
   onCancelEdit: () => void;
@@ -396,6 +407,13 @@ function SpaceHeader({
             <label className="block text-xs text-gray-500 mb-1">Fecha meta</label>
             <input type="date" value={editTargetDate} onChange={e => onEditTargetDate(e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-md text-sm" />
           </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Líder</label>
+            <select value={editLeaderId} onChange={e => onEditLeaderId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm">
+              <option value="">Sin líder asignado</option>
+              {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
           <div className="flex gap-2">
             <button onClick={onSaveEdit} disabled={!editName.trim()} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">Guardar</button>
             <button onClick={onCancelEdit} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
@@ -413,10 +431,11 @@ function SpaceHeader({
               )}
             </div>
             {space.objective && <p className="text-sm text-gray-600 mt-1">{space.objective}</p>}
-            <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
+            <div className="flex items-center gap-4 mt-3 text-sm text-gray-500 flex-wrap">
+              {space.leaderName && <span className="flex items-center gap-1"><Target size={14} />Líder: {space.leaderName}</span>}
               <span className="flex items-center gap-1"><Users size={14} />{members.length} miembros</span>
-              {space.targetDate && <span className="flex items-center gap-1"><Target size={14} />Meta: {formatDateRD(space.targetDate)}</span>}
-              <span className="flex items-center gap-1"><Calendar size={14} />{completed}/{total} tareas</span>
+              {space.targetDate && <span className="flex items-center gap-1"><Calendar size={14} />Meta: {formatDateRD(space.targetDate)}</span>}
+              <span className="flex items-center gap-1"><ClipboardList size={14} />{completed}/{total} tareas</span>
             </div>
           </div>
           {isAdmin && (

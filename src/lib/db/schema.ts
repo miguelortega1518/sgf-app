@@ -142,6 +142,7 @@ export const spaces = pgTable('spaces', {
   anchorDate: date('anchor_date', { mode: 'string' }),
   objective: text('objective'),
   ownerId: uuid('owner_id').notNull().references(() => persons.id),
+  leaderId: uuid('leader_id').references(() => persons.id),
   status: spaceStatusEnum('status').notNull().default('activo'),
   targetDate: date('target_date', { mode: 'string' }),
   declaredHealth: healthEnum('declared_health'),

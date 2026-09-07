@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
         type: input.type,
         objective: input.objective,
         targetDate: input.targetDate,
+        leaderId: input.leaderId,
         ownerId: session.id,
         openDate: todayRD(),
         status: input.type === 'recurrente' ? 'borrador' : 'activo',

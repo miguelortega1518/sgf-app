@@ -16,6 +16,7 @@ export default function NuevoEspacioPage() {
   const [type, setType] = useState<'proyecto' | 'continuo'>('proyecto');
   const [objective, setObjective] = useState('');
   const [targetDate, setTargetDate] = useState('');
+  const [leaderId, setLeaderId] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [people, setPeople] = useState<PersonOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +41,7 @@ export default function NuevoEspacioPage() {
         type,
         objective: objective || undefined,
         targetDate: targetDate || undefined,
+        leaderId: leaderId || undefined,
         memberIds: selectedMembers,
       }),
     });
@@ -106,6 +108,20 @@ export default function NuevoEspacioPage() {
             />
           </div>
         )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Líder</label>
+          <select
+            value={leaderId}
+            onChange={e => setLeaderId(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Sin líder asignado</option>
+            {people.map(person => (
+              <option key={person.id} value={person.id}>{person.name}</option>
+            ))}
+          </select>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Miembros</label>

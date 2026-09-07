@@ -49,6 +49,16 @@ export async function GET(
       .where(eq(persons.id, space.ownerId))
       .limit(1);
 
+    let leaderName: string | null = null;
+    if (space.leaderId) {
+      const [leader] = await db
+        .select({ name: persons.name })
+        .from(persons)
+        .where(eq(persons.id, space.leaderId))
+        .limit(1);
+      leaderName = leader?.name ?? null;
+    }
+
     const taskConditions = [eq(tasks.spaceId, id)];
     if (session.role !== 'admin') {
       taskConditions.push(eq(tasks.responsibleId, session.id));
@@ -78,7 +88,7 @@ export async function GET(
       .where(and(...taskConditions));
 
     return success({
-      space: { ...space, ownerName: owner?.name },
+      space: { ...space, ownerName: owner?.name, leaderName },
       members,
       tasks: spaceTasks,
     });
