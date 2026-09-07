@@ -58,12 +58,14 @@ export async function POST(req: NextRequest) {
 
     if (!space) return error('Espacio no encontrado', 404);
 
+    const reviewerId = input.reviewerId || space.leaderId || null;
+
     const [task] = await db.insert(tasks).values({
       spaceId: input.spaceId,
       title: input.title,
       description: input.description,
       responsibleId: input.responsibleId,
-      reviewerId: input.reviewerId,
+      reviewerId,
       creatorId: session.id,
       companyId: input.companyId,
       milestoneId: input.milestoneId,

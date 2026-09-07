@@ -211,6 +211,13 @@ export async function PATCH(
       .where(eq(spaces.id, id))
       .returning();
 
+    if ('leaderId' in input && input.leaderId !== space.leaderId) {
+      await db
+        .update(tasks)
+        .set({ reviewerId: input.leaderId })
+        .where(and(eq(tasks.spaceId, id), ne(tasks.status, 'completada')));
+    }
+
     await logAudit({
       actorId: session.id,
       action: 'space_updated',
