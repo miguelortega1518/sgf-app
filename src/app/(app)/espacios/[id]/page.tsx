@@ -165,7 +165,14 @@ export default function SpaceDetailPage() {
         leaderId: editLeaderId || null,
       }),
     });
-    if (res.ok) { setEditingSpace(false); fetchData(); toast('Espacio actualizado'); }
+    if (res.ok) {
+      setEditingSpace(false);
+      fetchData();
+      toast('Espacio actualizado');
+    } else {
+      const body = await res.json().catch(() => null);
+      toast(body?.error || 'Error al guardar los cambios');
+    }
   }
 
   if (loading || !data) {

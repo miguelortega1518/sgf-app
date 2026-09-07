@@ -11,7 +11,7 @@ export const createSpaceSchema = z.object({
 
 export const updateSpaceSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  objective: z.string().max(2000).optional(),
+  objective: z.string().max(2000).nullable().optional(),
   targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   leaderId: z.string().uuid().nullable().optional(),
   status: z.enum(['borrador', 'activo', 'cerrado']).optional(),
