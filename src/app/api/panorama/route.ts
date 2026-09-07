@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { spaces, tasks, persons, spaceUpdates } from '@/lib/db/schema';
+import { spaces, tasks, persons, spaceUpdates, spaceMembers } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
@@ -35,12 +35,12 @@ export async function GET() {
 
       spaceIds = activeSpaces.map(s => s.id);
     } else {
-      const userSpaceIds = await db
-        .selectDistinct({ spaceId: tasks.spaceId })
-        .from(tasks)
-        .where(and(eq(tasks.responsibleId, session.id), eq(tasks.archived, false)));
+      const memberOf = await db
+        .select({ spaceId: spaceMembers.spaceId })
+        .from(spaceMembers)
+        .where(eq(spaceMembers.personId, session.id));
 
-      spaceIds = userSpaceIds.map(r => r.spaceId);
+      spaceIds = memberOf.map(r => r.spaceId);
 
       activeSpaces = spaceIds.length > 0
         ? await db
@@ -65,9 +65,7 @@ export async function GET() {
       spaceIds = activeSpaces.map(s => s.id);
     }
 
-    const taskFilter = isAdmin
-      ? and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false))
-      : and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false), eq(tasks.responsibleId, session.id));
+    const taskFilter = and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false));
 
     const taskStats = spaceIds.length > 0
       ? await db

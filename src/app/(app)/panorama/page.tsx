@@ -59,8 +59,6 @@ export default function PanoramaPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'espacios' | 'kpis'>('espacios');
 
-  const isAdmin = user?.role === 'admin';
-
   useEffect(() => {
     Promise.all([
       fetch('/api/panorama').then(r => r.ok ? r.json() : []),
@@ -88,30 +86,25 @@ export default function PanoramaPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Panorama</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {isAdmin
-              ? `${spaces.length} ${spaces.length === 1 ? 'espacio activo' : 'espacios activos'}`
-              : `Mis tareas en ${spaces.length} ${spaces.length === 1 ? 'espacio' : 'espacios'}`
-            }
+            {spaces.length} {spaces.length === 1 ? 'espacio activo' : 'espacios activos'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && (
-            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-              <a
-                href="/api/export"
-                className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 transition-colors"
-              >
-                <Download size={14} />
-                Excel
-              </a>
-              <a
-                href="/api/export?format=pdf"
-                className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 border-l border-gray-200 transition-colors"
-              >
-                PDF
-              </a>
-            </div>
-          )}
+          <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+            <a
+              href="/api/export"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 transition-colors"
+            >
+              <Download size={14} />
+              Excel
+            </a>
+            <a
+              href="/api/export?format=pdf"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-3 py-1.5 border-l border-gray-200 transition-colors"
+            >
+              PDF
+            </a>
+          </div>
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button
               onClick={() => setTab('espacios')}
@@ -135,7 +128,7 @@ export default function PanoramaPage() {
 
       {tab === 'kpis' && dashboard && (
         <div className="space-y-6 mb-6">
-          <div className={`grid gap-4 ${isAdmin ? 'grid-cols-4' : 'grid-cols-4'}`}>
+          <div className="grid gap-4 grid-cols-4">
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle size={16} className="text-green-500" />
@@ -147,7 +140,7 @@ export default function PanoramaPage() {
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-1">
                 <TrendingUp size={16} className="text-blue-500" />
-                <p className="text-sm text-gray-500">{isAdmin ? 'Total tareas' : 'Mis tareas'}</p>
+                <p className="text-sm text-gray-500">Total tareas</p>
               </div>
               <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.total}</p>
             </div>
@@ -167,7 +160,7 @@ export default function PanoramaPage() {
             </div>
           </div>
 
-          <div className={`grid gap-6 ${isAdmin && dashboard.byPerson.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-6 ${dashboard.byPerson.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
                 <div className="w-1 h-4 bg-blue-500 rounded" />
@@ -187,7 +180,7 @@ export default function PanoramaPage() {
               </div>
             </div>
 
-            {isAdmin && dashboard.byPerson.length > 0 && (
+            {dashboard.byPerson.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
                   <Users size={16} className="text-gray-400" />
@@ -259,9 +252,9 @@ export default function PanoramaPage() {
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Espacio</th>
               <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Tipo</th>
-              {isAdmin && <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Dueño</th>}
+              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Dueño</th>
               <th className="text-center text-xs font-medium text-gray-500 uppercase px-4 py-3">Progreso</th>
-              {isAdmin && <th className="text-center text-xs font-medium text-gray-500 uppercase px-4 py-3">Salud</th>}
+              <th className="text-center text-xs font-medium text-gray-500 uppercase px-4 py-3">Salud</th>
               <th className="text-center text-xs font-medium text-gray-500 uppercase px-4 py-3">Vencidas</th>
               <th className="text-center text-xs font-medium text-gray-500 uppercase px-4 py-3">Bloqueadas</th>
             </tr>
@@ -295,11 +288,9 @@ export default function PanoramaPage() {
                       {TYPE_LABELS[space.type]}
                     </span>
                   </td>
-                  {isAdmin && (
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-gray-700">{space.ownerName}</span>
-                    </td>
-                  )}
+                  <td className="px-4 py-3">
+                    <span className="text-sm text-gray-700">{space.ownerName}</span>
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -311,22 +302,20 @@ export default function PanoramaPage() {
                       <span className="text-xs text-gray-500 w-12">{space.completedTasks}/{space.totalTasks}</span>
                     </div>
                   </td>
-                  {isAdmin && (
-                    <td className="px-4 py-3 text-center">
-                      {space.noSignal ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-gray-400 font-medium">
-                          <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
-                          Sin señal
-                        </span>
-                      ) : space.declaredHealth ? (
-                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${
-                          HEALTH_COLORS[space.declaredHealth] || 'bg-gray-300'
-                        }`} />
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </td>
-                  )}
+                  <td className="px-4 py-3 text-center">
+                    {space.noSignal ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-400 font-medium">
+                        <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+                        Sin señal
+                      </span>
+                    ) : space.declaredHealth ? (
+                      <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+                        HEALTH_COLORS[space.declaredHealth] || 'bg-gray-300'
+                      }`} />
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     {space.overdueTasks > 0 ? (
                       <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
@@ -355,7 +344,7 @@ export default function PanoramaPage() {
 
         {spaces.length === 0 && (
           <div className="text-center py-12 text-gray-500 text-sm">
-            {isAdmin ? 'No hay espacios activos' : 'No tienes tareas asignadas en espacios activos'}
+            No hay espacios activos
           </div>
         )}
       </div>

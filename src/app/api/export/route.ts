@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { tasks, spaces, persons, companies } from '@/lib/db/schema';
-import { requireRole } from '@/lib/auth';
+import { tasks, spaces, persons, companies, spaceMembers } from '@/lib/db/schema';
+import { requireSession } from '@/lib/auth';
 import { handleError } from '@/lib/api-utils';
-import { eq, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
@@ -25,10 +25,24 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRole('admin');
+    const session = await requireSession();
     const format = req.nextUrl.searchParams.get('format') || 'xlsx';
 
     const reviewer = alias(persons, 'reviewer');
+
+    let taskFilter;
+    if (session.role === 'admin') {
+      taskFilter = eq(tasks.archived, false);
+    } else {
+      const memberOf = await db
+        .select({ spaceId: spaceMembers.spaceId })
+        .from(spaceMembers)
+        .where(eq(spaceMembers.personId, session.id));
+      const spaceIds = memberOf.map(r => r.spaceId);
+      taskFilter = spaceIds.length > 0
+        ? and(eq(tasks.archived, false), inArray(tasks.spaceId, spaceIds))
+        : and(eq(tasks.archived, false), eq(tasks.spaceId, '00000000-0000-0000-0000-000000000000'));
+    }
 
     const rows = await db
       .select({
@@ -52,7 +66,7 @@ export async function GET(req: NextRequest) {
       .innerJoin(persons, eq(tasks.responsibleId, persons.id))
       .leftJoin(reviewer, eq(tasks.reviewerId, reviewer.id))
       .leftJoin(companies, eq(tasks.companyId, companies.id))
-      .where(eq(tasks.archived, false))
+      .where(taskFilter)
       .orderBy(asc(spaces.name), asc(tasks.dueDate));
 
     const data = rows.map(r => ({
