@@ -40,7 +40,16 @@ export async function GET() {
         .from(spaceMembers)
         .where(eq(spaceMembers.personId, session.id));
 
-      spaceIds = memberOf.map(r => r.spaceId);
+      const leaderOf = await db
+        .select({ id: spaces.id })
+        .from(spaces)
+        .where(eq(spaces.leaderId, session.id));
+
+      const idSet = new Set([
+        ...memberOf.map(r => r.spaceId),
+        ...leaderOf.map(r => r.id),
+      ]);
+      spaceIds = [...idSet];
 
       activeSpaces = spaceIds.length > 0
         ? await db

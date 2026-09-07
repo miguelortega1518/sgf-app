@@ -38,7 +38,15 @@ export async function GET(req: NextRequest) {
         .select({ spaceId: spaceMembers.spaceId })
         .from(spaceMembers)
         .where(eq(spaceMembers.personId, session.id));
-      const spaceIds = memberOf.map(r => r.spaceId);
+      const leaderOf = await db
+        .select({ id: spaces.id })
+        .from(spaces)
+        .where(eq(spaces.leaderId, session.id));
+      const idSet = new Set([
+        ...memberOf.map(r => r.spaceId),
+        ...leaderOf.map(r => r.id),
+      ]);
+      const spaceIds = [...idSet];
       taskFilter = spaceIds.length > 0
         ? and(eq(tasks.archived, false), inArray(tasks.spaceId, spaceIds))
         : and(eq(tasks.archived, false), eq(tasks.spaceId, '00000000-0000-0000-0000-000000000000'));

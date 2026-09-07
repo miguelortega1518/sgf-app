@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { tasks, persons, companies, spaceMembers } from '@/lib/db/schema';
+import { tasks, persons, companies, spaceMembers, spaces } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
@@ -19,7 +19,15 @@ export async function GET() {
         .select({ spaceId: spaceMembers.spaceId })
         .from(spaceMembers)
         .where(eq(spaceMembers.personId, session.id));
-      const spaceIds = memberOf.map(r => r.spaceId);
+      const leaderOf = await db
+        .select({ id: spaces.id })
+        .from(spaces)
+        .where(eq(spaces.leaderId, session.id));
+      const idSet = new Set([
+        ...memberOf.map(r => r.spaceId),
+        ...leaderOf.map(r => r.id),
+      ]);
+      const spaceIds = [...idSet];
       baseCondition = spaceIds.length > 0
         ? and(eq(tasks.archived, false), inArray(tasks.spaceId, spaceIds))
         : and(eq(tasks.archived, false), sql`false`);
