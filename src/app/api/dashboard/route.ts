@@ -1,14 +1,19 @@
 import { db } from '@/lib/db';
-import { tasks, persons, companies, spaces } from '@/lib/db/schema';
-import { requireRole } from '@/lib/auth';
+import { tasks, persons, companies } from '@/lib/db/schema';
+import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
-import { eq, and, ne, count, sql, desc } from 'drizzle-orm';
+import { eq, and, count, sql, desc } from 'drizzle-orm';
 
 export async function GET() {
   try {
-    await requireRole('admin');
+    const session = await requireSession();
     const today = todayRD();
+    const isAdmin = session.role === 'admin';
+
+    const baseCondition = isAdmin
+      ? eq(tasks.archived, false)
+      : and(eq(tasks.archived, false), eq(tasks.responsibleId, session.id));
 
     const [totals] = await db
       .select({
@@ -21,21 +26,23 @@ export async function GET() {
         notStarted: count(sql`CASE WHEN ${tasks.status} = 'no_iniciada' THEN 1 END`),
       })
       .from(tasks)
-      .where(eq(tasks.archived, false));
+      .where(baseCondition);
 
-    const byPerson = await db
-      .select({
-        personId: tasks.responsibleId,
-        personName: persons.name,
-        total: count(),
-        completed: count(sql`CASE WHEN ${tasks.status} = 'completada' THEN 1 END`),
-        overdue: count(sql`CASE WHEN ${tasks.dueDateOriginal} < ${today} AND ${tasks.status} != 'completada' THEN 1 END`),
-      })
-      .from(tasks)
-      .innerJoin(persons, eq(tasks.responsibleId, persons.id))
-      .where(eq(tasks.archived, false))
-      .groupBy(tasks.responsibleId, persons.name)
-      .orderBy(desc(count()));
+    const byPerson = isAdmin
+      ? await db
+          .select({
+            personId: tasks.responsibleId,
+            personName: persons.name,
+            total: count(),
+            completed: count(sql`CASE WHEN ${tasks.status} = 'completada' THEN 1 END`),
+            overdue: count(sql`CASE WHEN ${tasks.dueDateOriginal} < ${today} AND ${tasks.status} != 'completada' THEN 1 END`),
+          })
+          .from(tasks)
+          .innerJoin(persons, eq(tasks.responsibleId, persons.id))
+          .where(eq(tasks.archived, false))
+          .groupBy(tasks.responsibleId, persons.name)
+          .orderBy(desc(count()))
+      : [];
 
     const byCompany = await db
       .select({
@@ -47,7 +54,7 @@ export async function GET() {
       })
       .from(tasks)
       .innerJoin(companies, eq(tasks.companyId, companies.id))
-      .where(eq(tasks.archived, false))
+      .where(baseCondition)
       .groupBy(tasks.companyId, companies.name)
       .orderBy(desc(count()));
 

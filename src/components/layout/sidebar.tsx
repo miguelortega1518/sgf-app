@@ -15,7 +15,7 @@ import { SearchDialog } from './search-dialog';
 const NAV_ITEMS = [
   { href: '/mi-trabajo', label: 'Mi trabajo', icon: CheckSquare, roles: ['admin', 'miembro', 'observador'] },
   { href: '/mi-equipo', label: 'Mi equipo', icon: Users, roles: ['admin', 'miembro'] },
-  { href: '/panorama', label: 'Panorama', icon: LayoutDashboard, roles: ['admin'] },
+  { href: '/panorama', label: 'Panorama', icon: LayoutDashboard, roles: ['admin', 'miembro', 'observador'] },
   { href: '/espacios', label: 'Espacios', icon: FolderOpen, roles: ['admin', 'miembro', 'observador'] },
   { href: '/calendario', label: 'Calendario', icon: CalendarDays, roles: ['admin', 'miembro', 'observador'] },
 ] as const;

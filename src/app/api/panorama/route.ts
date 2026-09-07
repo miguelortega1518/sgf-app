@@ -1,34 +1,73 @@
 import { db } from '@/lib/db';
 import { spaces, tasks, persons, spaceUpdates } from '@/lib/db/schema';
-import { requireRole } from '@/lib/auth';
+import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
 import { eq, and, ne, count, desc, sql, inArray } from 'drizzle-orm';
 
 export async function GET() {
   try {
-    await requireRole('admin');
+    const session = await requireSession();
     const today = todayRD();
+    const isAdmin = session.role === 'admin';
 
-    const activeSpaces = await db
-      .select({
-        id: spaces.id,
-        name: spaces.name,
-        type: spaces.type,
-        status: spaces.status,
-        targetDate: spaces.targetDate,
-        declaredHealth: spaces.declaredHealth,
-        ownerId: spaces.ownerId,
-        ownerName: persons.name,
-        openDate: spaces.openDate,
-        period: spaces.period,
-      })
-      .from(spaces)
-      .innerJoin(persons, eq(spaces.ownerId, persons.id))
-      .where(ne(spaces.status, 'cerrado'))
-      .orderBy(desc(spaces.createdAt));
+    let spaceIds: string[];
+    let activeSpaces;
 
-    const spaceIds = activeSpaces.map(s => s.id);
+    if (isAdmin) {
+      activeSpaces = await db
+        .select({
+          id: spaces.id,
+          name: spaces.name,
+          type: spaces.type,
+          status: spaces.status,
+          targetDate: spaces.targetDate,
+          declaredHealth: spaces.declaredHealth,
+          ownerId: spaces.ownerId,
+          ownerName: persons.name,
+          openDate: spaces.openDate,
+          period: spaces.period,
+        })
+        .from(spaces)
+        .innerJoin(persons, eq(spaces.ownerId, persons.id))
+        .where(ne(spaces.status, 'cerrado'))
+        .orderBy(desc(spaces.createdAt));
+
+      spaceIds = activeSpaces.map(s => s.id);
+    } else {
+      const userSpaceIds = await db
+        .selectDistinct({ spaceId: tasks.spaceId })
+        .from(tasks)
+        .where(and(eq(tasks.responsibleId, session.id), eq(tasks.archived, false)));
+
+      spaceIds = userSpaceIds.map(r => r.spaceId);
+
+      activeSpaces = spaceIds.length > 0
+        ? await db
+            .select({
+              id: spaces.id,
+              name: spaces.name,
+              type: spaces.type,
+              status: spaces.status,
+              targetDate: spaces.targetDate,
+              declaredHealth: spaces.declaredHealth,
+              ownerId: spaces.ownerId,
+              ownerName: persons.name,
+              openDate: spaces.openDate,
+              period: spaces.period,
+            })
+            .from(spaces)
+            .innerJoin(persons, eq(spaces.ownerId, persons.id))
+            .where(and(ne(spaces.status, 'cerrado'), inArray(spaces.id, spaceIds)))
+            .orderBy(desc(spaces.createdAt))
+        : [];
+
+      spaceIds = activeSpaces.map(s => s.id);
+    }
+
+    const taskFilter = isAdmin
+      ? and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false))
+      : and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false), eq(tasks.responsibleId, session.id));
 
     const taskStats = spaceIds.length > 0
       ? await db
@@ -40,7 +79,7 @@ export async function GET() {
             blocked: count(sql`CASE WHEN ${tasks.status} = 'bloqueada' THEN 1 END`),
           })
           .from(tasks)
-          .where(and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false)))
+          .where(taskFilter)
           .groupBy(tasks.spaceId)
       : [];
 
