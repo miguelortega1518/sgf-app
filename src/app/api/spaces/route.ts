@@ -7,16 +7,36 @@ import { createSpaceSchema } from '@/lib/schemas/space';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
 import { todayRD } from '@/lib/date-utils';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 
 export async function GET() {
   try {
-    await requireSession();
-    const allSpaces = await db
+    const session = await requireSession();
+
+    if (session.role === 'admin') {
+      const allSpaces = await db
+        .select()
+        .from(spaces)
+        .orderBy(desc(spaces.createdAt));
+      return success(allSpaces);
+    }
+
+    const memberOf = await db
+      .select({ spaceId: spaceMembers.spaceId })
+      .from(spaceMembers)
+      .where(eq(spaceMembers.personId, session.id));
+
+    const spaceIds = memberOf.map(r => r.spaceId);
+
+    if (spaceIds.length === 0) return success([]);
+
+    const userSpaces = await db
       .select()
       .from(spaces)
+      .where(inArray(spaces.id, spaceIds))
       .orderBy(desc(spaces.createdAt));
-    return success(allSpaces);
+
+    return success(userSpaces);
   } catch (err) {
     return handleError(err);
   }

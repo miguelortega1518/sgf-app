@@ -23,6 +23,15 @@ export async function GET(
 
     if (!space) return error('Espacio no encontrado', 404);
 
+    if (session.role !== 'admin') {
+      const [membership] = await db
+        .select({ personId: spaceMembers.personId })
+        .from(spaceMembers)
+        .where(and(eq(spaceMembers.spaceId, id), eq(spaceMembers.personId, session.id)))
+        .limit(1);
+      if (!membership) return error('Sin acceso a este espacio', 403);
+    }
+
     const members = await db
       .select({
         personId: spaceMembers.personId,
