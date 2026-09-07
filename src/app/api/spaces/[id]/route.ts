@@ -216,6 +216,21 @@ export async function PATCH(
         .update(tasks)
         .set({ reviewerId: input.leaderId })
         .where(and(eq(tasks.spaceId, id), ne(tasks.status, 'completada')));
+
+      if (input.leaderId) {
+        const [existing] = await db
+          .select({ personId: spaceMembers.personId })
+          .from(spaceMembers)
+          .where(and(eq(spaceMembers.spaceId, id), eq(spaceMembers.personId, input.leaderId)))
+          .limit(1);
+        if (!existing) {
+          await db.insert(spaceMembers).values({
+            spaceId: id,
+            personId: input.leaderId,
+            spaceRole: 'colaborador',
+          });
+        }
+      }
     }
 
     await logAudit({

@@ -75,17 +75,30 @@ export async function POST(req: NextRequest) {
         spaceRole: 'dueño',
       });
 
+      const addedIds = new Set([session.id]);
+
       if (input.memberIds?.length) {
         const memberValues = input.memberIds
-          .filter(id => id !== session.id)
-          .map(id => ({
-            spaceId: s.id,
-            personId: id,
-            spaceRole: 'colaborador' as const,
-          }));
+          .filter(id => !addedIds.has(id))
+          .map(id => {
+            addedIds.add(id);
+            return {
+              spaceId: s.id,
+              personId: id,
+              spaceRole: 'colaborador' as const,
+            };
+          });
         if (memberValues.length) {
           await tx.insert(spaceMembers).values(memberValues);
         }
+      }
+
+      if (input.leaderId && !addedIds.has(input.leaderId)) {
+        await tx.insert(spaceMembers).values({
+          spaceId: s.id,
+          personId: input.leaderId,
+          spaceRole: 'colaborador',
+        });
       }
 
       return s;
