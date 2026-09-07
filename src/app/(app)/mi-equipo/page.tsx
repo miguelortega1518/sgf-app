@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from '@/lib/hooks/use-session';
+import { useToast } from '@/components/providers/toast-provider';
 import { formatDateRD } from '@/lib/date-utils';
 import {
   Users, ChevronDown, ChevronRight, AlertTriangle,
@@ -69,6 +70,8 @@ export default function MiEquipoPage() {
   const [data, setData] = useState<TeamData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const initializedRef = useRef(false);
+  const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
     try {
@@ -76,7 +79,8 @@ export default function MiEquipoPage() {
       if (res.ok) {
         const result: TeamData = await res.json();
         setData(result);
-        if (expanded.size === 0) {
+        if (!initializedRef.current) {
+          initializedRef.current = true;
           setExpanded(new Set(result.members.map(m => m.personId)));
         }
       }
@@ -104,7 +108,13 @@ export default function MiEquipoPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
-    if (res.ok) fetchData();
+    if (res.ok) {
+      fetchData();
+      toast('Tarea aprobada');
+    } else {
+      const body = await res.json().catch(() => null);
+      toast(body?.error || 'Error al actualizar la tarea');
+    }
   }
 
   if (loading) {
