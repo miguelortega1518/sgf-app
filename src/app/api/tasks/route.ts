@@ -19,6 +19,9 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search');
 
     const conditions = [eq(tasks.archived, false)];
+    if (session.role !== 'admin') {
+      conditions.push(eq(tasks.responsibleId, session.id));
+    }
     if (spaceId) conditions.push(eq(tasks.spaceId, spaceId));
     if (responsibleId) conditions.push(eq(tasks.responsibleId, responsibleId));
     if (status) conditions.push(eq(tasks.status, status as typeof tasks.status.enumValues[number]));

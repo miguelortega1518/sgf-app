@@ -7,11 +7,19 @@ import { NextRequest } from 'next/server';
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const q = req.nextUrl.searchParams.get('q')?.trim();
     if (!q || q.length < 2) return error('Búsqueda muy corta', 400);
 
     const pattern = `%${q}%`;
+
+    const taskConditions = [
+      eq(tasks.archived, false),
+      or(ilike(tasks.title, pattern), ilike(tasks.description, pattern)),
+    ];
+    if (session.role !== 'admin') {
+      taskConditions.push(eq(tasks.responsibleId, session.id));
+    }
 
     const [matchedTasks, matchedSpaces, matchedPersons] = await Promise.all([
       db
@@ -25,10 +33,7 @@ export async function GET(req: NextRequest) {
         .from(tasks)
         .innerJoin(spaces, eq(tasks.spaceId, spaces.id))
         .innerJoin(persons, eq(tasks.responsibleId, persons.id))
-        .where(and(
-          eq(tasks.archived, false),
-          or(ilike(tasks.title, pattern), ilike(tasks.description, pattern)),
-        ))
+        .where(and(...taskConditions))
         .limit(20),
 
       db

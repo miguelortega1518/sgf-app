@@ -12,7 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
 
     const [space] = await db
@@ -40,6 +40,11 @@ export async function GET(
       .where(eq(persons.id, space.ownerId))
       .limit(1);
 
+    const taskConditions = [eq(tasks.spaceId, id)];
+    if (session.role !== 'admin') {
+      taskConditions.push(eq(tasks.responsibleId, session.id));
+    }
+
     const spaceTasks = await db
       .select({
         id: tasks.id,
@@ -61,7 +66,7 @@ export async function GET(
       .from(tasks)
       .leftJoin(companies, eq(tasks.companyId, companies.id))
       .innerJoin(persons, eq(tasks.responsibleId, persons.id))
-      .where(eq(tasks.spaceId, id));
+      .where(and(...taskConditions));
 
     return success({
       space: { ...space, ownerName: owner?.name },
