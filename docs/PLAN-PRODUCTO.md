@@ -139,10 +139,26 @@ Dos puntos de desacuerdo, resueltos así:
 
 Gestión de portafolio y cumplimiento empresarial, marketplace de integraciones, agentes de código propios, wiki completa, gestión para otros departamentos, y IA para estimar o pronosticar sin historial.
 
-## 13. Decisiones que necesito de ti
+## 13. Decisiones tomadas (27-oct-2026)
 
-1. ¿Forja es solo para tu equipo o piensas ofrecerla a otros? Define si la fase 5 entra.
-2. ¿El equipo usa GitHub o GitLab? Define la primera integración.
-3. ¿Aceptan enviar texto de tareas a un proveedor de IA? Define la fase 4.
-4. ¿Quieres un módulo de clientes? Decisión de la sección 9.
-5. ¿Presupuesto mensual para base de datos y, si aplica, IA?
+| # | Pregunta | Respuesta | Efecto en el plan |
+|---|---|---|---|
+| 1 | ¿Solo para el equipo u otros? | Para el equipo, y **en algún momento se ofrecerá a otros** | La fase 5 (multi-equipo) entra, pero después de las fases 0 a 3. Desde ya se diseña sin suposiciones de «un solo equipo» en lo nuevo |
+| 2 | ¿GitHub o GitLab? | **GitHub** | La fase 1 se hace solo con GitHub App; GitLab queda fuera |
+| 3 | ¿Enviar texto de tareas a un proveedor de IA? | **Sí** | La fase 4 puede usar una API externa. Se mantienen la redacción previa, el interruptor por equipo y el registro |
+| 4 | ¿Módulo de clientes? | **Sí** | Se planifica como módulo propio (sección 14) |
+| 5 | Presupuesto de base de datos e IA | **Sin discutir con el equipo** | Se avanza solo con lo que no cuesta. Ver «Pendiente de presupuesto» abajo |
+
+### Pendiente de presupuesto
+- **Base de datos propia para Forja.** Hoy comparte instancia con el ERP (1 GB de disco, sin autoescalado). Antes de decidir hay que cotizarlo con el plan vigente de Render. Mientras tanto, esa instancia ya tiene recuperación a un punto en el tiempo, así que existe una red de seguridad.
+- **IA.** Para 5 personas el costo estimado es de unos $2 a $30 al mes según el modelo, con tope de gasto. Se lleva al equipo como una cifra concreta.
+
+## 14. Módulo de clientes (planificación)
+
+Se construye **después de la fase 2**, como un módulo separado que comparte usuarios, notificaciones, auditoría y búsqueda con el tablero. Alcance inicial:
+- Cuentas, contactos y oportunidades con un tablero de etapas.
+- Captura de correo y calendario sin teclear datos (lo más valorado en Attio, Folk y Copper).
+- Reportes útiles desde el primer día (la queja más repetida en Pipedrive, Zoho y Freshsales).
+- Importación desde HubSpot, Salesforce y CSV.
+- Vínculo con el trabajo de desarrollo: una oportunidad o cuenta puede tener solicitudes de cliente que se convierten en tareas del tablero, que es lo que ningún CRM de ventas hace bien.
+Primero hay que acordar con el equipo qué necesita realmente del módulo: qué datos de clientes manejan hoy y dónde (hoja de cálculo, correo, otro sistema).
