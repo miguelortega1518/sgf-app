@@ -129,7 +129,7 @@ Si además se necesita relación con clientes (cuentas, contactos, oportunidades
 
 ## 9 bis. Contraste con la investigación paralela (`docs/research/`)
 
-Otra herramienta investigó el mismo tema en paralelo (6 informes, sin confirmar quién los escribió; no son míos y están sin versionar). Coincide con este plan en: integración PR→estado como prioridad uno, métricas de entrega incluidas en todos los planes, velocidad y teclado como contrato, cero configuración, precio plano, IA como sugerencia reversible, y no usar agentes autónomos al inicio. Ajustes que se tomaron de ella: el principio 7, el triage con razón visible, la estimación por similitud sin IA generativa, la opción de modelo local, la vista «Mi día» y los agentes como cola de trabajo.
+Otra herramienta investigó el mismo tema en paralelo (6 informes en `docs/research/`, versionados el 27-oct-2026; no los escribió Hermes y sus fuentes no se verificaron una por una). Coincide con este plan en: integración PR→estado como prioridad uno, métricas de entrega incluidas en todos los planes, velocidad y teclado como contrato, cero configuración, precio plano, IA como sugerencia reversible, y no usar agentes autónomos al inicio. Ajustes que se tomaron de ella: el principio 7, el triage con razón visible, la estimación por similitud sin IA generativa, la opción de modelo local, la vista «Mi día» y los agentes como cola de trabajo.
 
 Dos puntos de desacuerdo, resueltos así:
 - **Estimaciones:** mi informe las daba por bajo valor por falta de datos; el otro las propone con estadística simple. Se acepta la versión sin IA y condicionada a tener historial.
