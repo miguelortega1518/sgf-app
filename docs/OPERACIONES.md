@@ -109,6 +109,7 @@ con la causa real. Dos casos tienen mensaje propio:
 - Toda cuenta existente debe cambiar su contraseña en el próximo ingreso (migración 0001).
 - Las contraseñas puestas por un administrador (crear usuario o restablecer) son temporales: la persona debe cambiarlas.
 - `npx tsx scripts/reset-admin.ts [correo]` genera una contraseña temporal aleatoria, la muestra una vez y obliga a cambiarla.
+- `npx tsx scripts/rotate-passwords.ts --out <archivo>` anula **todas** las contraseñas actuales con temporales aleatorias. No las imprime: solo las escribe en el archivo indicado, que hay que borrar después de entregarlas por un canal privado. Acepta `--emails=a@x.com,b@x.com` para limitarlo y respeta `EXPECT_DB_NAME`.
 - Ninguna contraseña debe escribirse en el código ni en los scripts. Las pruebas leen `SGF_TEST_PASSWORD`.
 - El repositorio es público: lo que se haya escrito en él alguna vez se considera conocido, aunque se borre después.
 
@@ -117,3 +118,16 @@ con la causa real. Dos casos tienen mensaje propio:
 - **Base de datos propia para Forja.** Hoy comparte instancia con el ERP (1 GB de disco, sin autoescalado).
 - **Rol de base de datos separado para desarrollo.** Hoy desarrollo y producción usan el mismo usuario y contraseña, así que
   la copia local de `.env.local` abre también producción.
+
+## 9. Día del despliegue de la fase 0 (pendiente de autorización)
+
+1. **Respaldo fresco** de producción: `npm run db:backup` (solo lee).
+2. Fusionar `fase-0-cimientos` en `master` y subirlo (sección de Git de más abajo).
+3. En Render, actualizar el servicio: comando de build (el de `render.yaml`) y `healthCheckPath = /api/health`.
+4. Desplegar ese commit y leer el registro del build. Debe decir «Línea base marcada como aplicada» y «Migraciones aplicadas en una sola transacción».
+5. Verificar: `/api/health` responde 200 con `"schema":"ok"`; un login incorrecto da 401; `npm run db:verify` contra producción da «Esquema correcto».
+6. **De inmediato**, anular la contraseña pública: `EXPECT_DB_NAME=sgf npx tsx scripts/rotate-passwords.ts --out C:/Users/migue/backups/credenciales-temporales.txt`, entregar cada una en privado y borrar el archivo. Sin este paso, cualquiera que conozca la contraseña publicada podría entrar primero y fijar la suya.
+7. Si algo sale mal: *Rollback* al deploy anterior en Render (el cambio de esquema es compatible hacia atrás). Si hubiera daño en los datos, restaurar el respaldo del paso 1 (sección 4b).
+
+**Git en este equipo:** el Git que trae Hermes usa un selector de credenciales que abre una ventana y se queda esperando. Para subir cambios:
+`GCM_INTERACTIVE=never GIT_TERMINAL_PROMPT=0 "C:/Program Files/Git/cmd/git.exe" push`
