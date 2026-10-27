@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function NuevaPlantillaPage() {
@@ -93,12 +94,12 @@ export default function NuevaPlantillaPage() {
           >
             {submitting ? 'Creando...' : 'Crear plantilla'}
           </button>
-          <a
+          <Link
             href="/admin/plantillas"
             className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
           >
             Cancelar
-          </a>
+          </Link>
         </div>
       </form>
     </div>

@@ -369,17 +369,21 @@ function DonutChart({ segments, completionRate }: {
 
   if (total === 0) return null;
 
-  let cumulativeAngle = -90;
+  const visible = segments.filter(s => s.count > 0);
+  // Ángulo de inicio de cada segmento, calculado sin mutar variables durante el render.
+  const rotations = visible.reduce<number[]>((acc, _s, i) => {
+    acc.push(i === 0 ? -90 : acc[i - 1] + (visible[i - 1].count / total) * 360);
+    return acc;
+  }, []);
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0">
       <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--border)" strokeWidth={strokeWidth} />
-      {segments.filter(s => s.count > 0).map((segment, i) => {
+      {visible.map((segment, i) => {
         const fraction = segment.count / total;
         const dashLength = fraction * circumference;
         const gapLength = circumference - dashLength;
-        const rotation = cumulativeAngle;
-        cumulativeAngle += fraction * 360;
+        const rotation = rotations[i];
         return (
           <circle
             key={i}

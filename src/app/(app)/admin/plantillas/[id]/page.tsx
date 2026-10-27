@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Plus, Trash2, Play, ArrowLeft } from 'lucide-react';
 
@@ -89,9 +90,9 @@ export default function PlantillaEditorPage() {
   return (
     <div className="p-6 max-w-6xl">
       <div className="flex items-center gap-3 mb-1">
-        <a href="/admin/plantillas" className="text-gray-400 hover:text-gray-600">
+        <Link href="/admin/plantillas" className="text-gray-400 hover:text-gray-600">
           <ArrowLeft size={20} />
-        </a>
+        </Link>
         <span className="text-sm text-gray-500">Plantilla</span>
       </div>
 

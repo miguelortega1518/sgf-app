@@ -1,5 +1,4 @@
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'vitest';
 import { weekStart, weeklyVelocity, percentile, cycleTime, workInProgress, blockersByArea, doneByKind, type MetricTask } from '../src/lib/metrics';
 
 const NOW = new Date('2026-10-28T15:00:00Z'); // miércoles
@@ -10,9 +9,9 @@ const t = (over: Partial<MetricTask>): MetricTask => ({
 });
 
 test('weekStart devuelve el lunes', () => {
-  assert.equal(weekStart(d('2026-10-28')).toISOString().slice(0, 10), '2026-10-26');
-  assert.equal(weekStart(d('2026-10-25')).toISOString().slice(0, 10), '2026-10-19'); // domingo
-  assert.equal(weekStart(d('2026-10-26')).toISOString().slice(0, 10), '2026-10-26');
+  expect(weekStart(d('2026-10-28')).toISOString().slice(0, 10)).toBe('2026-10-26');
+  expect(weekStart(d('2026-10-25')).toISOString().slice(0, 10)).toBe('2026-10-19'); // domingo
+  expect(weekStart(d('2026-10-26')).toISOString().slice(0, 10)).toBe('2026-10-26');
 });
 
 test('weeklyVelocity agrupa por semana y suma puntos', () => {
@@ -24,22 +23,22 @@ test('weeklyVelocity agrupa por semana y suma puntos', () => {
     t({ status: 'en_proceso', completedAt: null }),
   ];
   const v = weeklyVelocity(rows, 4, NOW);
-  assert.equal(v.length, 4);
-  assert.deepEqual(v.at(-1), { start: '2026-10-26', tasks: 2, points: 8 });
-  assert.deepEqual(v.at(-2), { start: '2026-10-19', tasks: 1, points: 2 });
-  assert.equal(v.reduce((s, w) => s + w.points, 0), 10);
+  expect(v.length).toBe(4);
+  expect(v.at(-1)).toEqual({ start: '2026-10-26', tasks: 2, points: 8 });
+  expect(v.at(-2)).toEqual({ start: '2026-10-19', tasks: 1, points: 2 });
+  expect(v.reduce((s, w) => s + w.points, 0)).toBe(10);
 });
 
 test('tareas sin estimar cuentan 0 puntos', () => {
   const v = weeklyVelocity([t({ completedAt: d('2026-10-27'), estimate: null })], 2, NOW);
-  assert.deepEqual(v.at(-1), { start: '2026-10-26', tasks: 1, points: 0 });
+  expect(v.at(-1)).toEqual({ start: '2026-10-26', tasks: 1, points: 0 });
 });
 
 test('percentile', () => {
-  assert.equal(percentile([], 50), null);
-  assert.equal(percentile([1, 2, 3, 4], 50), 2);
-  assert.equal(percentile([1, 2, 3, 4], 85), 4);
-  assert.equal(percentile([7], 85), 7);
+  expect(percentile([], 50)).toBe(null);
+  expect(percentile([1, 2, 3, 4], 50)).toBe(2);
+  expect(percentile([1, 2, 3, 4], 85)).toBe(4);
+  expect(percentile([7], 85)).toBe(7);
 });
 
 test('cycleTime usa mediana y p85 de días entre creación y cierre', () => {
@@ -50,10 +49,10 @@ test('cycleTime usa mediana y p85 de días entre creación y cierre', () => {
     t({ createdAt: d('2026-01-01'), completedAt: d('2026-01-03') }), // fuera de la ventana
   ];
   const c = cycleTime(rows, 60, NOW);
-  assert.equal(c.count, 3);
-  assert.equal(c.median, 4);
-  assert.equal(c.p85, 10);
-  assert.deepEqual(cycleTime([], 60, NOW), { count: 0, median: null, p85: null });
+  expect(c.count).toBe(3);
+  expect(c.median).toBe(4);
+  expect(c.p85).toBe(10);
+  expect(cycleTime([], 60, NOW)).toEqual({ count: 0, median: null, p85: null });
 });
 
 test('workInProgress ignora por hacer y hechas, y ordena por carga', () => {
@@ -66,8 +65,8 @@ test('workInProgress ignora por hacer y hechas, y ordena por carga', () => {
     t({ status: 'completada', responsibleId: 'c', responsibleName: 'Cami' }),
   ];
   const w = workInProgress(rows);
-  assert.deepEqual(w.map(r => r.name), ['Beto', 'Ana']);
-  assert.deepEqual(w[0], { personId: 'b', name: 'Beto', inProgress: 1, inReview: 1, blocked: 1 });
+  expect(w.map(r => r.name)).toEqual(['Beto', 'Ana']);
+  expect(w[0]).toEqual({ personId: 'b', name: 'Beto', inProgress: 1, inReview: 1, blocked: 1 });
 });
 
 test('blockersByArea cuenta solo bloqueadas y usa "otro" si no hay área', () => {
@@ -77,10 +76,10 @@ test('blockersByArea cuenta solo bloqueadas y usa "otro" si no hay área', () =>
     t({ status: 'bloqueada', blockedByArea: null }),
     t({ status: 'en_proceso', blockedByArea: 'qa' }),
   ];
-  assert.deepEqual(blockersByArea(rows), [{ area: 'qa', count: 2 }, { area: 'otro', count: 1 }]);
+  expect(blockersByArea(rows)).toEqual([{ area: 'qa', count: 2 }, { area: 'otro', count: 1 }]);
 });
 
 test('doneByKind cuenta terminadas recientes por tipo', () => {
   const rows = [t({ kind: 'bug', completedAt: d('2026-10-27') }), t({ kind: 'bug', completedAt: d('2026-10-20') }), t({ kind: 'feature', completedAt: d('2026-10-25') }), t({ kind: 'bug', completedAt: d('2025-01-01') })];
-  assert.deepEqual(doneByKind(rows, 30, NOW), [{ kind: 'bug', count: 2 }, { kind: 'feature', count: 1 }]);
+  expect(doneByKind(rows, 30, NOW)).toEqual([{ kind: 'bug', count: 2 }, { kind: 'feature', count: 1 }]);
 });

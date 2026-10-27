@@ -3,7 +3,7 @@ export function addBusinessDays(
   businessDays: number,
   holidays: Set<string>,
 ): string {
-  let date = new Date(anchorDate + 'T12:00:00');
+  const date = new Date(anchorDate + 'T12:00:00');
   let count = 0;
 
   while (count < businessDays) {
@@ -25,7 +25,7 @@ export function countBusinessDays(
   endDate: string,
   holidays: Set<string>,
 ): number {
-  let date = new Date(startDate + 'T12:00:00');
+  const date = new Date(startDate + 'T12:00:00');
   const end = new Date(endDate + 'T12:00:00');
   let count = 0;
 

@@ -1037,9 +1037,19 @@ type SpaceComment = {
   createdAt: string; editedAt: string | null;
 };
 
+function timeAgo(dateStr: string, now: number): string {
+  const mins = Math.floor((now - new Date(dateStr).getTime()) / 60000);
+  if (mins < 1) return 'ahora';
+  if (mins < 60) return `hace ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `hace ${hours}h`;
+  return `hace ${Math.floor(hours / 24)}d`;
+}
+
 function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
   spaceId: string; canComment: boolean; userId: string; isAdmin: boolean;
 }) {
+  const [now] = useState(() => Date.now());
   const [cmnts, setCmnts] = useState<SpaceComment[]>([]);
   const [content, setContent] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1085,16 +1095,6 @@ function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
     fetchComments();
   }
 
-  function timeAgo(dateStr: string): string {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'ahora';
-    if (mins < 60) return `hace ${mins}m`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `hace ${hours}h`;
-    return `hace ${Math.floor(hours / 24)}d`;
-  }
-
   return (
     <div className="mt-8">
       <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-3">
@@ -1119,7 +1119,7 @@ function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
             <div key={c.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg px-4 py-2.5">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-medium text-gray-700">{c.authorName}</span>
-                <span className="text-xs text-gray-400">{timeAgo(c.createdAt)}</span>
+                <span className="text-xs text-gray-400">{timeAgo(c.createdAt, now)}</span>
                 {c.editedAt && <span className="text-[10px] text-gray-400">(editado)</span>}
                 {(c.authorId === userId || isAdmin) && (
                   <div className="ml-auto flex gap-1">

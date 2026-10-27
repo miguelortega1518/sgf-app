@@ -9,7 +9,7 @@ import {
   Bell, ChevronLeft, ChevronRight, FileText, ScrollText, Sun,
   Menu, X, Moon, FileBarChart,
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { SearchDialog } from './search-dialog';
 import { LogoMark } from '@/components/ui/logo';
 
@@ -32,16 +32,20 @@ const ADMIN_ITEMS = [
   { href: '/admin/feriados', label: 'Días no laborables', icon: Sun },
 ] as const;
 
+const MOBILE_QUERY = '(max-width: 768px)';
+
+function subscribeMobile(onChange: () => void) {
+  const mq = window.matchMedia(MOBILE_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
 function useIsMobile() {
-  const [mobile, setMobile] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)');
-    setMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return mobile;
+  return useSyncExternalStore(
+    subscribeMobile,
+    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => false,
+  );
 }
 
 function useDarkMode() {

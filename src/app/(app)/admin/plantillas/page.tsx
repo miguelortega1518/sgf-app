@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Plus, FileText, Upload, Copy } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { useRouter } from 'next/navigation';
@@ -99,13 +100,13 @@ export default function PlantillasPage() {
             {importing ? 'Importando...' : 'Importar Excel'}
             <input type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" />
           </label>
-          <a
+          <Link
             href="/admin/plantillas/nueva"
             className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
           >
             <Plus size={16} />
             Nueva plantilla
-          </a>
+          </Link>
         </div>
       </div>
 

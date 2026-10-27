@@ -13,7 +13,8 @@
     "db:custom": "tsx scripts/apply-custom-migrations.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:setup": "npm run db:push && npm run db:custom && npm run db:seed",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -40,6 +41,7 @@
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
