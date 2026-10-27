@@ -39,6 +39,29 @@ Salen de los incidentes reales de este proyecto, no de la teoría.
 
 **Criterio de aceptación:** un deploy de prueba con un cambio de esquema sobre datos reales sin pérdida, respaldo restaurado en un entorno limpio, y CI en verde.
 
+### Estado de la fase 0 (27-oct-2026, rama `fase-0-cimientos`, todavía sin desplegar)
+
+| Entrega | Estado | Evidencia |
+|---|---|---|
+| Migraciones versionadas; `db:push` eliminado | Hecho | Línea base 0000 + migración 0001; guarda contra cambios destructivos; ver `docs/OPERACIONES.md` |
+| Deploy de prueba con cambio de esquema sobre datos reales | Hecho | Copia de producción (57 filas): adopción de la línea base + migración 0001 en ~1 s; datos idénticos al original; repetir no hace nada |
+| Una migración rota no deja nada a medias | Hecho | Probado: la primera sentencia válida se revirtió junto con la que falló |
+| Respaldo y restauración verificables | Hecho | Respaldo de producción restaurado en una base limpia con conteos iguales; un respaldo dañado con `--wipe` falla sin tocar los datos |
+| Respaldo automático diario | Hecho, con límite | Tarea de Windows a las 02:00; solo corre con el equipo encendido. La recuperación a un punto en el tiempo de Render es la red principal |
+| Errores visibles | Hecho | Referencia en el mensaje y en el registro; distingue base caída (503) de esquema desfasado (500); reproducido el incidente del 27-oct |
+| Verificación del esquema tras cada deploy | Hecho en código | `/api/health` responde 503 si no hay base o falta una columna; **falta activar `healthCheckPath` en Render al desplegar** |
+| Pruebas y lint | Hecho | 106 pruebas, 0 errores de lint y de TypeScript |
+| CI en GitHub Actions | Escrito, pendiente de primera corrida | `.github/workflows/ci.yml`: migra una base vacía y falla si `schema.ts` tiene cambios sin migración |
+| `render.yaml` sincronizado | Hecho | Refleja el servicio real; sin la base gratuita que caducó |
+| Contraseñas iniciales rotadas | Hecho en código, **pendiente de desplegar** | Cambio obligatorio en el próximo ingreso; ver el hallazgo siguiente |
+| Base propia para Forja | **Pendiente de presupuesto** | Ver abajo |
+| Límite de intentos de login con tiempo de espera | Hecho | Solo cuentan los fallos; mensaje con minutos y cabecera `Retry-After` |
+
+**Hallazgo de seguridad (27-oct-2026):** el repositorio es público y `scripts/reset-admin.ts` (commit `638b666`) tenía escrita la contraseña por defecto
+del administrador. Se comprobó, sin tocar el login, que **las 5 cuentas de producción siguen usando esa contraseña**. Quitarla del código no basta,
+porque el historial de Git es público: la única corrección real es que cada persona cambie la suya, y eso es lo que fuerza la migración 0001 al desplegar.
+Hasta entonces, cada persona puede cambiarla en *Mi perfil*. También se detectó que desarrollo y producción comparten usuario y contraseña de base de datos.
+
 ## 4. Fase 1: GitHub como fuente de verdad (2–3 semanas)
 
 Es la función más valorada de GitHub Projects y la que más trabajo ahorra.
@@ -150,8 +173,18 @@ Gestión de portafolio y cumplimiento empresarial, marketplace de integraciones,
 | 5 | Presupuesto de base de datos e IA | **Sin discutir con el equipo** | Se avanza solo con lo que no cuesta. Ver «Pendiente de presupuesto» abajo |
 
 ### Pendiente de presupuesto
-- **Base de datos propia para Forja.** Hoy comparte instancia con el ERP (1 GB de disco, sin autoescalado). Antes de decidir hay que cotizarlo con el plan vigente de Render. Mientras tanto, esa instancia ya tiene recuperación a un punto en el tiempo, así que existe una red de seguridad.
-- **IA.** Para 5 personas el costo estimado es de unos $2 a $30 al mes según el modelo, con tope de gasto. Se lleva al equipo como una cifra concreta.
+
+Precios de Render consultados el 27-oct-2026 en la página oficial (https://render.com/pricing). Los precios cambian: confirmar antes de decidir.
+
+| Opción | Costo extra al mes | Qué da | Cuándo conviene |
+|---|---|---|---|
+| A. Seguir compartiendo la instancia `erp` (hoy) | $0 | La instancia ya se paga para el ERP (plan basic-256mb, 1 GB de disco, recuperación a un punto en el tiempo) | Uso interno del equipo, mientras haya pocos datos |
+| B. Instancia propia basic-256mb | $6 | Aislamiento total del ERP, sus propios respaldos y conexiones | Antes de abrir Forja a otros equipos |
+| C. Instancia propia basic-1gb | $19 | Lo anterior con 4 veces más memoria | Cuando haya varios equipos o datos que crezcan |
+
+Disco adicional: $0.30 por GB al mes. La instancia compartida tiene el autoescalado de disco apagado y 1 GB: conviene vigilar el uso.
+**IA:** para 5 personas se estimó de $2 a $30 al mes según el modelo (cálculo propio, sin verificar con facturas reales); se lleva al equipo como una cifra con tope.
+**Recomendación:** A por ahora; pasar a B antes de ofrecerlo a otros. Además, crear un usuario de base de datos distinto para desarrollo (sin costo).
 
 ## 14. Módulo de clientes (planificación)
 

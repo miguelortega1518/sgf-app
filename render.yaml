@@ -1,23 +1,35 @@
-databases:
-  - name: sgf-db
-    plan: free
-    databaseName: sgf
-    user: sgf_user
+# Descripción de referencia del despliegue de Forja en Render.
+#
+# IMPORTANTE: el servicio actual se creó a mano y NO está enlazado a este archivo. Sirve como documentación
+# y para recrear el entorno. Si algún día se enlaza como Blueprint, revisar cada diferencia antes de sincronizar.
+#
+# La base de datos NO se declara aquí a propósito: la base gratuita "sgf-db" que definía este archivo
+# caducó y fue eliminada (eso causó el error de login del 26-oct-2026). Hoy la base "sgf" vive dentro de la
+# instancia Postgres de pago "erp" (Oregón) y se conecta por su URL externa con SSL. Si se vuelve a declarar
+# una base aquí, que sea de un plan de pago.
 
 services:
   - type: web
     name: sgf-app
-    plan: free
     runtime: node
-    buildCommand: npm install && npm run db:push && npm run db:custom && npm run build
-    startCommand: PORT=$PORT node .next/standalone/server.js
+    plan: free
+    region: ohio
+    branch: master
+    autoDeploy: false          # los despliegues se hacen a propósito, no con cada push
+    healthCheckPath: /api/health   # responde 503 si no hay base o el esquema no coincide: ese deploy no recibe tráfico
+    buildCommand: >-
+      npm install --include=dev
+      && EXPECT_DB_NAME=sgf npm run db:migrate
+      && npm run db:custom
+      && npm run build
+      && cp -r public .next/standalone/
+      && cp -r .next/static .next/standalone/.next/
+    startCommand: node .next/standalone/server.js
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: sgf-db
-          property: connectionString
+        sync: false            # secreto: se define en el panel de Render (URL externa con ?sslmode=require)
       - key: JWT_SECRET
-        generateValue: true
+        sync: false            # secreto: se define en el panel de Render
       - key: NODE_ENV
         value: production
       - key: NEXT_PUBLIC_APP_URL

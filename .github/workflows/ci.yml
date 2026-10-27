@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Una base vacía con la misma versión de Postgres que producción: las migraciones se prueban desde cero.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: sgf
+          POSTGRES_PASSWORD: sgf
+          POSTGRES_DB: sgf_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sgf -d sgf_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      DATABASE_URL: postgresql://sgf:sgf@localhost:5432/sgf_ci
+      JWT_SECRET: ci-solo-para-pruebas-no-es-un-secreto-real-0123456789abcdef
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Pruebas
+        run: npm test
+
+      - name: Revisar migraciones (sin cambios destructivos, diario coherente)
+        run: npm run db:check
+
+      - name: Migrar una base vacía y compararla con lo que el código espera
+        run: |
+          npm run db:migrate
+          npm run db:custom
+          npm run db:verify
+
+      - name: Comprobar que schema.ts no tiene cambios sin migración
+        run: |
+          npx drizzle-kit generate --name=ci_sin_cambios
+          if [ -n "$(git status --porcelain src/lib/db/migrations)" ]; then
+            echo "::error::schema.ts tiene cambios que no están en una migración. Ejecute 'npm run db:generate', revise el SQL y suba el archivo."
+            git status --porcelain src/lib/db/migrations
+            exit 1
+          fi
+
+      - name: Compilar
+        run: npm run build
