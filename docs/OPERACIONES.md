@@ -119,7 +119,7 @@ con la causa real. Dos casos tienen mensaje propio:
 - **Rol de base de datos separado para desarrollo.** Hoy desarrollo y producción usan el mismo usuario y contraseña, así que
   la copia local de `.env.local` abre también producción.
 
-## 9. Día del despliegue de la fase 0 (pendiente de autorización)
+## 9. Despliegue de la fase 0 (ejecutado el 27-oct-2026)
 
 1. **Respaldo fresco** de producción: `npm run db:backup` (solo lee).
 2. Fusionar `fase-0-cimientos` en `master` y subirlo (sección de Git de más abajo).
@@ -131,3 +131,14 @@ con la causa real. Dos casos tienen mensaje propio:
 
 **Git en este equipo:** el Git que trae Hermes usa un selector de credenciales que abre una ventana y se queda esperando. Para subir cambios:
 `GCM_INTERACTIVE=never GIT_TERMINAL_PROMPT=0 "C:/Program Files/Git/cmd/git.exe" push`
+
+**Cómo salió (27-oct-2026, commit `e544677`):** el build adoptó la línea base y aplicó la migración 0001 en 728 ms; el deploy pasó la compuerta de
+`/api/health`; los conteos y el contenido de todas las tablas quedaron iguales al respaldo previo, salvo `persons.updated_at` (el trigger de
+actualización se disparó con el `UPDATE` de la migración; las contraseñas no cambiaron). Después se rotaron las 5 contraseñas y se comprobó que la
+pública ya no funciona.
+
+**Para el próximo ensayo:** instalar los triggers (`db:custom`) en la copia *antes* de migrar, como en producción; si no, el ensayo no muestra el cambio de `updated_at`.
+
+**Sesiones abiertas:** el login emite un JWT de hasta 7 días que no se puede revocar desde el servidor. El cambio obligatorio de contraseña bloquea la API mientras esté pendiente,
+pero una sesión emitida antes de rotar volvería a servir cuando su dueño cambie la contraseña. Para cerrarlas todas, cambiar `JWT_SECRET` en Render (desconecta a todos). Pendiente
+como mejora de código: que cambiar la contraseña invalide las sesiones anteriores.

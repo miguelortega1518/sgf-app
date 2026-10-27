@@ -39,7 +39,7 @@ Salen de los incidentes reales de este proyecto, no de la teoría.
 
 **Criterio de aceptación:** un deploy de prueba con un cambio de esquema sobre datos reales sin pérdida, respaldo restaurado en un entorno limpio, y CI en verde.
 
-### Estado de la fase 0 (27-oct-2026, rama `fase-0-cimientos`, todavía sin desplegar)
+### Estado de la fase 0 (27-oct-2026, desplegada en producción: commit `e544677`)
 
 | Entrega | Estado | Evidencia |
 |---|---|---|
@@ -49,18 +49,18 @@ Salen de los incidentes reales de este proyecto, no de la teoría.
 | Respaldo y restauración verificables | Hecho | Respaldo de producción restaurado en una base limpia con conteos iguales; un respaldo dañado con `--wipe` falla sin tocar los datos |
 | Respaldo automático diario | Hecho, con límite | Tarea de Windows a las 02:00; solo corre con el equipo encendido. La recuperación a un punto en el tiempo de Render es la red principal |
 | Errores visibles | Hecho | Referencia en el mensaje y en el registro; distingue base caída (503) de esquema desfasado (500); reproducido el incidente del 27-oct |
-| Verificación del esquema tras cada deploy | Hecho en código | `/api/health` responde 503 si no hay base o falta una columna; **falta activar `healthCheckPath` en Render al desplegar** |
+| Verificación del esquema tras cada deploy | Hecho y activo | `/api/health` responde 503 si no hay base o falta una columna; Render lo usa como compuerta (`healthCheckPath`) |
 | Pruebas y lint | Hecho | 106 pruebas, 0 errores de lint y de TypeScript |
-| CI en GitHub Actions | Escrito, pendiente de primera corrida | `.github/workflows/ci.yml`: migra una base vacía y falla si `schema.ts` tiene cambios sin migración |
+| CI en GitHub Actions | Hecho, en verde | `.github/workflows/ci.yml`: migra una base vacía y falla si `schema.ts` tiene cambios sin migración |
 | `render.yaml` sincronizado | Hecho | Refleja el servicio real; sin la base gratuita que caducó |
-| Contraseñas iniciales rotadas | Hecho en código, **pendiente de desplegar** | Cambio obligatorio en el próximo ingreso; ver el hallazgo siguiente |
+| Contraseñas iniciales rotadas | **Hecho en producción** | Las 5 cuentas se pasaron a contraseñas temporales aleatorias con cambio obligatorio; la pública ya no funciona (comprobado en la base y en el login real) |
 | Base propia para Forja | **Pendiente de presupuesto** | Ver abajo |
 | Límite de intentos de login con tiempo de espera | Hecho | Solo cuentan los fallos; mensaje con minutos y cabecera `Retry-After` |
 
 **Hallazgo de seguridad (27-oct-2026):** el repositorio es público y `scripts/reset-admin.ts` (commit `638b666`) tenía escrita la contraseña por defecto
 del administrador. Se comprobó, sin tocar el login, que **las 5 cuentas de producción siguen usando esa contraseña**. Quitarla del código no basta,
 porque el historial de Git es público: la única corrección real es que cada persona cambie la suya, y eso es lo que fuerza la migración 0001 al desplegar.
-Hasta entonces, cada persona puede cambiarla en *Mi perfil*. También se detectó que desarrollo y producción comparten usuario y contraseña de base de datos.
+Ya está corregido en producción (ver arriba). También se detectó que desarrollo y producción comparten usuario y contraseña de base de datos.
 
 ## 4. Fase 1: GitHub como fuente de verdad (2–3 semanas)
 
