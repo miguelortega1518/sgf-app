@@ -27,7 +27,7 @@ import {
 } from '../src/lib/db/schema-check';
 import { evaluateMigration, type JournalEntry } from '../src/lib/db/migration-guard';
 
-const FOLDER = resolve(__dirname, '../src/lib/db/migrations');
+const FOLDER = process.env.MIGRATIONS_FOLDER ? resolve(process.env.MIGRATIONS_FOLDER) : resolve(__dirname, '../src/lib/db/migrations');
 const PLAN_ONLY = process.argv.includes('--plan');
 const LOCK_KEY = 727274;
 
