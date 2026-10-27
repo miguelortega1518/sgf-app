@@ -14,9 +14,9 @@ export default function AppLayout({
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
+    if (loading) return;
+    if (!user) router.push('/login');
+    else if (user.mustChangePassword) router.replace('/cambiar-contrasena');
   }, [user, loading, router]);
 
   if (loading) {
@@ -27,7 +27,7 @@ export default function AppLayout({
     );
   }
 
-  if (!user) return null;
+  if (!user || user.mustChangePassword) return null;
 
   return (
     <div className="h-full flex bg-[var(--bg-primary)]">

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { logger } from './logger';
+import { classifyError, newErrorId } from './errors';
 
 export function success<T>(data: T, status = 200) {
   return NextResponse.json(data, { status });
 }
 
-export function error(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+export function error(message: string, status = 400, extra?: Record<string, unknown>) {
+  return NextResponse.json({ error: message, ...extra }, { status });
 }
 
 export function handleError(err: unknown) {
@@ -22,11 +23,27 @@ export function handleError(err: unknown) {
     if (err.message === 'FORBIDDEN') {
       return error('Sin permisos', 403);
     }
-    logger.error('unhandled_api_error', {
-      message: err.message,
-      stack: err.stack?.split('\n').slice(0, 3).join(' | '),
-    });
-    return error('Error interno', 500);
+    if (err.message === 'PASSWORD_CHANGE_REQUIRED') {
+      return error('Debe cambiar su contraseña para continuar', 403, { code: 'PASSWORD_CHANGE_REQUIRED' });
+    }
   }
-  return error('Error desconocido', 500);
+
+  const errorId = newErrorId();
+  const info = classifyError(err);
+  const event =
+    info.kind === 'db_unavailable' ? 'db_unavailable' : info.kind === 'schema_mismatch' ? 'schema_mismatch' : 'unhandled_api_error';
+  logger.error(event, {
+    errorId,
+    code: info.code,
+    detail: info.detail,
+    stack: err instanceof Error ? err.stack?.split('\n').slice(0, 4).join(' | ') : undefined,
+  });
+
+  if (info.kind === 'db_unavailable') {
+    return error(`No hay conexión con la base de datos. Intente de nuevo en unos minutos (ref. ${errorId}).`, 503, { errorId });
+  }
+  if (info.kind === 'schema_mismatch') {
+    return error(`La base de datos no está al día con esta versión de la aplicación (ref. ${errorId}). Avise al administrador.`, 500, { errorId });
+  }
+  return error(`Error interno (ref. ${errorId})`, 500, { errorId });
 }

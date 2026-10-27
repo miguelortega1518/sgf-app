@@ -7,6 +7,8 @@ type User = {
   name: string;
   email: string;
   role: 'admin' | 'miembro' | 'observador';
+  /** La cuenta tiene una contraseña temporal y debe cambiarla antes de usar la app. */
+  mustChangePassword?: boolean;
 };
 
 type SessionContextType = {

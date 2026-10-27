@@ -62,8 +62,9 @@ export default function LoginPage() {
         setError(data.error || 'No se pudo iniciar sesión');
         return;
       }
+      const data = await res.json().catch(() => ({}));
       await refresh();
-      router.push('/mi-trabajo');
+      router.push(data.mustChangePassword ? '/cambiar-contrasena' : '/mi-trabajo');
     } catch {
       setError('Sin conexión con el servidor. Revisa tu red e inténtalo de nuevo.');
     } finally {

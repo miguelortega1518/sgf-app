@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { persons } from '@/lib/db/schema';
-import { requireSession, hashPassword, verifyPassword } from '@/lib/auth';
+import { requireSession, hashPassword, verifyPassword, invalidateActiveCache } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -13,8 +13,13 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireSession();
+    // Es la única acción permitida mientras la cuenta tiene una contraseña temporal pendiente de cambio.
+    const session = await requireSession({ allowPasswordChange: true });
     const input = schema.parse(await req.json());
+
+    if (input.newPassword === input.currentPassword) {
+      return error('La nueva contraseña debe ser distinta de la actual', 400);
+    }
 
     const [user] = await db
       .select({ passwordHash: persons.passwordHash })
@@ -28,7 +33,11 @@ export async function POST(req: NextRequest) {
     if (!valid) return error('Contraseña actual incorrecta', 400);
 
     const hash = await hashPassword(input.newPassword);
-    await db.update(persons).set({ passwordHash: hash }).where(eq(persons.id, session.id));
+    await db
+      .update(persons)
+      .set({ passwordHash: hash, mustChangePassword: false, updatedAt: new Date() })
+      .where(eq(persons.id, session.id));
+    invalidateActiveCache(session.id);
 
     return success({ ok: true });
   } catch (err) {

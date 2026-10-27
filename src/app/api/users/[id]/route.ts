@@ -28,7 +28,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     if (input.email !== undefined) updates.email = input.email;
     if (input.role !== undefined) updates.role = input.role;
     if (input.active !== undefined) updates.active = input.active;
-    if (input.password !== undefined) updates.passwordHash = await hashPassword(input.password);
+    if (input.password !== undefined) {
+      updates.passwordHash = await hashPassword(input.password);
+      // Una contraseña restablecida por un administrador es temporal.
+      updates.mustChangePassword = true;
+    }
 
     const [updated] = await db
       .update(persons)
@@ -43,7 +47,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
         createdAt: persons.createdAt,
       });
 
-    if (input.active !== undefined) {
+    if (input.active !== undefined || input.password !== undefined) {
       invalidateActiveCache(id);
     }
 

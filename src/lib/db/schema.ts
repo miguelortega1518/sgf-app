@@ -91,6 +91,7 @@ export const persons = pgTable('persons', {
   role: userRoleEnum('role').notNull().default('miembro'),
   active: boolean('active').notNull().default(true),
   passwordHash: text('password_hash').notNull(),
+  mustChangePassword: boolean('must_change_password').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

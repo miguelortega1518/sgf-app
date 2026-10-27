@@ -1,5 +1,14 @@
 import { strict as assert } from 'node:assert';
 
+function requireTestPassword(): string {
+  const pw = process.env.SGF_TEST_PASSWORD;
+  if (!pw) {
+    console.error('Defina SGF_TEST_PASSWORD (y opcionalmente SGF_TEST_EMAIL) para ejecutar esta prueba.');
+    process.exit(1);
+  }
+  return pw;
+}
+
 const BASE = 'http://localhost:3000';
 let cookie = '';
 
@@ -20,7 +29,7 @@ async function login() {
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'mortega@grupoblb.do', password: 'SGF2026!' }),
+    body: JSON.stringify({ email: process.env.SGF_TEST_EMAIL ?? 'mortega@grupoblb.do', password: requireTestPassword() }),
   });
   const raw = res.headers.get('set-cookie') || '';
   const match = raw.match(/sgf-session=([^;]+)/);

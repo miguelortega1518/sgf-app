@@ -8,6 +8,13 @@
       "when": 1793100273094,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793100875919,
+      "tag": "0001_cambio_obligatorio_de_contrasena",
+      "breakpoints": true
     }
   ]
 }

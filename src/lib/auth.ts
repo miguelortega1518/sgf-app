@@ -21,34 +21,38 @@ export type SessionUser = {
   role: Person['role'];
 };
 
-// Cache for active-user checks (TTL 60s)
-const activeCache = new Map<string, { active: boolean; ts: number }>();
-const ACTIVE_CACHE_TTL = 60_000;
+// Estado de la cuenta que se consulta en cada petición. Se guarda 60 s para no golpear la base cada vez.
+export type UserFlags = { active: boolean; mustChangePassword: boolean };
+const flagsCache = new Map<string, UserFlags & { ts: number }>();
+const FLAGS_CACHE_TTL = 60_000;
 
-async function isUserActive(userId: string): Promise<boolean> {
-  const cached = activeCache.get(userId);
-  if (cached && Date.now() - cached.ts < ACTIVE_CACHE_TTL) {
-    return cached.active;
+export async function getUserFlags(userId: string): Promise<UserFlags> {
+  const cached = flagsCache.get(userId);
+  if (cached && Date.now() - cached.ts < FLAGS_CACHE_TTL) {
+    return { active: cached.active, mustChangePassword: cached.mustChangePassword };
   }
 
   const [user] = await db
-    .select({ active: persons.active })
+    .select({ active: persons.active, mustChangePassword: persons.mustChangePassword })
     .from(persons)
     .where(eq(persons.id, userId))
     .limit(1);
 
-  const active = user?.active ?? false;
-  activeCache.set(userId, { active, ts: Date.now() });
+  const flags: UserFlags = {
+    active: user?.active ?? false,
+    mustChangePassword: user?.mustChangePassword ?? false,
+  };
+  flagsCache.set(userId, { ...flags, ts: Date.now() });
 
   // Evict stale entries
-  if (activeCache.size > 500) {
-    const cutoff = Date.now() - ACTIVE_CACHE_TTL;
-    for (const [key, val] of activeCache) {
-      if (val.ts < cutoff) activeCache.delete(key);
+  if (flagsCache.size > 500) {
+    const cutoff = Date.now() - FLAGS_CACHE_TTL;
+    for (const [key, val] of flagsCache) {
+      if (val.ts < cutoff) flagsCache.delete(key);
     }
   }
 
-  return active;
+  return flags;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -99,15 +103,22 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 }
 
-export async function requireSession(): Promise<SessionUser> {
+/**
+ * Exige una sesión válida de una cuenta activa. Si la cuenta tiene una contraseña temporal pendiente de
+ * cambio, bloquea todo salvo lo que pase `allowPasswordChange` (cambiar la contraseña y salir).
+ */
+export async function requireSession(options?: { allowPasswordChange?: boolean }): Promise<SessionUser> {
   const session = await getSession();
   if (!session) {
     throw new Error('UNAUTHORIZED');
   }
 
-  const active = await isUserActive(session.id);
-  if (!active) {
+  const flags = await getUserFlags(session.id);
+  if (!flags.active) {
     throw new Error('UNAUTHORIZED');
+  }
+  if (flags.mustChangePassword && !options?.allowPasswordChange) {
+    throw new Error('PASSWORD_CHANGE_REQUIRED');
   }
 
   return session;
@@ -128,10 +139,12 @@ export async function destroySession(): Promise<void> {
   cookieStore.delete(COOKIE_NAME);
 }
 
+export type AuthenticatedUser = SessionUser & { mustChangePassword: boolean };
+
 export async function authenticate(
   email: string,
   password: string,
-): Promise<SessionUser | null> {
+): Promise<AuthenticatedUser | null> {
   const [user] = await db
     .select()
     .from(persons)
@@ -148,9 +161,10 @@ export async function authenticate(
     name: user.name,
     email: user.email,
     role: user.role,
+    mustChangePassword: user.mustChangePassword,
   };
 }
 
 export function invalidateActiveCache(userId: string): void {
-  activeCache.delete(userId);
+  flagsCache.delete(userId);
 }

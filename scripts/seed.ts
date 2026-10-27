@@ -35,7 +35,7 @@ async function seed() {
     { name: 'Ileana Encarnación', email: 'iencarnacion@grupoblb.do', role: 'miembro' as const },
     { name: 'Rosanna Acosta', email: 'racosta@grupoblb.do', role: 'miembro' as const },
     { name: 'Luz Elaine', email: 'lelaine@grupoblb.do', role: 'miembro' as const },
-  ].map(p => ({ ...p, passwordHash }))).returning();
+  ].map(p => ({ ...p, passwordHash, mustChangePassword: true }))).returning();
   const who = (n: string) => team.find(p => p.name.includes(n))!;
   const admin = who('Miguel');
   console.log(`✓ ${team.length} personas`);

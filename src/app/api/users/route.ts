@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
       email: input.email,
       role: input.role,
       passwordHash,
+      // La contraseña la eligió un administrador: la persona debe cambiarla en su primer ingreso.
+      mustChangePassword: true,
     }).returning({
       id: persons.id,
       name: persons.name,
