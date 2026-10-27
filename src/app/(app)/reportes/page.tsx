@@ -177,28 +177,28 @@ export default function ReportesPage() {
           </div>
         </div>
 
-        {/* Reporte por empresa */}
+        {/* Reporte por repositorio */}
         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-5">
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
               <Building2 size={20} className="text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-base font-medium text-[var(--text-primary)]">Reporte por empresa</h2>
+              <h2 className="text-base font-medium text-[var(--text-primary)]">Reporte por repositorio</h2>
               <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-                Resumen de tareas agrupadas por empresa con tasa de cumplimiento
+                Resumen de tareas agrupadas por repositorio con tasa de cumplimiento
               </p>
             </div>
           </div>
           <div className="flex items-end gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Empresa</label>
+              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Repositorio</label>
               <select
                 value={companyId}
                 onChange={e => setCompanyId(e.target.value)}
                 className="w-full px-3 py-2 border border-[var(--border)] rounded-md text-sm bg-[var(--bg-card)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">Todas las empresas (resumen)</option>
+                <option value="">Todos los repositorios (resumen)</option>
                 {companies.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -207,24 +207,24 @@ export default function ReportesPage() {
             <button
               onClick={() => {
                 const params = companyId ? `companyId=${companyId}&format=xlsx` : 'format=xlsx';
-                download(`/api/reports/empresa?${params}`, 'empresa-xlsx');
+                download(`/api/reports/empresa?${params}`, 'repositorio-xlsx');
               }}
-              disabled={generating === 'empresa-xlsx'}
+              disabled={generating === 'repositorio-xlsx'}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-primary)] border border-[var(--border)] rounded-md hover:bg-[var(--bg-hover)] disabled:opacity-50 transition-colors"
             >
               <Download size={14} />
-              {generating === 'empresa-xlsx' ? 'Generando...' : 'Excel'}
+              {generating === 'repositorio-xlsx' ? 'Generando...' : 'Excel'}
             </button>
             <button
               onClick={() => {
                 const params = companyId ? `companyId=${companyId}&format=pdf` : 'format=pdf';
-                download(`/api/reports/empresa?${params}`, 'empresa-pdf');
+                download(`/api/reports/empresa?${params}`, 'repositorio-pdf');
               }}
-              disabled={generating === 'empresa-pdf'}
+              disabled={generating === 'repositorio-pdf'}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-primary)] border border-[var(--border)] rounded-md hover:bg-[var(--bg-hover)] disabled:opacity-50 transition-colors"
             >
               <FileText size={14} />
-              {generating === 'empresa-pdf' ? 'Generando...' : 'PDF'}
+              {generating === 'repositorio-pdf' ? 'Generando...' : 'PDF'}
             </button>
           </div>
         </div>

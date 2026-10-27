@@ -23,7 +23,7 @@ const ACTION_LABELS: Record<string, string> = {
   task_approved: 'Tarea aprobada',
   task_approved_admin_override: 'Aprobación admin',
   space_health_updated: 'Actualización de salud',
-  space_closed: 'Espacio cerrado',
+  space_closed: 'Proyecto cerrado',
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -74,7 +74,7 @@ export default function BitacoraPage() {
   return (
     <div className="p-6 max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Bitácora</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Actividad</h1>
         <p className="text-sm text-gray-500 mt-1">
           Registro de todas las acciones del sistema
         </p>
@@ -87,7 +87,7 @@ export default function BitacoraPage() {
         </div>
       ) : (
         <>
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">

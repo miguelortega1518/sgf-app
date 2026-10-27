@@ -123,7 +123,7 @@ export default function PlantillasPage() {
             <a
               key={t.id}
               href={`/admin/plantillas/${t.id}`}
-              className="block bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+              className="block bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
             >
               <div className="flex items-center justify-between">
                 <div>

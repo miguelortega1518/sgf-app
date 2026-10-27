@@ -17,7 +17,7 @@ type Notification = {
 };
 
 const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  task_completed: { label: 'Completada', color: 'text-green-700', bg: 'bg-green-50' },
+  task_completed: { label: 'Hecho', color: 'text-green-700', bg: 'bg-green-50' },
   task_review: { label: 'Revisión', color: 'text-amber-700', bg: 'bg-amber-50' },
   task_blocked: { label: 'Bloqueada', color: 'text-red-700', bg: 'bg-red-50' },
   task_assigned: { label: 'Asignada', color: 'text-blue-700', bg: 'bg-blue-50' },
@@ -101,7 +101,7 @@ export default function NotificacionesPage() {
             <button
               onClick={() => setFilter('all')}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                filter === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                filter === 'all' ? 'bg-[var(--bg-card)] text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
               Todas
@@ -109,7 +109,7 @@ export default function NotificacionesPage() {
             <button
               onClick={() => setFilter('unread')}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                filter === 'unread' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+                filter === 'unread' ? 'bg-[var(--bg-card)] text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
               Sin leer
@@ -130,7 +130,7 @@ export default function NotificacionesPage() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+            <div key={i} className="bg-[var(--bg-card)] rounded-lg border border-gray-200 p-4 animate-pulse">
               <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
               <div className="h-3 bg-gray-100 rounded w-1/2" />
             </div>
@@ -154,7 +154,7 @@ export default function NotificacionesPage() {
               const href = n.taskId ? `/tareas/${n.taskId}` : n.spaceId ? `/espacios/${n.spaceId}` : null;
               const content = (
                 <div
-                  className={`bg-white rounded-lg border p-4 transition-colors ${
+                  className={`bg-[var(--bg-card)] rounded-lg border p-4 transition-colors ${
                     n.read ? 'border-gray-200' : 'border-blue-200 bg-blue-50/30'
                   }`}
                 >

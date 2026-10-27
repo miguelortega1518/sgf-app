@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+export const TASK_KINDS = ['feature', 'bug', 'mejora', 'deuda', 'chore'] as const;
+const taskKind = z.enum(TASK_KINDS);
+// Puntos de historia: serie de Fibonacci acotada, como en la mayoría de equipos.
+const estimate = z.number().int().min(0).max(100).nullable();
+const branch = z.string().trim().max(200).regex(/^[\w./#@-]*$/, 'Rama inválida').nullable().transform(v => v || null);
+const prUrl = z.string().trim().max(500).url('Enlace inválido').refine(u => /^https?:\/\//.test(u), 'Debe empezar por http(s)').or(z.literal('')).nullable().transform(v => v || null);
+const labels = z.array(z.string().trim().min(1).max(30)).max(8);
+
 export const createTaskSchema = z.object({
   spaceId: z.string().uuid(),
   title: z.string().min(1, 'El título es requerido').max(500),
@@ -14,6 +22,11 @@ export const createTaskSchema = z.object({
   requiresEvidence: z.boolean().default(false),
   doneDefinition: z.string().max(2000).optional(),
   instructions: z.string().max(10000).optional(),
+  kind: taskKind.default('feature'),
+  estimate: estimate.optional(),
+  branch: branch.optional(),
+  prUrl: prUrl.optional(),
+  labels: labels.optional(),
 });
 
 export const updateTaskStatusSchema = z.object({
@@ -29,6 +42,7 @@ export const updateTaskStatusSchema = z.object({
   ]).optional(),
   delayReasonText: z.string().max(500).optional(),
   blockedByArea: z.enum([
+    'infraestructura', 'diseno', 'producto', 'qa', 'seguridad', 'terceros',
     'compras', 'operaciones', 'tesoreria',
     'contabilidad', 'administracion', 'presupuesto', 'otro',
   ]).optional(),
@@ -43,6 +57,11 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   priority: z.enum(['critica', 'alta', 'normal', 'baja']).optional(),
   milestoneId: z.string().uuid().nullable().optional(),
+  kind: taskKind.optional(),
+  estimate: estimate.optional(),
+  branch: branch.optional(),
+  prUrl: prUrl.optional(),
+  labels: labels.optional(),
 });
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;

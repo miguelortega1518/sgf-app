@@ -17,8 +17,8 @@ type CalTask = {
 
 const STATUS_DOT: Record<string, string> = {
   no_iniciada: 'bg-gray-400',
-  en_proceso: 'bg-blue-500',
-  en_revision: 'bg-yellow-500',
+  en_proceso: 'bg-sky-500',
+  en_revision: 'bg-purple-500',
   completada: 'bg-green-500',
   bloqueada: 'bg-red-500',
 };
@@ -125,7 +125,7 @@ export default function CalendarioPage() {
               <select
                 value={selectedPerson}
                 onChange={e => setSelectedPerson(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white"
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-[var(--bg-card)]"
               >
                 <option value="all">Todos los usuarios</option>
                 {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -150,7 +150,7 @@ export default function CalendarioPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg overflow-hidden">
         <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
           {DAY_NAMES.map(d => (
             <div key={d} className="px-2 py-2 text-xs font-medium text-gray-500 text-center uppercase">

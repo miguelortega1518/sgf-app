@@ -69,7 +69,7 @@ export default function NuevaPlantillaPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Días del ciclo
+              Días del sprint
             </label>
             <input
               type="number"

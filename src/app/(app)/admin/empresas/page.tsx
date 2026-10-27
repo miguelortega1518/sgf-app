@@ -43,7 +43,7 @@ export default function EmpresasPage() {
       setShowForm(false);
     } else {
       const data = await res.json();
-      toast(data.error || 'Error al crear empresa', 'error');
+      toast(data.error || 'Error al crear repositorio', 'error');
     }
     setSaving(false);
   }
@@ -99,9 +99,9 @@ export default function EmpresasPage() {
     <div className="p-6 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Empresas</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Repositorios</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Gestiona las empresas del grupo
+            Gestiona los repositorios y servicios del producto
           </p>
         </div>
         <button
@@ -109,21 +109,21 @@ export default function EmpresasPage() {
           className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium"
         >
           <Plus size={16} />
-          Nueva empresa
+          Nuevo repositorio
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+        <form onSubmit={handleCreate} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-gray-900">Nueva empresa</h3>
+            <h3 className="font-medium text-gray-900">Nuevo repositorio</h3>
             <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
               <X size={18} />
             </button>
           </div>
           <input
             required
-            placeholder="Nombre de la empresa"
+            placeholder="Nombre del repositorio"
             value={name}
             onChange={e => setName(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -134,7 +134,7 @@ export default function EmpresasPage() {
               disabled={saving}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
             >
-              {saving ? 'Creando...' : 'Crear empresa'}
+              {saving ? 'Creando...' : 'Crear repositorio'}
             </button>
           </div>
         </form>
@@ -143,12 +143,12 @@ export default function EmpresasPage() {
       {companies.length === 0 ? (
         <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg">
           <Building2 size={40} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500">No hay empresas registradas</p>
+          <p className="text-gray-500">No hay repositorios registradas</p>
         </div>
       ) : (
         <div className="space-y-3">
           {companies.map(c => (
-            <div key={c.id} className="bg-white border border-gray-200 rounded-lg p-4">
+            <div key={c.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center">

@@ -58,7 +58,7 @@ export default function PerfilPage() {
     <div className="max-w-lg mx-auto p-6">
       <h1 className="text-xl font-semibold text-gray-900 mb-6">Mi perfil</h1>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+      <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-5 mb-6">
         <div className="flex items-center gap-4 mb-4">
           <div className="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-lg font-semibold">
             {user.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -77,7 +77,7 @@ export default function PerfilPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-5">
+      <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-5">
         <h2 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
           <Lock size={16} />
           Cambiar contraseña

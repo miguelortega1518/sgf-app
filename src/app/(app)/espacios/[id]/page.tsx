@@ -8,13 +8,21 @@ import {
   Plus, Users, Calendar, Target, Building2, ChevronDown,
   ChevronRight, Play, XCircle, CheckCircle2, Pencil, Heart,
   Filter, ClipboardList, Flag, MessageSquare, Archive, ArchiveRestore,
-  Trash2, CircleCheck, AlertTriangle, CircleX,
+  Trash2, CircleCheck, AlertTriangle, CircleX, LayoutGrid, List,
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import { KanbanBoard } from '@/components/tasks/kanban-board';
+import { KIND_ORDER, KIND_LABEL, ESTIMATE_STEPS, SPACE_TYPE_LABEL, type TaskStatus } from '@/lib/labels';
 
 type TaskItem = {
   id: string;
+  number?: number | null;
+  kind?: string | null;
+  estimate?: number | null;
+  branch?: string | null;
+  prUrl?: string | null;
+  labels?: string[] | null;
   title: string;
   status: string;
   dueDate: string | null;
@@ -51,17 +59,17 @@ type SpaceData = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  completada: 'Completada',
+  no_iniciada: 'Por hacer',
+  en_proceso: 'En progreso',
+  en_revision: 'En code review',
+  completada: 'Hecho',
   bloqueada: 'Bloqueada',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   no_iniciada: 'bg-gray-100 text-gray-600',
-  en_proceso: 'bg-blue-100 text-blue-700',
-  en_revision: 'bg-yellow-100 text-yellow-700',
+  en_proceso: 'bg-sky-100 text-sky-700',
+  en_revision: 'bg-purple-100 text-purple-700',
   completada: 'bg-green-100 text-green-700',
   bloqueada: 'bg-red-100 text-red-700',
 };
@@ -91,6 +99,10 @@ export default function SpaceDetailPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [view, setView] = useState<'board' | 'list'>(() => {
+    if (typeof window === 'undefined') return 'board';
+    return localStorage.getItem('forja-view') === 'list' ? 'list' : 'board';
+  });
   const [closeReport, setCloseReport] = useState<{
     totalTasks: number; onTimeCount: number; lateCount: number;
     onTimeRate: number; avgDays: number;
@@ -101,6 +113,11 @@ export default function SpaceDetailPage() {
     if (res.ok) setData(await res.json());
     setLoading(false);
   }, [id]);
+
+  function changeView(v: 'board' | 'list') {
+    setView(v);
+    localStorage.setItem('forja-view', v);
+  }
 
   useEffect(() => {
     fetchData();
@@ -117,6 +134,28 @@ export default function SpaceDetailPage() {
     if (res.ok) fetchData();
   }
 
+  async function moveTask(
+    taskId: string, status: TaskStatus,
+    extra?: { blockedByArea?: string; blockedByAreaText?: string },
+  ): Promise<boolean> {
+    const before = data;
+    // Movimiento optimista: la tarjeta cambia de columna al instante y se revierte si el servidor la rechaza.
+    setData(d => d && ({ ...d, tasks: d.tasks.map(t => t.id === taskId ? { ...t, status, blockedByArea: status === 'bloqueada' ? extra?.blockedByArea ?? null : null } : t) }));
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, ...extra }),
+    });
+    if (!res.ok) {
+      setData(before);
+      const body = await res.json().catch(() => null);
+      toast(body?.error || 'No se pudo mover la tarea', 'error');
+      return false;
+    }
+    fetchData();
+    return true;
+  }
+
   async function handleSpaceAction(action: 'activar' | 'cerrar') {
     setActionError(null);
     const newStatus = action === 'activar' ? 'activo' : 'cerrado';
@@ -128,7 +167,7 @@ export default function SpaceDetailPage() {
     if (res.ok) {
       const result = await res.json();
       fetchData();
-      toast(action === 'activar' ? 'Espacio activado' : 'Espacio cerrado');
+      toast(action === 'activar' ? 'Proyecto activado' : 'Proyecto cerrado');
       if (result.closeReport) setCloseReport(result.closeReport);
     } else {
       const body = await res.json();
@@ -168,7 +207,7 @@ export default function SpaceDetailPage() {
     if (res.ok) {
       setEditingSpace(false);
       fetchData();
-      toast('Espacio actualizado');
+      toast('Proyecto actualizado');
     } else {
       const body = await res.json().catch(() => null);
       toast(body?.error || 'Error al guardar los cambios');
@@ -200,9 +239,9 @@ export default function SpaceDetailPage() {
   const activeFilters = (filterStatus ? 1 : 0) + (filterPriority ? 1 : 0);
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6 max-w-[88rem]">
       <Breadcrumbs items={[
-        { label: 'Espacios', href: '/espacios' },
+        { label: 'Proyectos', href: '/espacios' },
         { label: space.name },
       ]} />
       {actionError && (
@@ -241,6 +280,16 @@ export default function SpaceDetailPage() {
           Tareas ({spaceTasks.filter(t => t.status !== 'completada').length} pendientes)
         </h2>
         <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-[var(--border)] p-0.5" role="group" aria-label="Vista de tareas">
+            <button onClick={() => changeView('board')} aria-pressed={view === 'board'}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded transition-colors ${view === 'board' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:text-gray-800'}`}>
+              <LayoutGrid size={14} aria-hidden="true" />Tablero
+            </button>
+            <button onClick={() => changeView('list')} aria-pressed={view === 'list'}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-sm rounded transition-colors ${view === 'list' ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:text-gray-800'}`}>
+              <List size={14} aria-hidden="true" />Lista
+            </button>
+          </div>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
@@ -267,16 +316,16 @@ export default function SpaceDetailPage() {
       {showFilters && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 flex items-center gap-3 flex-wrap">
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white">
+            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-[var(--bg-card)]">
             <option value="">Todos los estados</option>
-            <option value="no_iniciada">No iniciada</option>
-            <option value="en_proceso">En proceso</option>
-            <option value="en_revision">En revisión</option>
-            <option value="completada">Completada</option>
+            <option value="no_iniciada">Por hacer</option>
+            <option value="en_proceso">En progreso</option>
+            <option value="en_revision">En code review</option>
+            <option value="completada">Hecho</option>
             <option value="bloqueada">Bloqueada</option>
           </select>
           <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
-            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-white">
+            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm bg-[var(--bg-card)]">
             <option value="">Todas las prioridades</option>
             <option value="critica">Crítica</option>
             <option value="alta">Alta</option>
@@ -302,7 +351,13 @@ export default function SpaceDetailPage() {
         />
       )}
 
-      {isRecurrente ? (
+      {view === 'board' ? (
+        <KanbanBoard
+          tasks={filteredTasks}
+          readOnly={space.status === 'cerrado' || user?.role === 'observador'}
+          onMove={moveTask}
+        />
+      ) : isRecurrente ? (
         <GroupedByCompanyView
           tasks={filteredTasks}
           onStatusChange={handleStatusChange}
@@ -324,7 +379,7 @@ export default function SpaceDetailPage() {
 
       {closeReport && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setCloseReport(null)}>
-          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--bg-card)] rounded-xl p-6 max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Reporte de cierre</h3>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="bg-gray-50 rounded-lg p-3 text-center">
@@ -399,7 +454,7 @@ function SpaceHeader({
   return (
     <div>
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
-        <span className="capitalize">{space.type}</span>
+        <span>{SPACE_TYPE_LABEL[space.type] ?? space.type}</span>
         {space.period && <span>· {space.period}</span>}
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
           {badge.label}
@@ -415,9 +470,9 @@ function SpaceHeader({
             <input type="date" value={editTargetDate} onChange={e => onEditTargetDate(e.target.value)} className="px-3 py-1.5 border border-gray-300 rounded-md text-sm" />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Líder</label>
+            <label className="block text-xs text-gray-500 mb-1">Líder técnico</label>
             <select value={editLeaderId} onChange={e => onEditLeaderId(e.target.value)} className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm">
-              <option value="">Sin líder asignado</option>
+              <option value="">Sin líder técnico asignado</option>
               {people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
@@ -432,14 +487,14 @@ function SpaceHeader({
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold text-gray-900">{space.name}</h1>
               {canEdit && (
-                <button onClick={onStartEdit} className="text-gray-400 hover:text-blue-600 p-1" title="Editar espacio" aria-label="Editar espacio">
+                <button onClick={onStartEdit} className="text-gray-400 hover:text-blue-600 p-1" title="Editar proyecto" aria-label="Editar proyecto">
                   <Pencil size={16} aria-hidden="true" />
                 </button>
               )}
             </div>
             {space.objective && <p className="text-sm text-gray-600 mt-1">{space.objective}</p>}
             <div className="flex items-center gap-4 mt-3 text-sm text-gray-500 flex-wrap">
-              {space.leaderName && <span className="flex items-center gap-1"><Target size={14} />Líder: {space.leaderName}</span>}
+              {space.leaderName && <span className="flex items-center gap-1"><Target size={14} />Líder técnico: {space.leaderName}</span>}
               <span className="flex items-center gap-1"><Users size={14} />{members.length} miembros</span>
               {space.targetDate && <span className="flex items-center gap-1"><Calendar size={14} />Meta: {formatDateRD(space.targetDate)}</span>}
               <span className="flex items-center gap-1"><ClipboardList size={14} />{completed}/{total} tareas</span>
@@ -451,7 +506,7 @@ function SpaceHeader({
                 <button onClick={onActivate} className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"><Play size={14} />Activar</button>
               )}
               {space.status === 'activo' && (
-                <button onClick={onClose} className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"><XCircle size={14} />Cerrar ciclo</button>
+                <button onClick={onClose} className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"><XCircle size={14} />Cerrar sprint</button>
               )}
             </div>
           )}
@@ -459,7 +514,7 @@ function SpaceHeader({
       )}
 
       {/* Progress bar */}
-      <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4">
+      <div className="mt-4 bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-gray-700">Progreso general</span>
           <span className="text-sm font-semibold text-gray-900">{pct}%</span>
@@ -494,7 +549,7 @@ function GroupedByCompanyView({
   for (const task of tasks) {
     const key = task.companyId || '__none__';
     if (!groups.has(key)) {
-      groups.set(key, { companyName: task.companyName || 'Sin empresa', tasks: [] });
+      groups.set(key, { companyName: task.companyName || 'Sin repositorio', tasks: [] });
     }
     groups.get(key)!.tasks.push(task);
   }
@@ -533,7 +588,7 @@ function CompanyGroup({
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
@@ -667,7 +722,7 @@ function FlatTaskList({
           const nextStatus = getNextStatus(task);
 
           return (
-            <div key={task.id} className={`bg-white border rounded-lg p-3 hover:shadow-sm transition-shadow ${
+            <div key={task.id} className={`bg-[var(--bg-card)] border rounded-lg p-3 hover:shadow-sm transition-shadow ${
               isOverdue ? 'border-red-300 bg-red-50/30' : 'border-gray-200'
             }`}>
               <div className="flex items-start justify-between gap-2">
@@ -726,7 +781,7 @@ function FlatTaskList({
           </summary>
           <div className="space-y-2 mt-2">
             {completedTasks.map(task => (
-              <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-3 opacity-60">
+              <div key={task.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-3 opacity-60">
                 <a href={`/tareas/${task.id}`} className="text-sm text-gray-500 line-through">
                   {task.title}
                 </a>
@@ -759,11 +814,16 @@ function NewTaskForm({
   const [responsibleId, setResponsibleId] = useState('');
   const [companyId, setCompanyId] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [kind, setKind] = useState('feature');
+  const [estimate, setEstimate] = useState('');
+  const [review, setReview] = useState(true);
+  const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setFormError('');
     const res = await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -773,14 +833,18 @@ function NewTaskForm({
         responsibleId,
         companyId: companyId || undefined,
         dueDate: dueDate || undefined,
+        kind,
+        estimate: estimate ? Number(estimate) : undefined,
+        requiresApproval: review,
       }),
     });
     if (res.ok) onCreated();
+    else setFormError((await res.json().catch(() => null))?.error || 'No se pudo crear la tarea');
     setSubmitting(false);
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
+    <form onSubmit={handleSubmit} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4 mb-4 space-y-3">
       <input
         type="text"
         placeholder="Título de la tarea"
@@ -805,7 +869,7 @@ function NewTaskForm({
           onChange={e => setCompanyId(e.target.value)}
           className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
         >
-          <option value="">Empresa (opcional)</option>
+          <option value="">Repositorio (opcional)</option>
           {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <input
@@ -815,6 +879,22 @@ function NewTaskForm({
           className="px-3 py-2 border border-gray-300 rounded-md text-sm"
         />
       </div>
+      <div className="flex gap-3 flex-wrap items-center">
+        <select value={kind} onChange={e => setKind(e.target.value)} aria-label="Tipo de tarea"
+          className="px-3 py-2 border border-gray-300 rounded-md text-sm">
+          {KIND_ORDER.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+        </select>
+        <select value={estimate} onChange={e => setEstimate(e.target.value)} aria-label="Estimación en puntos"
+          className="px-3 py-2 border border-gray-300 rounded-md text-sm">
+          <option value="">Sin estimar</option>
+          {ESTIMATE_STEPS.map(n => <option key={n} value={n}>{n} {n === 1 ? 'punto' : 'puntos'}</option>)}
+        </select>
+        <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={review} onChange={e => setReview(e.target.checked)} className="accent-[var(--accent)]" />
+          Requiere code review
+        </label>
+      </div>
+      {formError && <p role="alert" className="text-sm text-red-700">{formError}</p>}
       <div className="flex gap-2">
         <button type="submit" disabled={submitting} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">
           Crear
@@ -915,7 +995,7 @@ function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boo
             const today = new Date().toISOString().slice(0, 10);
             const isPast = !m.completed && m.targetDate < today;
             return (
-              <div key={m.id} className="bg-white border border-gray-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
+              <div key={m.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
                 {canEdit ? (
                   <button onClick={() => toggleComplete(m.id, !m.completed)}
                     className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
@@ -1019,7 +1099,7 @@ function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
     <div className="mt-8">
       <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5 mb-3">
         <MessageSquare size={14} />
-        Comentarios del espacio
+        Comentarios del proyecto
       </h3>
 
       {canComment && (
@@ -1036,7 +1116,7 @@ function SpaceCommentsSection({ spaceId, canComment, userId, isAdmin }: {
       {cmnts.length > 0 ? (
         <div className="space-y-2">
           {cmnts.map(c => (
-            <div key={c.id} className="bg-white border border-gray-200 rounded-lg px-4 py-2.5">
+            <div key={c.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg px-4 py-2.5">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-medium text-gray-700">{c.authorName}</span>
                 <span className="text-xs text-gray-400">{timeAgo(c.createdAt)}</span>
@@ -1165,7 +1245,7 @@ function HealthUpdatesSection({ spaceId, canPost }: { spaceId: string; canPost: 
             const cfg = HEALTH_CONFIG[u.health as keyof typeof HEALTH_CONFIG] || HEALTH_CONFIG.verde;
             const HIcon = cfg.Icon;
             return (
-              <div key={u.id} className="bg-white border border-gray-200 rounded-lg px-3 py-2.5">
+              <div key={u.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg px-3 py-2.5">
                 <div className="flex items-center gap-2 mb-1">
                   <HIcon size={14} className={cfg.color.split(' ')[1]} aria-hidden="true" />
                   <span className={`text-xs font-medium ${cfg.color}`}>{cfg.label}</span>

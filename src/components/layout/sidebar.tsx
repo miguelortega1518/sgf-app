@@ -11,22 +11,25 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { SearchDialog } from './search-dialog';
+import { LogoMark } from '@/components/ui/logo';
 
 const NAV_ITEMS = [
   { href: '/mi-trabajo', label: 'Mi trabajo', icon: CheckSquare, roles: ['admin', 'miembro', 'observador'] },
   { href: '/mi-equipo', label: 'Mi equipo', icon: Users, roles: ['admin', 'miembro'] },
   { href: '/panorama', label: 'Panorama', icon: LayoutDashboard, roles: ['admin', 'miembro', 'observador'] },
-  { href: '/espacios', label: 'Espacios', icon: FolderOpen, roles: ['admin', 'miembro', 'observador'] },
+  { href: '/espacios', label: 'Proyectos', icon: FolderOpen, roles: ['admin', 'miembro', 'observador'] },
   { href: '/calendario', label: 'Calendario', icon: CalendarDays, roles: ['admin', 'miembro', 'observador'] },
   { href: '/reportes', label: 'Reportes', icon: FileBarChart, roles: ['admin', 'miembro'] },
 ] as const;
 
+const ROLE_LABEL: Record<string, string> = { admin: 'Admin', miembro: 'Desarrollador', observador: 'Observador' };
+
 const ADMIN_ITEMS = [
-  { href: '/admin/plantillas', label: 'Plantillas', icon: FileText },
-  { href: '/admin/usuarios', label: 'Usuarios', icon: Users },
-  { href: '/admin/empresas', label: 'Empresas', icon: Building2 },
-  { href: '/admin/bitacora', label: 'Bitácora', icon: ScrollText },
-  { href: '/admin/feriados', label: 'Feriados', icon: Sun },
+  { href: '/admin/plantillas', label: 'Plantillas de sprint', icon: FileText },
+  { href: '/admin/usuarios', label: 'Equipo', icon: Users },
+  { href: '/admin/empresas', label: 'Repositorios', icon: Building2 },
+  { href: '/admin/bitacora', label: 'Actividad', icon: ScrollText },
+  { href: '/admin/feriados', label: 'Días no laborables', icon: Sun },
 ] as const;
 
 function useIsMobile() {
@@ -45,7 +48,7 @@ function useDarkMode() {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('sgf-theme');
+    const saved = localStorage.getItem('forja-theme');
     if (saved === 'dark') {
       setDark(true);
       document.documentElement.classList.add('dark');
@@ -60,11 +63,11 @@ function useDarkMode() {
       if (next) {
         document.documentElement.classList.add('dark');
         document.documentElement.classList.remove('light');
-        localStorage.setItem('sgf-theme', 'dark');
+        localStorage.setItem('forja-theme', 'dark');
       } else {
         document.documentElement.classList.remove('dark');
         document.documentElement.classList.add('light');
-        localStorage.setItem('sgf-theme', 'light');
+        localStorage.setItem('forja-theme', 'light');
       }
       return next;
     });
@@ -133,8 +136,9 @@ export function Sidebar() {
     >
       <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
         {showLabels && (
-          <Link href="/mi-trabajo" className="font-semibold text-lg text-[var(--text-primary)]">
-            SGF
+          <Link href="/mi-trabajo" className="inline-flex items-center gap-2.5 font-semibold tracking-tight text-[var(--text-primary)]" aria-label="Forja, ir a Mi trabajo">
+            <LogoMark size={26} />
+            <span className="text-base">Forja</span>
           </Link>
         )}
         {isMobile ? (
@@ -182,7 +186,7 @@ export function Sidebar() {
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
                     active
-                      ? 'bg-[var(--bg-active)] text-blue-600 font-medium dark:text-blue-400'
+                      ? 'bg-[var(--bg-active)] text-blue-700 font-medium'
                       : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                   }`}
                   aria-current={active ? 'page' : undefined}
@@ -211,7 +215,7 @@ export function Sidebar() {
                       href={item.href}
                       className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
                         active
-                          ? 'bg-[var(--bg-active)] text-blue-600 font-medium dark:text-blue-400'
+                          ? 'bg-[var(--bg-active)] text-blue-700 font-medium'
                           : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)]'
                       }`}
                       aria-current={active ? 'page' : undefined}
@@ -253,13 +257,13 @@ export function Sidebar() {
           className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-[var(--bg-hover)] transition-colors"
           aria-label={collapsed && !isMobile ? 'Mi perfil' : undefined}
         >
-          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-medium flex items-center justify-center dark:bg-blue-900 dark:text-blue-300" aria-hidden="true">
+          <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-medium flex items-center justify-center" aria-hidden="true">
             {user.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
           </div>
           {showLabels && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[var(--text-primary)] truncate">{user.name}</p>
-              <p className="text-xs text-[var(--text-secondary)] truncate">{user.role}</p>
+              <p className="text-xs text-[var(--text-secondary)] truncate">{ROLE_LABEL[user.role] ?? user.role}</p>
             </div>
           )}
         </Link>

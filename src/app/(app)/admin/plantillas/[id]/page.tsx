@@ -100,7 +100,7 @@ export default function PlantillaEditorPage() {
           <h1 className="text-2xl font-semibold text-gray-900">{template.name}</h1>
           <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
             <span>{PERIODICITY_LABELS[template.periodicity]}</span>
-            <span>{template.targetCycleDays} días ciclo</span>
+            <span>{template.targetCycleDays} días sprint</span>
             <span>{taskTemplates.length} tareas</span>
           </div>
         </div>
@@ -109,12 +109,12 @@ export default function PlantillaEditorPage() {
           className="inline-flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm font-medium"
         >
           <Play size={16} />
-          Generar ciclo
+          Generar sprint
         </button>
       </div>
 
       {/* Task templates table */}
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
           <h2 className="text-sm font-semibold text-gray-700">Tareas de la plantilla</h2>
           <button
@@ -137,7 +137,7 @@ export default function PlantillaEditorPage() {
                 <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200">
                   <th className="px-4 py-2 w-10">#</th>
                   <th className="px-4 py-2">Tarea</th>
-                  <th className="px-4 py-2">Empresa</th>
+                  <th className="px-4 py-2">Repositorio</th>
                   <th className="px-4 py-2">Responsable</th>
                   <th className="px-4 py-2 text-center">DH</th>
                   <th className="px-4 py-2 text-center">Aprob.</th>
@@ -250,7 +250,7 @@ function AddTaskDialog({
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+      <div className="bg-[var(--bg-card)] rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
         <h3 className="text-lg font-semibold mb-4">Agregar tarea a la plantilla</h3>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -267,7 +267,7 @@ function AddTaskDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Repositorio</label>
               <select
                 value={companyId}
                 onChange={e => setCompanyId(e.target.value)}
@@ -390,15 +390,15 @@ function GenerateCycleDialog({
       onGenerated(data.space.id);
     } else {
       const data = await res.json();
-      setError(data.error || 'Error al generar el ciclo');
+      setError(data.error || 'Error al generar el sprint');
       setSubmitting(false);
     }
   }
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
-        <h3 className="text-lg font-semibold mb-1">Generar ciclo</h3>
+      <div className="bg-[var(--bg-card)] rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+        <h3 className="text-lg font-semibold mb-1">Generar sprint</h3>
         <p className="text-sm text-gray-500 mb-4">
           Plantilla: {templateName}
         </p>
@@ -444,7 +444,7 @@ function GenerateCycleDialog({
               disabled={submitting}
               className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
             >
-              {submitting ? 'Generando...' : 'Generar ciclo'}
+              {submitting ? 'Generando...' : 'Generar sprint'}
             </button>
           </div>
         </form>

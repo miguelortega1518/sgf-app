@@ -119,7 +119,7 @@ export async function PATCH(
     if (!task) return error('Tarea no encontrada', 404);
 
     const [space] = await db.select().from(spaces).where(eq(spaces.id, task.spaceId)).limit(1);
-    if (!space) return error('Espacio no encontrado', 404);
+    if (!space) return error('Proyecto no encontrado', 404);
 
     if (session.role === 'observador') {
       return error('Sin permisos', 403);
@@ -188,10 +188,10 @@ async function handleStatusChange(
 
   if (input.status === 'completada' && task.requiresApproval) {
     if (!canApproveTask(session.role as 'admin' | 'miembro' | 'observador', session.id, task.reviewerId)) {
-      return error('Solo el revisor o un admin puede aprobar esta tarea', 403);
+      return error('Solo el revisor asignado o un admin puede aprobar esta tarea', 403);
     }
     if (task.status !== 'en_revision') {
-      return error('La tarea debe estar en revisión para ser aprobada', 400);
+      return error('La tarea debe estar en code review para ser aprobada', 400);
     }
 
     const isAdminOverride = session.id !== task.reviewerId && isAdmin;
@@ -201,10 +201,6 @@ async function handleStatusChange(
       action: isAdminOverride ? 'task_approved_admin_override' : 'task_approved',
       taskId,
     });
-  }
-
-  if (input.status === 'en_revision' && !task.requiresApproval) {
-    return error('Esta tarea no requiere aprobación, pase directo a completada', 400);
   }
 
   if (input.status === 'completada' && task.requiresEvidence) {
@@ -219,10 +215,10 @@ async function handleStatusChange(
 
   if (input.status === 'bloqueada') {
     if (!input.blockedByArea) {
-      return error('Indique el área que bloquea la tarea', 400);
+      return error('Indique qué bloquea la tarea', 400);
     }
     if (input.blockedByArea === 'otro' && !input.blockedByAreaText) {
-      return error('Especifique el área de bloqueo', 400);
+      return error('Especifique qué bloquea la tarea', 400);
     }
   }
 
@@ -269,8 +265,8 @@ async function handleStatusChange(
     notify({
       recipientId: task.reviewerId,
       type: 'task_completed',
-      title: `Tarea completada: ${task.title}`,
-      body: 'Una tarea que supervisas ha sido completada.',
+      title: `Hecho: ${task.title}`,
+      body: 'Una tarea que revisas ya está hecha.',
       taskId,
     }).catch(() => {});
   }
@@ -279,8 +275,8 @@ async function handleStatusChange(
     notify({
       recipientId: task.reviewerId,
       type: 'task_review',
-      title: `Tarea en revisión: ${task.title}`,
-      body: 'Una tarea requiere tu aprobación.',
+      title: `En code review: ${task.title}`,
+      body: 'Hay cambios esperando tu revisión.',
       taskId,
     }).catch(() => {});
   }

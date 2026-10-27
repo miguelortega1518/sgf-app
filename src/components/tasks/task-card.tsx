@@ -1,11 +1,21 @@
 'use client';
 
+import Link from 'next/link';
 import { formatDateRD } from '@/lib/date-utils';
-import { Building2, Calendar, AlertTriangle, Lock } from 'lucide-react';
+import { Calendar, AlertTriangle, Lock, GitBranch, GitPullRequest, Play, GitPullRequestArrow, Check } from 'lucide-react';
+import {
+  STATUS_LABEL, KIND_CHIP, KIND_LABEL, PRIORITY_DOT, PRIORITY_LABEL, SPACE_TYPE_LABEL, AREA_LABEL,
+  taskKey, prLabel, type TaskKind, type TaskStatus,
+} from '@/lib/labels';
 
 type TaskCardProps = {
   task: {
     id: string;
+    number?: number | null;
+    kind?: string | null;
+    estimate?: number | null;
+    branch?: string | null;
+    prUrl?: string | null;
     title: string;
     status: string;
     dueDate: string | null;
@@ -21,117 +31,83 @@ type TaskCardProps = {
   onStatusChange?: (taskId: string, status: string) => void;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  completada: 'Completada',
-  bloqueada: 'Bloqueada',
-};
+function nextStatusOf(task: TaskCardProps['task']): TaskStatus | null {
+  if (task.status === 'no_iniciada') return 'en_proceso';
+  if (task.status === 'en_proceso') return task.requiresApproval ? 'en_revision' : 'completada';
+  if (task.status === 'en_revision') return 'completada';
+  return null;
+}
 
-const PRIORITY_COLORS: Record<string, string> = {
-  critica: 'bg-red-100 text-red-700',
-  alta: 'bg-orange-100 text-orange-700',
-  normal: 'bg-gray-100 text-gray-700',
-  baja: 'bg-gray-50 text-gray-500',
-};
-
-const SPACE_TYPE_COLORS: Record<string, string> = {
-  recurrente: 'bg-blue-50 text-blue-600',
-  proyecto: 'bg-purple-50 text-purple-600',
-  continuo: 'bg-green-50 text-green-600',
-};
-
-const SPACE_TYPE_LABELS: Record<string, string> = {
-  recurrente: 'Cierre',
-  proyecto: 'Proyecto',
-  continuo: 'Operativo',
+const NEXT_ACTION: Record<string, { label: string; Icon: typeof Play }> = {
+  en_proceso: { label: 'Empezar', Icon: Play },
+  en_revision: { label: 'Pedir code review', Icon: GitPullRequestArrow },
+  completada: { label: 'Marcar como hecho', Icon: Check },
 };
 
 export function TaskCard({ task, isOverdue, onStatusChange }: TaskCardProps) {
-  const nextStatus = task.status === 'no_iniciada'
-    ? 'en_proceso'
-    : task.status === 'en_proceso'
-      ? task.requiresApproval ? 'en_revision' : 'completada'
-      : task.status === 'en_revision'
-        ? 'completada'
-        : null;
+  const next = nextStatusOf(task);
+  const action = next ? NEXT_ACTION[next] : null;
+  const kind = (task.kind ?? 'feature') as TaskKind;
 
   return (
-    <div className={`bg-white border rounded-lg p-3 hover:shadow-sm transition-shadow ${
-      isOverdue ? 'border-red-300 bg-red-50/30' : 'border-gray-200'
+    <div className={`group rounded-lg border p-3 transition-[border-color,box-shadow] hover:shadow-[0_2px_6px_oklch(0.2_0.02_255/0.08)] ${
+      isOverdue ? 'border-red-300 bg-red-50/40' : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--border-strong)]'
     }`}>
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <a
-            href={`/tareas/${task.id}`}
-            className="text-sm font-medium text-gray-900 hover:text-blue-600 line-clamp-2"
-          >
-            {task.title}
-          </a>
-
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${
-              SPACE_TYPE_COLORS[task.spaceType]
-            }`}>
-              {SPACE_TYPE_LABELS[task.spaceType] || task.spaceType}
-            </span>
-            <span className="text-xs text-gray-500 truncate">
-              {task.spaceName}
-            </span>
-            {task.companyName && (
-              <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                <Building2 size={12} />
-                {task.companyName}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-mono text-[11px] text-[var(--text-muted)] tabular">{taskKey(task.number)}</span>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${KIND_CHIP[kind] ?? KIND_CHIP.feature}`}>{KIND_LABEL[kind] ?? kind}</span>
+            {task.estimate != null && <span className="tabular rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">{task.estimate} pts</span>}
+            {task.priority !== 'normal' && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-secondary)]" title={`Prioridad ${PRIORITY_LABEL[task.priority] ?? task.priority}`}>
+                <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.normal}`} aria-hidden="true" />
+                {PRIORITY_LABEL[task.priority] ?? task.priority}
               </span>
             )}
           </div>
 
-          <div className="flex items-center gap-2 mt-1.5">
+          <Link href={`/tareas/${task.id}`} className="text-sm font-medium text-[var(--text-primary)] hover:text-blue-700 line-clamp-2">
+            {task.title}
+          </Link>
+
+          <div className="flex items-center gap-x-3 gap-y-1 mt-1.5 flex-wrap text-xs text-[var(--text-muted)]">
+            <span className="truncate">{task.spaceName} · {SPACE_TYPE_LABEL[task.spaceType] ?? task.spaceType}</span>
+            {task.companyName && <span className="font-mono">{task.companyName}</span>}
+            {task.branch && <span className="inline-flex items-center gap-1 font-mono"><GitBranch size={12} aria-hidden="true" />{task.branch}</span>}
+            {task.prUrl && (
+              <a href={task.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-mono text-purple-700 hover:underline">
+                <GitPullRequest size={12} aria-hidden="true" />{prLabel(task.prUrl)}
+              </a>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 mt-1.5 text-xs">
+            <span className="rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-[11px] font-medium">{STATUS_LABEL[task.status as TaskStatus] ?? task.status}</span>
             {task.dueDate && (
-              <span className={`inline-flex items-center gap-1 text-xs ${
-                isOverdue ? 'text-red-600 font-medium' : 'text-gray-500'
-              }`}>
-                <Calendar size={12} />
+              <span className={`inline-flex items-center gap-1 tabular ${isOverdue ? 'text-red-700 font-medium' : 'text-[var(--text-muted)]'}`}>
+                <Calendar size={12} aria-hidden="true" />
                 {formatDateRD(task.dueDate)}
-                {isOverdue && <AlertTriangle size={12} />}
+                {isOverdue && <AlertTriangle size={12} aria-label="Vencida" />}
               </span>
             )}
             {task.status === 'bloqueada' && (
-              <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                <Lock size={12} />
-                {task.blockedByArea || 'Bloqueada'}
-              </span>
-            )}
-            {task.priority !== 'normal' && (
-              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium ${
-                PRIORITY_COLORS[task.priority]
-              }`}>
-                {task.priority}
+              <span className="inline-flex items-center gap-1 text-red-700">
+                <Lock size={12} aria-hidden="true" />
+                {task.blockedByArea ? (AREA_LABEL[task.blockedByArea] ?? task.blockedByArea) : 'Bloqueada'}
               </span>
             )}
           </div>
         </div>
 
-        {nextStatus && onStatusChange && (
+        {next && action && onStatusChange && (
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              onStatusChange(task.id, nextStatus);
-            }}
-            className="shrink-0 w-11 h-11 flex items-center justify-center rounded-lg border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-colors"
-            title={`Marcar ${STATUS_LABELS[nextStatus]?.toLowerCase()}`}
+            onClick={(e) => { e.preventDefault(); onStatusChange(task.id, next); }}
+            className="shrink-0 h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-[var(--border-strong)] text-xs font-medium text-[var(--text-primary)] transition-colors hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700"
+            aria-label={`${action.label}: ${task.title}`}
           >
-            {nextStatus === 'completada' ? (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="4,10 8,14 16,6" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="6,10 14,10" />
-                <polyline points="10,6 10,14" />
-              </svg>
-            )}
+            <action.Icon size={14} aria-hidden="true" />
+            <span className="hidden sm:inline">{action.label}</span>
           </button>
         )}
       </div>

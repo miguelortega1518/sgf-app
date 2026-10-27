@@ -1,7 +1,7 @@
 import {
   pgTable, pgEnum, text, integer, boolean, date,
   timestamp, uuid, uniqueIndex, index, check, jsonb,
-  primaryKey,
+  primaryKey, serial,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -61,6 +61,17 @@ export const blockedByAreaEnum = pgEnum('blocked_by_area', [
   'administracion',
   'presupuesto',
   'otro',
+  // Áreas de bloqueo para equipos de desarrollo
+  'infraestructura',
+  'diseno',
+  'producto',
+  'qa',
+  'seguridad',
+  'terceros',
+]);
+
+export const taskKindEnum = pgEnum('task_kind', [
+  'feature', 'bug', 'mejora', 'deuda', 'chore',
 ]);
 
 // ─── Tables ───────────────────────────────────────────
@@ -178,6 +189,8 @@ export const milestones = pgTable('milestones', {
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').defaultRandom().primaryKey(),
+  // Número correlativo legible (FOR-142). Se asigna solo.
+  number: serial('number').notNull(),
   spaceId: uuid('space_id').notNull().references(() => spaces.id),
   templateId: uuid('template_id').references(() => taskTemplates.id),
   companyId: uuid('company_id').references(() => companies.id),
@@ -198,6 +211,11 @@ export const tasks = pgTable('tasks', {
   blockedByAreaText: text('blocked_by_area_text'),
   blockedSince: date('blocked_since', { mode: 'string' }),
   priority: priorityEnum('priority').notNull().default('normal'),
+  kind: taskKindEnum('kind').notNull().default('feature'),
+  estimate: integer('estimate'),
+  branch: text('branch'),
+  prUrl: text('pr_url'),
+  labels: text('labels').array().notNull().default(sql`'{}'::text[]`),
   draggedFromId: uuid('dragged_from_id'),
   archived: boolean('archived').notNull().default(false),
   requiresApproval: boolean('requires_approval').notNull().default(false),
@@ -211,6 +229,7 @@ export const tasks = pgTable('tasks', {
   index('idx_task_reviewer').on(t.reviewerId),
   index('idx_task_space_status').on(t.spaceId, t.status),
   index('idx_task_company_space').on(t.companyId, t.spaceId),
+  uniqueIndex('uq_task_number').on(t.number),
 ]);
 
 export const subtasks = pgTable('subtasks', {

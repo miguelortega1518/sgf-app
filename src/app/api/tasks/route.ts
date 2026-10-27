@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
       .where(eq(spaces.id, input.spaceId))
       .limit(1);
 
-    if (!space) return error('Espacio no encontrado', 404);
+    if (!space) return error('Proyecto no encontrado', 404);
 
     const reviewerId = input.reviewerId || space.leaderId || null;
 
@@ -76,6 +76,11 @@ export async function POST(req: NextRequest) {
       requiresEvidence: input.requiresEvidence,
       doneDefinition: input.doneDefinition,
       instructions: input.instructions,
+      kind: input.kind,
+      estimate: input.estimate ?? null,
+      branch: input.branch ?? null,
+      prUrl: input.prUrl ?? null,
+      labels: input.labels ?? [],
     }).returning();
 
     await logAudit({

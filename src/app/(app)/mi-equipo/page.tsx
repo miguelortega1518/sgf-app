@@ -43,17 +43,17 @@ type TeamData = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  completada: 'Completada',
+  no_iniciada: 'Por hacer',
+  en_proceso: 'En progreso',
+  en_revision: 'En code review',
+  completada: 'Hecho',
   bloqueada: 'Bloqueada',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   no_iniciada: 'bg-gray-100 text-gray-600',
-  en_proceso: 'bg-blue-100 text-blue-700',
-  en_revision: 'bg-yellow-100 text-yellow-700',
+  en_proceso: 'bg-sky-100 text-sky-700',
+  en_revision: 'bg-purple-100 text-purple-700',
   completada: 'bg-green-100 text-green-700',
   bloqueada: 'bg-amber-100 text-amber-700',
 };
@@ -142,15 +142,15 @@ export default function MiEquipoPage() {
 
       {data.totalMembers > 0 && (
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
             <p className="text-sm text-gray-500">Personas</p>
             <p className="text-2xl font-semibold text-gray-900">{data.totalMembers}</p>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
             <p className="text-sm text-gray-500">Tareas pendientes</p>
             <p className="text-2xl font-semibold text-gray-900">{data.totalTasks}</p>
           </div>
-          <div className={`bg-white border rounded-lg p-4 ${data.totalOverdue > 0 ? 'border-red-300' : 'border-gray-200'}`}>
+          <div className={`bg-[var(--bg-card)] border rounded-lg p-4 ${data.totalOverdue > 0 ? 'border-red-300' : 'border-gray-200'}`}>
             <p className="text-sm text-gray-500">Vencidas</p>
             <p className={`text-2xl font-semibold ${data.totalOverdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>
               {data.totalOverdue}
@@ -170,7 +170,7 @@ export default function MiEquipoPage() {
       ) : (
         <div className="space-y-4">
           {data.members.map(member => (
-            <div key={member.personId} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div key={member.personId} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg overflow-hidden">
               <button
                 onClick={() => toggleExpand(member.personId)}
                 className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"

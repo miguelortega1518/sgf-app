@@ -14,6 +14,11 @@ export async function GET() {
     const myTasks = await db
       .select({
         id: tasks.id,
+        number: tasks.number,
+        kind: tasks.kind,
+        estimate: tasks.estimate,
+        branch: tasks.branch,
+        prUrl: tasks.prUrl,
         title: tasks.title,
         status: tasks.status,
         dueDate: tasks.dueDate,

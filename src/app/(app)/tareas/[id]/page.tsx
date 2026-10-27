@@ -13,12 +13,22 @@ import {
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import Link from 'next/link';
+import { GitPullRequest } from 'lucide-react';
+import {
+  KIND_ORDER, KIND_LABEL, KIND_CHIP, ESTIMATE_STEPS, BLOCK_AREAS, AREA_LABEL, taskKey, prLabel, type TaskKind,
+} from '@/lib/labels';
 
 type DepTask = { id: string; title: string; status: string };
 
 type TaskDetail = {
   task: {
     id: string;
+    number?: number | null;
+    kind?: string | null;
+    estimate?: number | null;
+    branch?: string | null;
+    prUrl?: string | null;
+    labels?: string[] | null;
     title: string;
     description: string | null;
     status: string;
@@ -49,17 +59,17 @@ type TaskDetail = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  completada: 'Completada',
+  no_iniciada: 'Por hacer',
+  en_proceso: 'En progreso',
+  en_revision: 'En code review',
+  completada: 'Hecho',
   bloqueada: 'Bloqueada',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   no_iniciada: 'bg-gray-100 text-gray-700',
-  en_proceso: 'bg-blue-100 text-blue-700',
-  en_revision: 'bg-yellow-100 text-yellow-700',
+  en_proceso: 'bg-sky-100 text-sky-700',
+  en_revision: 'bg-purple-100 text-purple-700',
   completada: 'bg-green-100 text-green-700',
   bloqueada: 'bg-red-100 text-red-700',
 };
@@ -98,6 +108,12 @@ export default function TaskDetailPage() {
   const [editDueDate, setEditDueDate] = useState('');
   const [editPriority, setEditPriority] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  const [editKind, setEditKind] = useState('feature');
+  const [editEstimate, setEditEstimate] = useState('');
+  const [editBranch, setEditBranch] = useState('');
+  const [editPr, setEditPr] = useState('');
+  const [editLabels, setEditLabels] = useState('');
+  const [editError, setEditError] = useState('');
 
   async function handleStatusChange(status: string, extra?: Record<string, unknown>) {
     setStatusError(null);
@@ -119,6 +135,12 @@ export default function TaskDetailPage() {
     setEditDescription(data.task.description || '');
     setEditDueDate(data.task.dueDate || '');
     setEditPriority(data.task.priority);
+    setEditKind(data.task.kind ?? 'feature');
+    setEditEstimate(data.task.estimate != null ? String(data.task.estimate) : '');
+    setEditBranch(data.task.branch ?? '');
+    setEditPr(data.task.prUrl ?? '');
+    setEditLabels((data.task.labels ?? []).join(', '));
+    setEditError('');
     setEditing(true);
   }
 
@@ -132,9 +154,15 @@ export default function TaskDetailPage() {
         description: editDescription || null,
         dueDate: editDueDate || null,
         priority: editPriority,
+        kind: editKind,
+        estimate: editEstimate ? Number(editEstimate) : null,
+        branch: editBranch.trim() || null,
+        prUrl: editPr.trim() || null,
+        labels: editLabels.split(',').map(s => s.trim()).filter(Boolean).slice(0, 8),
       }),
     });
     if (res.ok) { setEditing(false); fetchData(); toast('Tarea actualizada'); }
+    else setEditError((await res.json().catch(() => null))?.error || 'No se pudo guardar');
     setEditSaving(false);
   }
 
@@ -162,8 +190,8 @@ export default function TaskDetailPage() {
   return (
     <div className="p-6 max-w-3xl">
       <Breadcrumbs items={[
-        { label: 'Espacios', href: '/espacios' },
-        { label: task.spaceName || 'Espacio', href: `/espacios/${task.spaceId}` },
+        { label: 'Proyectos', href: '/espacios' },
+        { label: task.spaceName || 'Proyecto', href: `/espacios/${task.spaceId}` },
         { label: task.title },
       ]} />
       <div className="mb-6">
@@ -206,6 +234,34 @@ export default function TaskDetailPage() {
                 </select>
               </div>
             </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label htmlFor="e-kind" className="block text-xs text-gray-500 mb-1">Tipo</label>
+                <select id="e-kind" value={editKind} onChange={e => setEditKind(e.target.value)} className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm">
+                  {KIND_ORDER.map(k => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="e-est" className="block text-xs text-gray-500 mb-1">Puntos</label>
+                <select id="e-est" value={editEstimate} onChange={e => setEditEstimate(e.target.value)} className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm">
+                  <option value="">Sin estimar</option>
+                  {ESTIMATE_STEPS.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label htmlFor="e-branch" className="block text-xs text-gray-500 mb-1">Rama</label>
+                <input id="e-branch" value={editBranch} onChange={e => setEditBranch(e.target.value)} placeholder="feat/filtros-guardados" className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm font-mono" />
+              </div>
+              <div className="col-span-2">
+                <label htmlFor="e-pr" className="block text-xs text-gray-500 mb-1">Pull request</label>
+                <input id="e-pr" value={editPr} onChange={e => setEditPr(e.target.value)} placeholder="https://github.com/org/repo/pull/218" className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm font-mono" />
+              </div>
+              <div className="col-span-2">
+                <label htmlFor="e-labels" className="block text-xs text-gray-500 mb-1">Etiquetas (separadas por coma)</label>
+                <input id="e-labels" value={editLabels} onChange={e => setEditLabels(e.target.value)} placeholder="api, frontend, urgente" className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm" />
+              </div>
+            </div>
+            {editError && <p role="alert" className="text-sm text-red-700">{editError}</p>}
             <div className="flex gap-2">
               <button onClick={saveEdit} disabled={editSaving || !editTitle.trim()} className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50">
                 Guardar
@@ -217,14 +273,37 @@ export default function TaskDetailPage() {
           </div>
         ) : (
           <>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="font-mono text-xs text-[var(--text-muted)] tabular">{taskKey(task.number)}</span>
+              <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${KIND_CHIP[(task.kind ?? 'feature') as TaskKind] ?? KIND_CHIP.feature}`}>
+                {KIND_LABEL[(task.kind ?? 'feature') as TaskKind] ?? task.kind}
+              </span>
+              {task.estimate != null && <span className="tabular px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[11px] font-medium">{task.estimate} pts</span>}
+            </div>
             <div className="flex items-start justify-between">
-              <h1 className="text-xl font-semibold text-gray-900">{task.title}</h1>
+              <h1 className="text-xl font-semibold text-gray-900 text-balance">{task.title}</h1>
               {user?.role !== 'observador' && task.status !== 'completada' && (
                 <button onClick={startEditing} className="text-gray-400 hover:text-blue-600 p-1" title="Editar tarea" aria-label="Editar tarea">
                   <Pencil size={16} aria-hidden="true" />
                 </button>
               )}
             </div>
+
+            {(task.branch || task.prUrl || (task.labels && task.labels.length > 0)) && (
+              <div className="flex items-center gap-3 mt-3 flex-wrap text-sm">
+                {task.branch && (
+                  <span className="inline-flex items-center gap-1.5 font-mono text-xs text-gray-700 bg-gray-100 rounded px-2 py-1">
+                    <GitBranch size={13} aria-hidden="true" />{task.branch}
+                  </span>
+                )}
+                {task.prUrl && (
+                  <a href={task.prUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 font-mono text-xs text-purple-700 bg-purple-100 rounded px-2 py-1 hover:bg-purple-200">
+                    <GitPullRequest size={13} aria-hidden="true" />{prLabel(task.prUrl)}
+                  </a>
+                )}
+                {task.labels?.map(l => <span key={l} className="text-xs text-gray-600 border border-[var(--border)] rounded-full px-2 py-0.5">{l}</span>)}
+              </div>
+            )}
 
             <div className="flex items-center gap-3 mt-3 flex-wrap">
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[task.status]}`}>
@@ -327,7 +406,7 @@ export default function TaskDetailPage() {
       {task.status === 'bloqueada' && task.blockedByArea && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm">
           <span className="text-red-700 font-medium">Bloqueada por: </span>
-          <span className="text-red-600 capitalize">{task.blockedByArea}</span>
+          <span className="text-red-600 capitalize">{(AREA_LABEL[task.blockedByArea] ?? task.blockedByArea)}</span>
           {task.blockedSince && (
             <span className="text-red-400 ml-2">desde {formatDateRD(task.blockedSince)}</span>
           )}
@@ -389,7 +468,7 @@ export default function TaskDetailPage() {
 
       {audit.length > 0 && (
         <div className="mt-8">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Bitácora</h3>
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Actividad</h3>
           <div className="space-y-2">
             {audit.map(entry => (
               <div key={entry.id} className="flex items-start gap-3 text-sm">
@@ -631,7 +710,7 @@ function EvidenceSection({
             return (
               <div
                 key={ev.id}
-                className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2"
+                className="flex items-center justify-between bg-[var(--bg-card)] border border-gray-200 rounded-lg px-3 py-2"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <Icon size={14} className="text-gray-400 shrink-0" />
@@ -917,16 +996,6 @@ function CommentsSection({
   );
 }
 
-const BLOCK_AREAS = [
-  { value: 'compras', label: 'Compras' },
-  { value: 'operaciones', label: 'Operaciones' },
-  { value: 'tesoreria', label: 'Tesorería' },
-  { value: 'contabilidad', label: 'Contabilidad' },
-  { value: 'administracion', label: 'Administración' },
-  { value: 'presupuesto', label: 'Presupuesto' },
-  { value: 'otro', label: 'Otro' },
-] as const;
-
 function BlockDialog({
   onConfirm, onCancel,
 }: {
@@ -938,7 +1007,7 @@ function BlockDialog({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-lg p-5 w-full max-w-sm mx-4">
+      <div className="bg-[var(--bg-card)] rounded-xl shadow-lg p-5 w-full max-w-sm mx-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
             <ShieldAlert size={18} className="text-red-500" />
@@ -987,9 +1056,9 @@ function BlockDialog({
 }
 
 const DELAY_REASONS = [
-  { value: 'falta_informacion_terceros', label: 'Falta de información de terceros' },
-  { value: 'documento_no_recibido_otra_area', label: 'Documento no recibido de otra área' },
-  { value: 'error_sistema', label: 'Error de sistema' },
+  { value: 'falta_informacion_terceros', label: 'Falta información de un tercero' },
+  { value: 'documento_no_recibido_otra_area', label: 'Falta una definición de otro equipo' },
+  { value: 'error_sistema', label: 'Fallo de entorno o infraestructura' },
   { value: 'capacidad_insuficiente', label: 'Capacidad insuficiente' },
   { value: 'dependencia_atrasada', label: 'Dependencia atrasada' },
   { value: 'repriorizacion', label: 'Repriorización' },
@@ -1007,7 +1076,7 @@ function DelayReasonDialog({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-lg p-5 w-full max-w-sm mx-4">
+      <div className="bg-[var(--bg-card)] rounded-xl shadow-lg p-5 w-full max-w-sm mx-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
             <AlertTriangle size={18} className="text-amber-500" />

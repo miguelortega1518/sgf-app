@@ -21,7 +21,7 @@ export async function GET(
       .where(eq(spaces.id, id))
       .limit(1);
 
-    if (!space) return error('Espacio no encontrado', 404);
+    if (!space) return error('Proyecto no encontrado', 404);
 
     if (session.role !== 'admin') {
       const [membership] = await db
@@ -29,7 +29,7 @@ export async function GET(
         .from(spaceMembers)
         .where(and(eq(spaceMembers.spaceId, id), eq(spaceMembers.personId, session.id)))
         .limit(1);
-      if (!membership) return error('Sin acceso a este espacio', 403);
+      if (!membership) return error('Sin acceso a este proyecto', 403);
     }
 
     const members = await db
@@ -59,15 +59,19 @@ export async function GET(
       leaderName = leader?.name ?? null;
     }
 
+    // En un equipo de desarrollo todos los miembros ven el tablero completo del proyecto.
     const taskConditions = [eq(tasks.spaceId, id)];
-    if (session.role !== 'admin') {
-      taskConditions.push(eq(tasks.responsibleId, session.id));
-    }
 
     const spaceTasks = await db
       .select({
         id: tasks.id,
+        number: tasks.number,
         title: tasks.title,
+        kind: tasks.kind,
+        estimate: tasks.estimate,
+        branch: tasks.branch,
+        prUrl: tasks.prUrl,
+        labels: tasks.labels,
         status: tasks.status,
         dueDate: tasks.dueDate,
         dueDateOriginal: tasks.dueDateOriginal,
@@ -113,7 +117,7 @@ export async function PATCH(
       .where(eq(spaces.id, id))
       .limit(1);
 
-    if (!space) return error('Espacio no encontrado', 404);
+    if (!space) return error('Proyecto no encontrado', 404);
 
     const isOwner = space.ownerId === session.id;
     if (session.role !== 'admin' && !isOwner) {

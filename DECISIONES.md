@@ -43,3 +43,47 @@
 ## 11. Directorio separado del ERP
 **Decisión:** Proyecto en `sgf-app`, no dentro de ERP-Finca.
 **Razón:** Son sistemas completamente distintos: diferente stack (FastAPI+React vs Next.js), diferente dominio, diferente base de datos. Compartir directorio solo crea confusión.
+
+
+---
+
+# Forja: conversión a herramienta para equipos de desarrollo
+
+Rama: `forja-dev`. Este bloque documenta qué cambió respecto a la versión de finanzas (SGF) y por qué.
+
+## 12. Producto: de gestor financiero a gestor de trabajo de desarrollo
+**Decisión:** el producto pasa a llamarse **Forja**. Se conserva todo el motor (tareas, subtareas, dependencias, comentarios, evidencia, revisión, hitos, plantillas, notificaciones, auditoría) y cambia el vocabulario y los campos.
+**Razón:** el 80 % del modelo ya servía para un equipo técnico. Reescribir habría costado semanas y perdido la auditoría y los permisos que ya funcionan.
+
+## 13. Los nombres de la base de datos no cambian
+**Decisión:** las tablas y valores internos siguen siendo `spaces`, `companies`, `en_revision`, etc. Solo cambian las etiquetas visibles (`src/lib/labels.ts`).
+**Razón:** renombrar tablas exige una migración destructiva sobre datos en producción y no aporta nada al usuario. Mapa: espacio → Proyecto (recurrente = Sprint, proyecto = Iniciativa, continuo = Backlog); empresa → Repositorio; `en_revision` → En code review; `completada` → Hecho.
+
+## 14. Campos nuevos en la tarea
+`number` (serial, clave legible FOR-142), `kind` (feature, bug, mejora, deuda, chore), `estimate` (puntos de historia), `branch`, `pr_url`, `labels`.
+**Razón:** son lo mínimo que un equipo usa a diario. La clave correlativa permite citar tareas en commits y chats. Aditivos y con valores por defecto: no rompen datos existentes.
+
+## 15. Tablero Kanban como vista principal del proyecto
+Arrastrar y soltar cambia el estado (con actualización optimista y reversión si el servidor rechaza). Lista queda como vista alternativa, y la preferencia se guarda por navegador. Mover a "Bloqueada" pide el motivo. Hay un selector "Mover a…" accesible por teclado y táctil.
+**Razón:** es la forma en que los equipos técnicos esperan ver el trabajo, y es lo que más cambia la sensación de uso.
+
+## 16. Code review sin obligación de aprobación
+Se quitó la regla que impedía pasar a "En code review" si la tarea no requería aprobación. Aprobar sigue exigiendo ser el revisor asignado o admin.
+**Razón:** en desarrollo cualquier tarea puede pedir revisión; obligar a marcarla antes era fricción.
+
+## 17. Los miembros ven todo el tablero del proyecto
+Antes un miembro solo veía sus propias tareas dentro de un proyecto.
+**Razón:** un equipo técnico necesita ver qué hace el resto para no pisarse ni duplicar trabajo.
+
+## 18. Métricas de entrega (Panorama del equipo)
+Velocidad semanal en puntos, tiempo de ciclo (mediana y percentil 85), trabajo en curso por persona y bloqueos por área. Cálculo en `src/lib/metrics.ts` con pruebas.
+**Razón:** mediana y percentil 85 en lugar de promedio, porque un par de tareas eternas distorsionan el promedio. Los bloqueos por área muestran dónde se atasca el equipo.
+
+## 19. Identidad visual
+Neutros grafito fríos y un único acento ámbar ("brasa"). Azul cielo para "En progreso" y "Feature" (distinto del acento y del rojo de Bug). Tipografía Geist. Los colores salen de variables en `globals.css`, que reasigna las paletas de Tailwind: el modo claro, el oscuro y el del sistema salen de un único sitio. Contraste comprobado en claro y oscuro.
+
+## Pendiente (no incluido en esta rama)
+- Integración real con GitHub/GitLab (hoy la rama y el PR se escriben a mano). Requiere definir el proveedor y un webhook.
+- Las plantillas de sprint siguen usando "días hábiles" y feriados de RD.
+- Los reportes exportados (PDF/Excel) conservan columnas y textos de la versión anterior.
+- Los 33 errores de ESLint y las pruebas antiguas que importan `vitest` (no instalado) ya existían antes de esta rama.

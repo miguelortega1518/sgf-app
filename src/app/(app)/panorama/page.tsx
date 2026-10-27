@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from '@/lib/hooks/use-session';
 import { useRouter } from 'next/navigation';
 import { formatDateRD } from '@/lib/date-utils';
+import { DeliveryMetrics } from '@/components/dashboard/delivery-metrics';
 import {
   FolderOpen, AlertTriangle, Lock, RefreshCw,
   Target, Layers, TrendingUp, Users, Building2, CheckCircle, Download,
@@ -40,9 +41,9 @@ const TYPE_ICONS: Record<string, typeof RefreshCw> = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  recurrente: 'Recurrente',
-  proyecto: 'Proyecto',
-  continuo: 'Continuo',
+  recurrente: 'Sprint',
+  proyecto: 'Iniciativa',
+  continuo: 'Backlog',
 };
 
 const HEALTH_COLORS: Record<string, string> = {
@@ -57,7 +58,7 @@ export default function PanoramaPage() {
   const [spaces, setSpaces] = useState<SpaceRow[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'espacios' | 'kpis'>('espacios');
+  const [tab, setTab] = useState<'proyectos' | 'kpis'>('proyectos');
 
   useEffect(() => {
     Promise.all([
@@ -84,9 +85,9 @@ export default function PanoramaPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Panorama</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Panorama del equipo</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {spaces.length} {spaces.length === 1 ? 'espacio activo' : 'espacios activos'}
+            {spaces.length} {spaces.length === 1 ? 'proyecto activo' : 'proyectos activos'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -107,17 +108,17 @@ export default function PanoramaPage() {
           </div>
           <div className="flex bg-gray-100 rounded-lg p-0.5">
             <button
-              onClick={() => setTab('espacios')}
+              onClick={() => setTab('proyectos')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                tab === 'espacios' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                tab === 'proyectos' ? 'bg-[var(--bg-card)] text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Espacios
+              Proyectos
             </button>
             <button
               onClick={() => setTab('kpis')}
               className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                tab === 'kpis' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                tab === 'kpis' ? 'bg-[var(--bg-card)] text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               KPIs
@@ -126,10 +127,12 @@ export default function PanoramaPage() {
         </div>
       </div>
 
+      <DeliveryMetrics />
+
       {tab === 'kpis' && dashboard && (
         <div className="space-y-6 mb-6">
           <div className="grid gap-4 grid-cols-4">
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle size={16} className="text-green-500" />
                 <p className="text-sm text-gray-500">Cumplimiento</p>
@@ -137,21 +140,21 @@ export default function PanoramaPage() {
               <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.completionRate}%</p>
               <p className="text-xs text-gray-400 mt-1">{dashboard.totals.completed} de {dashboard.totals.total}</p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-1">
                 <TrendingUp size={16} className="text-blue-500" />
                 <p className="text-sm text-gray-500">Total tareas</p>
               </div>
               <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.total}</p>
             </div>
-            <div className={`bg-white border rounded-lg p-4 ${dashboard.totals.overdue > 0 ? 'border-red-300' : 'border-gray-200'}`}>
+            <div className={`bg-[var(--bg-card)] border rounded-lg p-4 ${dashboard.totals.overdue > 0 ? 'border-red-300' : 'border-gray-200'}`}>
               <div className="flex items-center gap-2 mb-1">
                 <AlertTriangle size={16} className="text-red-500" />
                 <p className="text-sm text-gray-500">Vencidas</p>
               </div>
               <p className={`text-3xl font-semibold ${dashboard.totals.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{dashboard.totals.overdue}</p>
             </div>
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-1">
                 <Lock size={16} className="text-amber-500" />
                 <p className="text-sm text-gray-500">Bloqueadas</p>
@@ -161,7 +164,7 @@ export default function PanoramaPage() {
           </div>
 
           <div className={`grid gap-6 ${dashboard.byPerson.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
               <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
                 <div className="w-1 h-4 bg-blue-500 rounded" />
                 Por estado
@@ -181,7 +184,7 @@ export default function PanoramaPage() {
             </div>
 
             {dashboard.byPerson.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
                   <Users size={16} className="text-gray-400" />
                   Por persona
@@ -215,10 +218,10 @@ export default function PanoramaPage() {
           </div>
 
           {dashboard.byCompany.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
               <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
                 <Building2 size={16} className="text-gray-400" />
-                Por empresa
+                Por repositorio
               </h3>
               <div className="grid grid-cols-3 gap-4">
                 {dashboard.byCompany.map(c => {
@@ -245,12 +248,12 @@ export default function PanoramaPage() {
         </div>
       )}
 
-      {tab === 'espacios' && (
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      {tab === 'proyectos' && (
+      <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Espacio</th>
+              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Proyecto</th>
               <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Tipo</th>
               <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Dueño</th>
               <th className="text-center text-xs font-medium text-gray-500 uppercase px-4 py-3">Progreso</th>
@@ -344,7 +347,7 @@ export default function PanoramaPage() {
 
         {spaces.length === 0 && (
           <div className="text-center py-12 text-gray-500 text-sm">
-            No hay espacios activos
+            No hay proyectos activos
           </div>
         )}
       </div>
@@ -370,7 +373,7 @@ function DonutChart({ segments, completionRate }: {
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0">
-      <circle cx={center} cy={center} r={radius} fill="none" stroke="#f3f4f6" strokeWidth={strokeWidth} />
+      <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--border)" strokeWidth={strokeWidth} />
       {segments.filter(s => s.count > 0).map((segment, i) => {
         const fraction = segment.count / total;
         const dashLength = fraction * circumference;
@@ -392,11 +395,11 @@ function DonutChart({ segments, completionRate }: {
         );
       })}
       <text x={center} y={center - 4} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: '24px', fontWeight: 700, fill: '#111827' }}>
+        style={{ fontSize: '24px', fontWeight: 700, fill: 'var(--text-primary)' }}>
         {completionRate}%
       </text>
       <text x={center} y={center + 16} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: '10px', fill: '#6b7280' }}>
+        style={{ fontSize: '10px', fill: 'var(--text-muted)' }}>
         cumplimiento
       </text>
     </svg>

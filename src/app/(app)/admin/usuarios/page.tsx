@@ -152,7 +152,7 @@ export default function UsuariosPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-white border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+        <form onSubmit={handleCreate} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-medium text-gray-900">Nuevo usuario</h3>
             <button type="button" onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
@@ -214,7 +214,7 @@ export default function UsuariosPage() {
       ) : (
         <div className="space-y-3">
           {users.map(u => (
-            <div key={u.id} className="bg-white border border-gray-200 rounded-lg p-4">
+            <div key={u.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
               {editingId === u.id ? (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">

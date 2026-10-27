@@ -11,10 +11,10 @@ type SearchResults = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  completada: 'Completada',
+  no_iniciada: 'Por hacer',
+  en_proceso: 'En progreso',
+  en_revision: 'En code review',
+  completada: 'Hecho',
   bloqueada: 'Bloqueada',
 };
 
@@ -79,7 +79,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
             ref={inputRef}
             value={query}
             onChange={e => handleChange(e.target.value)}
-            placeholder="Buscar tareas, espacios, personas..."
+            placeholder="Buscar tareas, proyectos, personas..."
             className="flex-1 text-sm outline-none bg-transparent text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
             aria-label="Buscar"
           />
@@ -123,8 +123,8 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
               )}
 
               {results!.spaces.length > 0 && (
-                <div role="group" aria-label="Espacios">
-                  <p className="px-4 py-1.5 text-[11px] font-medium text-[var(--text-muted)] uppercase">Espacios</p>
+                <div role="group" aria-label="Proyectos">
+                  <p className="px-4 py-1.5 text-[11px] font-medium text-[var(--text-muted)] uppercase">Proyectos</p>
                   {results!.spaces.map(s => (
                     <a
                       key={s.id}

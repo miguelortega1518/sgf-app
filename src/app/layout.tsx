@@ -1,14 +1,15 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { SessionProvider } from '@/components/providers/session-provider';
 import { ToastProvider } from '@/components/providers/toast-provider';
 
-const inter = Inter({ subsets: ['latin'] });
+const geistSans = Geist({ subsets: ['latin'], variable: '--font-geist-sans', display: 'swap' });
+const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'SGF — Sistema de Gestión Financiera',
-  description: 'Gestión de trabajo del departamento de finanzas',
+  title: { default: 'Forja — gestión de trabajo para equipos de desarrollo', template: '%s · Forja' },
+  description: 'Tablero, sprints y revisión de código del equipo de desarrollo en un solo lugar.',
 };
 
 export default function RootLayout({
@@ -22,14 +23,14 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
             try {
-              var t = localStorage.getItem('sgf-theme');
+              var t = localStorage.getItem('forja-theme');
               if (t === 'dark') document.documentElement.classList.add('dark');
               else if (t === 'light') document.documentElement.classList.add('light');
             } catch(e){}
           })();
         `}} />
       </head>
-      <body className={`${inter.className} h-full bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans h-full bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased`}>
         <SessionProvider>
           <ToastProvider>
             {children}

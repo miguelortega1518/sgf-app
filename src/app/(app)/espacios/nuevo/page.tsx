@@ -51,14 +51,14 @@ export default function NuevoEspacioPage() {
       router.push(`/espacios/${space.id}`);
     } else {
       const data = await res.json();
-      setError(data.error || 'Error al crear el espacio');
+      setError(data.error || 'Error al crear el proyecto');
       setSubmitting(false);
     }
   }
 
   return (
     <div className="p-6 max-w-lg">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Nuevo espacio</h1>
+      <h1 className="text-2xl font-semibold text-gray-900 mb-6">Nuevo proyecto</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -83,7 +83,7 @@ export default function NuevoEspacioPage() {
             <option value="continuo">Continuo</option>
           </select>
           <p className="text-xs text-gray-500 mt-1">
-            Los espacios recurrentes se crean desde plantillas
+            Los proyectos recurrentes se crean desde plantillas
           </p>
         </div>
 
@@ -110,13 +110,13 @@ export default function NuevoEspacioPage() {
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Líder</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Líder técnico</label>
           <select
             value={leaderId}
             onChange={e => setLeaderId(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">Sin líder asignado</option>
+            <option value="">Sin líder técnico asignado</option>
             {people.map(person => (
               <option key={person.id} value={person.id}>{person.name}</option>
             ))}
@@ -156,7 +156,7 @@ export default function NuevoEspacioPage() {
             disabled={submitting}
             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {submitting ? 'Creando...' : 'Crear espacio'}
+            {submitting ? 'Creando...' : 'Crear proyecto'}
           </button>
           <button
             type="button"

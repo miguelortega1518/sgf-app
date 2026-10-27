@@ -22,9 +22,9 @@ const TYPE_ICONS: Record<string, typeof RefreshCw> = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  recurrente: 'Recurrente',
-  proyecto: 'Proyecto',
-  continuo: 'Continuo',
+  recurrente: 'Sprint',
+  proyecto: 'Iniciativa',
+  continuo: 'Backlog',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -59,7 +59,7 @@ export default function EspaciosPage() {
     <div className="p-6 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Espacios</h1>
+          <h1 className="text-2xl font-semibold text-[var(--text-primary)]">Proyectos</h1>
           <button
             onClick={() => setShowClosed(!showClosed)}
             className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${
@@ -77,7 +77,7 @@ export default function EspaciosPage() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
           >
             <Plus size={16} />
-            Nuevo espacio
+            Nuevo proyecto
           </button>
         )}
       </div>
@@ -119,9 +119,9 @@ export default function EspaciosPage() {
           {spaces.length === 0 && (
             <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-lg">
               <Layers size={40} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-gray-500">No hay espacios creados</p>
+              <p className="text-gray-500">No hay proyectos creados</p>
               <p className="text-xs text-gray-400 mt-1">
-                Crea un espacio para organizar tareas de tu equipo
+                Crea un proyecto para organizar tareas de tu equipo
               </p>
             </div>
           )}
