@@ -4,16 +4,18 @@ import { comments, persons } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
 import { stripHtml } from '@/lib/sanitize';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireProjectAccess } from '@/lib/project-access';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
+    await requireProjectAccess(session, id);
 
     const rows = await db
       .select({
@@ -43,8 +45,9 @@ export async function POST(
     const session = await requireSession();
     if (session.role === 'observador') return error('Sin permisos', 403);
     const { id } = await params;
+    await requireProjectAccess(session, id, 'write');
     const body = await req.json();
-    const { content } = z.object({ content: z.string().min(1).max(5000) }).parse(body);
+    const { content } = z.object({ content: z.string().transform(stripHtml).pipe(z.string().trim().min(1).max(5000)) }).parse(body);
 
     const [comment] = await db.insert(comments).values({
       spaceId: id,
@@ -58,22 +61,24 @@ export async function POST(
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireSession();
+    const { id } = await params;
+    await requireProjectAccess(session, id, 'write');
     const body = await req.json();
     const { commentId, content } = z.object({
       commentId: z.string().uuid(),
-      content: z.string().min(1).max(5000),
+      content: z.string().transform(stripHtml).pipe(z.string().trim().min(1).max(5000)),
     }).parse(body);
 
-    const [existing] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+    const [existing] = await db.select().from(comments).where(and(eq(comments.id, commentId), eq(comments.spaceId, id))).limit(1);
     if (!existing) return error('Comentario no encontrado', 404);
     if (existing.authorId !== session.id && session.role !== 'admin') return error('Sin permisos', 403);
 
     const [updated] = await db.update(comments)
       .set({ content: stripHtml(content), editedAt: new Date() })
-      .where(eq(comments.id, commentId))
+      .where(and(eq(comments.id, commentId), eq(comments.spaceId, id)))
       .returning();
     return success(updated);
   } catch (err) {
@@ -81,17 +86,19 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireSession();
+    const { id } = await params;
+    await requireProjectAccess(session, id, 'write');
     const body = await req.json();
     const { commentId } = z.object({ commentId: z.string().uuid() }).parse(body);
 
-    const [existing] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+    const [existing] = await db.select().from(comments).where(and(eq(comments.id, commentId), eq(comments.spaceId, id))).limit(1);
     if (!existing) return error('Comentario no encontrado', 404);
     if (existing.authorId !== session.id && session.role !== 'admin') return error('Sin permisos', 403);
 
-    await db.delete(comments).where(eq(comments.id, commentId));
+    await db.delete(comments).where(and(eq(comments.id, commentId), eq(comments.spaceId, id)));
     return success({ deleted: true });
   } catch (err) {
     return handleError(err);

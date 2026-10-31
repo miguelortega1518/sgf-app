@@ -83,9 +83,17 @@ export default function MiTrabajoPage() {
       body: JSON.stringify({ taskIds: [...selected], status }),
     });
     if (res.ok) {
+      const result: { updated: number; skipped: number; skippedTasks: { reason: string }[] } = await res.json();
       setSelected(new Set());
       setBatchMode(false);
-      fetchData();
+      await fetchData();
+      if (result.skipped > 0) {
+        const reasons = [...new Set(result.skippedTasks.map(item => item.reason))].slice(0, 2).join('; ');
+        const hasActionableSkips = result.skippedTasks.some(item => item.reason !== 'Ya estaba en ese estado');
+        toast(`Actualizadas: ${result.updated}. Omitidas: ${result.skipped}. ${reasons}`, result.updated > 0 ? 'warning' : hasActionableSkips ? 'error' : 'info');
+      } else {
+        toast(`Actualizadas: ${result.updated}`, 'success');
+      }
     } else {
       const err = await res.json();
       toast(err.error || 'Error al actualizar', 'error');

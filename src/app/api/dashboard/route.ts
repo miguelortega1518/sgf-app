@@ -1,37 +1,21 @@
 import { db } from '@/lib/db';
-import { tasks, persons, companies, spaceMembers, spaces } from '@/lib/db/schema';
+import { tasks, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
 import { eq, and, count, sql, desc, inArray } from 'drizzle-orm';
+import { accessibleSpaceIds } from '@/lib/project-access';
 
 export async function GET() {
   try {
     const session = await requireSession();
     const today = todayRD();
-    const isAdmin = session.role === 'admin';
-
-    let baseCondition;
-    if (isAdmin) {
-      baseCondition = eq(tasks.archived, false);
-    } else {
-      const memberOf = await db
-        .select({ spaceId: spaceMembers.spaceId })
-        .from(spaceMembers)
-        .where(eq(spaceMembers.personId, session.id));
-      const leaderOf = await db
-        .select({ id: spaces.id })
-        .from(spaces)
-        .where(eq(spaces.leaderId, session.id));
-      const idSet = new Set([
-        ...memberOf.map(r => r.spaceId),
-        ...leaderOf.map(r => r.id),
-      ]);
-      const spaceIds = [...idSet];
-      baseCondition = spaceIds.length > 0
-        ? and(eq(tasks.archived, false), inArray(tasks.spaceId, spaceIds))
+    const allowedSpaceIds = await accessibleSpaceIds(session);
+    const baseCondition = allowedSpaceIds === null
+      ? eq(tasks.archived, false)
+      : allowedSpaceIds.length > 0
+        ? and(eq(tasks.archived, false), inArray(tasks.spaceId, allowedSpaceIds))
         : and(eq(tasks.archived, false), sql`false`);
-    }
 
     const [totals] = await db
       .select({

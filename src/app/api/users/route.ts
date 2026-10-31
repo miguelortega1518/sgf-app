@@ -3,11 +3,14 @@ import { db } from '@/lib/db';
 import { persons } from '@/lib/db/schema';
 import { requireRole, requireSession, hashPassword } from '@/lib/auth';
 import { createUserSchema } from '@/lib/schemas/user';
-import { success, error, handleError } from '@/lib/api-utils';
+import { success, handleError } from '@/lib/api-utils';
+import { visiblePersonIds } from '@/lib/project-access';
+import { inArray, and, eq } from 'drizzle-orm';
 
 export async function GET() {
   try {
-    await requireSession();
+    const session = await requireSession();
+    const ids = await visiblePersonIds(session);
     const users = await db.select({
       id: persons.id,
       name: persons.name,
@@ -15,7 +18,7 @@ export async function GET() {
       role: persons.role,
       active: persons.active,
       createdAt: persons.createdAt,
-    }).from(persons);
+    }).from(persons).where(ids === null ? undefined : and(inArray(persons.id, ids), eq(persons.active, true)));
     return success(users);
   } catch (err) {
     return handleError(err);

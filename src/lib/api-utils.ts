@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
+import { isUniqueConstraintViolation } from './validation';
 import { logger } from './logger';
 import { classifyError, newErrorId } from './errors';
 
@@ -12,11 +13,18 @@ export function error(message: string, status = 400, extra?: Record<string, unkn
 }
 
 export function handleError(err: unknown) {
+  if (err instanceof SyntaxError) return error('JSON inválido', 400);
+  if (isUniqueConstraintViolation(err)) return error('Ya existe un registro con esos datos', 409);
   if (err instanceof ZodError) {
     const messages = err.issues.map((e: { message: string }) => e.message).join(', ');
     return error(messages, 400);
   }
   if (err instanceof Error) {
+    // Errores con httpStatus adjunto (project-access, task-transitions, validation)
+    const httpErr = err as Error & { httpStatus?: number };
+    if (httpErr.httpStatus && httpErr.httpStatus >= 400 && httpErr.httpStatus < 600) {
+      return error(httpErr.message, httpErr.httpStatus);
+    }
     if (err.message === 'UNAUTHORIZED') {
       return error('No autorizado', 401);
     }

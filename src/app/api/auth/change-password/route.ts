@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { persons } from '@/lib/db/schema';
-import { requireSession, hashPassword, verifyPassword, invalidateActiveCache } from '@/lib/auth';
+import { requireSession, hashPassword, verifyPassword } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       .update(persons)
       .set({ passwordHash: hash, mustChangePassword: false, updatedAt: new Date() })
       .where(eq(persons.id, session.id));
-    invalidateActiveCache(session.id);
+
 
     return success({ ok: true });
   } catch (err) {

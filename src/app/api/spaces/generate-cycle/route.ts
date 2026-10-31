@@ -8,6 +8,7 @@ import { requireRole } from '@/lib/auth';
 import { generateCycleSchema } from '@/lib/schemas/template';
 import { success, error, handleError } from '@/lib/api-utils';
 import { addBusinessDays } from '@/lib/business-days';
+import { buildGeneratedSpaceMembers } from '@/lib/generated-space-members';
 import { eq, and, inArray } from 'drizzle-orm';
 
 const PERIOD_LABELS: Record<string, string> = {
@@ -104,9 +105,6 @@ export async function POST(req: NextRequest) {
         },
       }).returning();
 
-      const responsibleIds = new Set<string>();
-      responsibleIds.add(input.ownerId);
-
       const templateIdToTaskId = new Map<string, string>();
 
       for (const tt of tplTasks) {
@@ -114,8 +112,6 @@ export async function POST(req: NextRequest) {
 
         const dueDate = addBusinessDays(anchorDate, tt.businessDayLimit, holidaySet);
         const responsibleId = tt.defaultResponsibleId || input.ownerId;
-        responsibleIds.add(responsibleId);
-
         const [task] = await tx.insert(tasks).values({
           spaceId: space.id,
           templateId: tt.id,
@@ -143,10 +139,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const memberValues = Array.from(responsibleIds).map(personId => ({
+      const memberValues = buildGeneratedSpaceMembers(input.ownerId, tplTasks).map(({ personId, spaceRole }) => ({
         spaceId: space.id,
         personId,
-        spaceRole: personId === input.ownerId ? 'dueño' as const : 'colaborador' as const,
+        spaceRole,
       }));
 
       if (memberValues.length > 0) {

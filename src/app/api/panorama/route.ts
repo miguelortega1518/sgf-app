@@ -1,78 +1,37 @@
 import { db } from '@/lib/db';
-import { spaces, tasks, persons, spaceUpdates, spaceMembers } from '@/lib/db/schema';
+import { spaces, tasks, persons, spaceUpdates } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
 import { eq, and, ne, count, desc, sql, inArray } from 'drizzle-orm';
+import { accessibleSpaceIds } from '@/lib/project-access';
 
 export async function GET() {
   try {
     const session = await requireSession();
     const today = todayRD();
-    const isAdmin = session.role === 'admin';
-
-    let spaceIds: string[];
-    let activeSpaces;
-
-    if (isAdmin) {
-      activeSpaces = await db
-        .select({
-          id: spaces.id,
-          name: spaces.name,
-          type: spaces.type,
-          status: spaces.status,
-          targetDate: spaces.targetDate,
-          declaredHealth: spaces.declaredHealth,
-          ownerId: spaces.ownerId,
-          ownerName: persons.name,
-          openDate: spaces.openDate,
-          period: spaces.period,
-        })
-        .from(spaces)
-        .innerJoin(persons, eq(spaces.ownerId, persons.id))
-        .where(ne(spaces.status, 'cerrado'))
-        .orderBy(desc(spaces.createdAt));
-
-      spaceIds = activeSpaces.map(s => s.id);
-    } else {
-      const memberOf = await db
-        .select({ spaceId: spaceMembers.spaceId })
-        .from(spaceMembers)
-        .where(eq(spaceMembers.personId, session.id));
-
-      const leaderOf = await db
-        .select({ id: spaces.id })
-        .from(spaces)
-        .where(eq(spaces.leaderId, session.id));
-
-      const idSet = new Set([
-        ...memberOf.map(r => r.spaceId),
-        ...leaderOf.map(r => r.id),
-      ]);
-      spaceIds = [...idSet];
-
-      activeSpaces = spaceIds.length > 0
-        ? await db
-            .select({
-              id: spaces.id,
-              name: spaces.name,
-              type: spaces.type,
-              status: spaces.status,
-              targetDate: spaces.targetDate,
-              declaredHealth: spaces.declaredHealth,
-              ownerId: spaces.ownerId,
-              ownerName: persons.name,
-              openDate: spaces.openDate,
-              period: spaces.period,
-            })
-            .from(spaces)
-            .innerJoin(persons, eq(spaces.ownerId, persons.id))
-            .where(and(ne(spaces.status, 'cerrado'), inArray(spaces.id, spaceIds)))
-            .orderBy(desc(spaces.createdAt))
-        : [];
-
-      spaceIds = activeSpaces.map(s => s.id);
-    }
+    const allowedSpaceIds = await accessibleSpaceIds(session);
+    const activeSpaces = await db
+      .select({
+        id: spaces.id,
+        name: spaces.name,
+        type: spaces.type,
+        status: spaces.status,
+        targetDate: spaces.targetDate,
+        declaredHealth: spaces.declaredHealth,
+        ownerId: spaces.ownerId,
+        ownerName: persons.name,
+        openDate: spaces.openDate,
+        period: spaces.period,
+      })
+      .from(spaces)
+      .innerJoin(persons, eq(spaces.ownerId, persons.id))
+      .where(and(
+        ne(spaces.status, 'cerrado'),
+        allowedSpaceIds === null ? undefined : inArray(spaces.id, allowedSpaceIds),
+      ))
+      .orderBy(desc(spaces.createdAt));
+    const spaceIds = activeSpaces.map(space => space.id);
 
     const taskFilter = and(inArray(tasks.spaceId, spaceIds), eq(tasks.archived, false));
 

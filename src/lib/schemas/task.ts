@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidIsoDate } from '../validation';
 
 export const TASK_KINDS = ['feature', 'bug', 'mejora', 'deuda', 'chore'] as const;
 const taskKind = z.enum(TASK_KINDS);
@@ -10,13 +11,13 @@ const labels = z.array(z.string().trim().min(1).max(30)).max(8);
 
 export const createTaskSchema = z.object({
   spaceId: z.string().uuid(),
-  title: z.string().min(1, 'El título es requerido').max(500),
+  title: z.string().trim().min(1, 'El título es requerido').max(500),
   description: z.string().max(5000).optional(),
   responsibleId: z.string().uuid('Responsable requerido'),
   reviewerId: z.string().uuid().optional(),
   companyId: z.string().uuid().optional(),
   milestoneId: z.string().uuid().optional(),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dueDate: z.string().refine(isValidIsoDate, 'Fecha inválida').optional(),
   priority: z.enum(['critica', 'alta', 'normal', 'baja']).default('normal'),
   requiresApproval: z.boolean().default(false),
   requiresEvidence: z.boolean().default(false),
@@ -50,11 +51,11 @@ export const updateTaskStatusSchema = z.object({
 });
 
 export const updateTaskSchema = z.object({
-  title: z.string().min(1).max(500).optional(),
+  title: z.string().trim().min(1).max(500).optional(),
   description: z.string().max(5000).optional(),
   responsibleId: z.string().uuid().optional(),
   reviewerId: z.string().uuid().nullable().optional(),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  dueDate: z.string().refine(isValidIsoDate, 'Fecha inválida').nullable().optional(),
   priority: z.enum(['critica', 'alta', 'normal', 'baja']).optional(),
   milestoneId: z.string().uuid().nullable().optional(),
   kind: taskKind.optional(),

@@ -1,11 +1,12 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { requireProjectAccess } from '@/lib/project-access';
 import { spaces, tasks, spaceMembers, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { updateSpaceSchema } from '@/lib/schemas/space';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
-import { eq, and, ne, lt, isNotNull } from 'drizzle-orm';
+import { eq, and, ne } from 'drizzle-orm';
 
 export async function GET(
   _req: NextRequest,
@@ -14,23 +15,11 @@ export async function GET(
   try {
     const session = await requireSession();
     const { id } = await params;
-
-    const [space] = await db
-      .select()
-      .from(spaces)
-      .where(eq(spaces.id, id))
-      .limit(1);
+    const space = await requireProjectAccess(session, id);
 
     if (!space) return error('Proyecto no encontrado', 404);
 
-    if (session.role !== 'admin') {
-      const [membership] = await db
-        .select({ personId: spaceMembers.personId })
-        .from(spaceMembers)
-        .where(and(eq(spaceMembers.spaceId, id), eq(spaceMembers.personId, session.id)))
-        .limit(1);
-      if (!membership) return error('Sin acceso a este proyecto', 403);
-    }
+
 
     const members = await db
       .select({
@@ -60,7 +49,7 @@ export async function GET(
     }
 
     // En un equipo de desarrollo todos los miembros ven el tablero completo del proyecto.
-    const taskConditions = [eq(tasks.spaceId, id)];
+    const taskConditions = [eq(tasks.spaceId, id), eq(tasks.archived, false)];
 
     const spaceTasks = await db
       .select({
@@ -118,6 +107,7 @@ export async function PATCH(
       .limit(1);
 
     if (!space) return error('Proyecto no encontrado', 404);
+    await requireProjectAccess(session, id, 'write');
 
     const isOwner = space.ownerId === session.id;
     if (session.role !== 'admin' && !isOwner) {

@@ -12,7 +12,7 @@ export async function GET() {
   try {
     const flags = await getUserFlags(session.id);
     if (!flags.active) return error('No autorizado', 401);
-    return success({ user: { ...session, mustChangePassword: flags.mustChangePassword } });
+    return success({ user: { ...session, role: flags.role, mustChangePassword: flags.mustChangePassword } });
   } catch (err) {
     // Si la base no responde, la sesión firmada sigue siendo válida: se muestra la app y las llamadas
     // a la API darán el error claro. Cerrar la sesión por una caída de la base sería peor.

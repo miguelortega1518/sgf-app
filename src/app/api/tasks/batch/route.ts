@@ -3,8 +3,10 @@ import { db } from '@/lib/db';
 import { tasks } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
-import { logAudit } from '@/lib/audit';
-import { inArray, eq, and } from 'drizzle-orm';
+import { requireProjectAccess } from '@/lib/project-access';
+import { applyStatusTransition, type NotificationIntent } from '@/lib/task-transitions';
+import { notify } from '@/lib/notify';
+import { inArray, asc } from 'drizzle-orm';
 import { z } from 'zod';
 
 const batchSchema = z.object({
@@ -19,45 +21,39 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { taskIds, status } = batchSchema.parse(body);
 
-    const userTasks = await db
-      .select({ id: tasks.id, status: tasks.status, requiresApproval: tasks.requiresApproval })
-      .from(tasks)
-      .where(and(
-        inArray(tasks.id, taskIds),
-        eq(tasks.responsibleId, session.id),
-        eq(tasks.archived, false),
-      ));
-
-    if (userTasks.length === 0) return error('No se encontraron tareas válidas', 404);
-
-    const eligible = userTasks.filter(t => {
-      if (status === 'completada' && t.requiresApproval) return false;
-      if (status === 'completada' && t.status === 'completada') return false;
-      return true;
-    });
-
-    if (eligible.length === 0) return error('Ninguna tarea es elegible para este cambio', 400);
-
-    const eligibleIds = eligible.map(t => t.id);
-
-    await db.transaction(async (tx) => {
-      const updateData: Record<string, unknown> = { status };
-      if (status === 'completada') updateData.completedAt = new Date();
-
-      await tx.update(tasks).set(updateData).where(inArray(tasks.id, eligibleIds));
-
-      for (const t of eligible) {
-        await logAudit({
-          actorId: session.id,
-          action: 'status_changed',
-          taskId: t.id,
-          previousValue: t.status,
-          newValue: status,
-        });
+    const ids = [...new Set(taskIds)];
+    const result = await db.transaction(async tx => {
+      const rows = await tx.select().from(tasks).where(inArray(tasks.id, ids)).orderBy(asc(tasks.id)).for('update');
+      const notifications: NotificationIntent[] = [];
+      let updated = 0;
+      const skippedTasks: { taskId: string; reason: string }[] = [];
+      const found = new Set(rows.map(task => task.id));
+      for (const taskId of ids) {
+        if (!found.has(taskId)) skippedTasks.push({ taskId, reason: 'Tarea no disponible' });
       }
+      for (const task of rows) {
+        if (task.archived) {
+          skippedTasks.push({ taskId: task.id, reason: 'Tarea no disponible' });
+          continue;
+        }
+        try {
+          const space = await requireProjectAccess(session, task.spaceId, 'write', tx);
+          const transition = await applyStatusTransition(tx, session, task, space, { status });
+          if (!transition.isNoop) updated++;
+          else skippedTasks.push({ taskId: task.id, reason: 'Ya estaba en ese estado' });
+          notifications.push(...transition.notifications);
+        } catch (err) {
+          const httpStatus = typeof err === 'object' && err !== null && 'httpStatus' in err
+            ? Number((err as { httpStatus: unknown }).httpStatus)
+            : 0;
+          if (![400, 403, 404, 409].includes(httpStatus)) throw err;
+          skippedTasks.push({ taskId: task.id, reason: err instanceof Error ? err.message : 'No se pudo actualizar' });
+        }
+      }
+      return { updated, skipped: skippedTasks.length, skippedTasks, notifications };
     });
-
-    return success({ updated: eligible.length, skipped: userTasks.length - eligible.length });
+    for (const intent of result.notifications) notify(intent).catch(() => {});
+    return success({ updated: result.updated, skipped: result.skipped, skippedTasks: result.skippedTasks });
   } catch (err) {
     return handleError(err);
   }

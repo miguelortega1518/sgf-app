@@ -4,7 +4,8 @@ import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { handleError, error } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
-import { eq, and, asc, count, sql } from 'drizzle-orm';
+import { eq, and, asc, count, sql, inArray } from 'drizzle-orm';
+import { accessibleSpaceIds } from '@/lib/project-access';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
@@ -26,7 +27,8 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
+    const allowedSpaces = await accessibleSpaceIds(session);
     const companyId = req.nextUrl.searchParams.get('companyId');
     const format = req.nextUrl.searchParams.get('format') || 'xlsx';
 
@@ -61,7 +63,7 @@ export async function GET(req: NextRequest) {
         .innerJoin(spaces, eq(tasks.spaceId, spaces.id))
         .innerJoin(persons, eq(tasks.responsibleId, persons.id))
         .leftJoin(reviewer, eq(tasks.reviewerId, reviewer.id))
-        .where(and(eq(tasks.companyId, companyId), eq(tasks.archived, false)))
+        .where(and(eq(tasks.companyId, companyId), eq(tasks.archived, false), allowedSpaces === null ? undefined : inArray(tasks.spaceId, allowedSpaces)))
         .orderBy(asc(spaces.name), asc(tasks.dueDate));
 
       const completed = rows.filter(r => r.status === 'completada');
@@ -179,7 +181,7 @@ export async function GET(req: NextRequest) {
       })
       .from(tasks)
       .innerJoin(companies, eq(tasks.companyId, companies.id))
-      .where(eq(tasks.archived, false))
+      .where(and(eq(tasks.archived, false), allowedSpaces === null ? undefined : inArray(tasks.spaceId, allowedSpaces)))
       .groupBy(tasks.companyId, companies.name)
       .orderBy(asc(companies.name));
 

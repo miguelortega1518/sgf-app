@@ -2,9 +2,10 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
+import { accessibleSpaceIds, visiblePersonIds, assertValidUuid } from '@/lib/project-access';
 import { handleError, error } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
@@ -26,11 +27,14 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const personId = req.nextUrl.searchParams.get('personId');
     const format = req.nextUrl.searchParams.get('format') || 'xlsx';
 
     if (!personId) return error('personId es requerido', 400);
+    assertValidUuid(personId, 'ID de persona');
+    const [allowedSpaces, allowedPeople] = await Promise.all([accessibleSpaceIds(session), visiblePersonIds(session)]);
+    if (allowedPeople !== null && !allowedPeople.includes(personId)) return error('Sin acceso a esta persona', 403);
 
     const [person] = await db
       .select({ id: persons.id, name: persons.name, email: persons.email })
@@ -61,7 +65,7 @@ export async function GET(req: NextRequest) {
       .innerJoin(spaces, eq(tasks.spaceId, spaces.id))
       .leftJoin(reviewer, eq(tasks.reviewerId, reviewer.id))
       .leftJoin(companies, eq(tasks.companyId, companies.id))
-      .where(and(eq(tasks.responsibleId, personId), eq(tasks.archived, false)))
+      .where(and(eq(tasks.responsibleId, personId), eq(tasks.archived, false), allowedSpaces === null ? undefined : inArray(tasks.spaceId, allowedSpaces)))
       .orderBy(asc(tasks.dueDate));
 
     const completed = rows.filter(r => r.status === 'completada');

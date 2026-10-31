@@ -3,16 +3,19 @@ import { db } from '@/lib/db';
 import { milestones, tasks } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
-import { eq, asc, count } from 'drizzle-orm';
+import { eq, asc, count, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireProjectAccess } from '@/lib/project-access';
+import { isValidIsoDate } from '@/lib/validation';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
+    await requireProjectAccess(session, id);
 
     const rows = await db
       .select()
@@ -42,10 +45,11 @@ export async function POST(
     const session = await requireSession();
     if (session.role === 'observador') return error('Sin permisos', 403);
     const { id } = await params;
+    await requireProjectAccess(session, id, 'write');
     const body = await req.json();
     const input = z.object({
-      name: z.string().min(1).max(200),
-      targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      name: z.string().trim().min(1).max(200),
+      targetDate: z.string().refine(isValidIsoDate, 'Fecha inválida'),
     }).parse(body);
 
     const existing = await db.select({ order: milestones.order }).from(milestones)
@@ -66,15 +70,17 @@ export async function POST(
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireSession();
     if (session.role === 'observador') return error('Sin permisos', 403);
+    const { id } = await params;
+    await requireProjectAccess(session, id, 'write');
     const body = await req.json();
     const { milestoneId, ...updates } = z.object({
       milestoneId: z.string().uuid(),
-      name: z.string().min(1).max(200).optional(),
-      targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      name: z.string().trim().min(1).max(200).optional(),
+      targetDate: z.string().refine(isValidIsoDate, 'Fecha inválida').optional(),
       completed: z.boolean().optional(),
       order: z.number().int().min(0).optional(),
     }).parse(body);
@@ -87,7 +93,7 @@ export async function PATCH(req: NextRequest) {
 
     const [updated] = await db.update(milestones)
       .set(setValues)
-      .where(eq(milestones.id, milestoneId))
+      .where(and(eq(milestones.id, milestoneId), eq(milestones.spaceId, id)))
       .returning();
     if (!updated) return error('Hito no encontrado', 404);
 
@@ -97,15 +103,21 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireSession();
     if (session.role === 'observador') return error('Sin permisos', 403);
+    const { id } = await params;
+    await requireProjectAccess(session, id, 'write');
     const body = await req.json();
     const { milestoneId } = z.object({ milestoneId: z.string().uuid() }).parse(body);
 
-    await db.update(tasks).set({ milestoneId: null }).where(eq(tasks.milestoneId, milestoneId));
-    await db.delete(milestones).where(eq(milestones.id, milestoneId));
+    await db.transaction(async tx => {
+      const [milestone] = await tx.select().from(milestones).where(and(eq(milestones.id, milestoneId), eq(milestones.spaceId, id))).for('update');
+      if (!milestone) throw Object.assign(new Error('Hito no encontrado'), { httpStatus: 404 });
+      await tx.update(tasks).set({ milestoneId: null }).where(and(eq(tasks.milestoneId, milestoneId), eq(tasks.spaceId, id)));
+      await tx.delete(milestones).where(eq(milestones.id, milestoneId));
+    });
 
     return success({ deleted: true });
   } catch (err) {

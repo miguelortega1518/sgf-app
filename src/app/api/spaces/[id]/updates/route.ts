@@ -5,6 +5,7 @@ import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
 import { stripHtml } from '@/lib/sanitize';
 import { eq, desc } from 'drizzle-orm';
+import { requireProjectAccess } from '@/lib/project-access';
 import { z } from 'zod';
 
 const createSchema = z.object({
@@ -17,8 +18,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id: spaceId } = await params;
+    await requireProjectAccess(session, spaceId, 'read');
 
     const updates = await db
       .select({
@@ -46,28 +48,21 @@ export async function POST(
 ) {
   try {
     const session = await requireSession();
-    if (session.role === 'observador') return error('Sin permisos', 403);
     const { id: spaceId } = await params;
 
-    const [space] = await db.select().from(spaces).where(eq(spaces.id, spaceId)).limit(1);
-    if (!space) return error('Espacio no encontrado', 404);
-
     const input = createSchema.parse(await req.json());
+    const content = stripHtml(input.content).trim();
+    if (!content) return error('El contenido no puede estar vacío', 400);
 
-    const [update] = await db
-      .insert(spaceUpdates)
-      .values({
-        spaceId,
-        authorId: session.id,
-        health: input.health,
-        content: stripHtml(input.content),
-      })
-      .returning();
-
-    await db
-      .update(spaces)
-      .set({ declaredHealth: input.health })
-      .where(eq(spaces.id, spaceId));
+    const update = await db.transaction(async tx => {
+      await requireProjectAccess(session, spaceId, 'write', tx);
+      const [row] = await tx
+        .insert(spaceUpdates)
+        .values({ spaceId, authorId: session.id, health: input.health, content })
+        .returning();
+      await tx.update(spaces).set({ declaredHealth: input.health }).where(eq(spaces.id, spaceId));
+      return row;
+    });
 
     return success(update, 201);
   } catch (err) {

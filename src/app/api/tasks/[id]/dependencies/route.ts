@@ -3,16 +3,18 @@ import { db } from '@/lib/db';
 import { taskDependencies, tasks } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { requireTaskAccess, assertValidUuid } from '@/lib/project-access';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id: taskId } = await params;
+    const task = await requireTaskAccess(session, taskId);
 
     const predecessorRows = await db
       .select({
@@ -22,7 +24,7 @@ export async function GET(
       })
       .from(taskDependencies)
       .innerJoin(tasks, eq(taskDependencies.predecessorId, tasks.id))
-      .where(eq(taskDependencies.taskId, taskId));
+      .where(and(eq(taskDependencies.taskId, taskId), eq(tasks.spaceId, task.spaceId)));
 
     const successorRows = await db
       .select({
@@ -32,7 +34,7 @@ export async function GET(
       })
       .from(taskDependencies)
       .innerJoin(tasks, eq(taskDependencies.taskId, tasks.id))
-      .where(eq(taskDependencies.predecessorId, taskId));
+      .where(and(eq(taskDependencies.predecessorId, taskId), eq(tasks.spaceId, task.spaceId)));
 
     return success({ predecessors: predecessorRows, successors: successorRows });
   } catch (err) {
@@ -56,14 +58,19 @@ export async function POST(
 
     if (predecessorId === taskId) return error('Una tarea no puede depender de sí misma', 400);
 
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
-    const [pred] = await db.select().from(tasks).where(eq(tasks.id, predecessorId)).limit(1);
-    if (!task || !pred) return error('Tarea no encontrada', 404);
+    const task = await requireTaskAccess(session, taskId, 'write');
+    const pred = await requireTaskAccess(session, predecessorId);
+    if (task.spaceId !== pred.spaceId) return error('Las dependencias deben pertenecer al mismo proyecto', 400);
 
-    await db
-      .insert(taskDependencies)
-      .values({ taskId, predecessorId })
-      .onConflictDoNothing();
+    await db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${task.spaceId}))`);
+      const cycle = await tx.execute(sql`with recursive ancestors(id) as (
+        select ${predecessorId}::uuid union
+        select d.predecessor_id from task_dependencies d join ancestors a on d.task_id = a.id
+      ) select id from ancestors where id = ${taskId}::uuid`);
+      if (cycle.length) throw Object.assign(new Error('La dependencia crea un ciclo'), { httpStatus: 400 });
+      await tx.insert(taskDependencies).values({ taskId, predecessorId }).onConflictDoNothing();
+    });
 
     return success({ ok: true }, 201);
   } catch (err) {
@@ -83,6 +90,8 @@ export async function DELETE(
     const { searchParams } = new URL(req.url);
     const predecessorId = searchParams.get('predecessorId');
     if (!predecessorId) return error('predecessorId requerido', 400);
+    assertValidUuid(predecessorId);
+    await requireTaskAccess(session, taskId, 'write');
 
     await db
       .delete(taskDependencies)

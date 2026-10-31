@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { tasks, spaces } from '@/lib/db/schema';
+import { tasks } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { canCreateAndAssignTask } from '@/lib/permissions';
 import { createTaskSchema } from '@/lib/schemas/task';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
-import { eq, and, asc, ilike } from 'drizzle-orm';
+import { accessibleSpaceIds, requireProjectAccess, assertValidUuid, validateTaskReferences } from '@/lib/project-access';
+import { eq, and, asc, ilike, inArray } from 'drizzle-orm';
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,9 +20,12 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search');
 
     const conditions = [eq(tasks.archived, false)];
-    if (session.role !== 'admin') {
-      conditions.push(eq(tasks.responsibleId, session.id));
-    }
+    const allowed = await accessibleSpaceIds(session);
+    if (allowed !== null) conditions.push(inArray(tasks.spaceId, allowed));
+    if (spaceId) await requireProjectAccess(session, spaceId);
+    if (responsibleId) assertValidUuid(responsibleId);
+    if (status && !tasks.status.enumValues.includes(status as typeof tasks.status.enumValues[number])) return error('Estado inválido', 400);
+    if (priority && !tasks.priority.enumValues.includes(priority as typeof tasks.priority.enumValues[number])) return error('Prioridad inválida', 400);
     if (spaceId) conditions.push(eq(tasks.spaceId, spaceId));
     if (responsibleId) conditions.push(eq(tasks.responsibleId, responsibleId));
     if (status) conditions.push(eq(tasks.status, status as typeof tasks.status.enumValues[number]));
@@ -50,17 +54,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const input = createTaskSchema.parse(body);
 
-    const [space] = await db
-      .select()
-      .from(spaces)
-      .where(eq(spaces.id, input.spaceId))
-      .limit(1);
-
-    if (!space) return error('Proyecto no encontrado', 404);
+    const space = await requireProjectAccess(session, input.spaceId, 'write');
 
     const reviewerId = input.reviewerId || space.leaderId || null;
 
-    const [task] = await db.insert(tasks).values({
+    const task = await db.transaction(async tx => {
+    await validateTaskReferences(input.spaceId, { ...input, reviewerId }, tx);
+    const [task] = await tx.insert(tasks).values({
       spaceId: input.spaceId,
       title: input.title,
       description: input.description,
@@ -89,6 +89,8 @@ export async function POST(req: NextRequest) {
       taskId: task.id,
       spaceId: input.spaceId,
       newValue: JSON.stringify({ title: task.title, responsible: task.responsibleId }),
+    }, tx);
+    return task;
     });
 
     return success(task, 201);

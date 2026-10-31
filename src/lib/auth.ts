@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
 import { db } from './db';
 import { persons } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Person } from './db/schema';
 
 const jwtSecret = process.env.JWT_SECRET;
@@ -21,19 +21,11 @@ export type SessionUser = {
   role: Person['role'];
 };
 
-// Estado de la cuenta que se consulta en cada petición. Se guarda 60 s para no golpear la base cada vez.
-export type UserFlags = { active: boolean; mustChangePassword: boolean };
-const flagsCache = new Map<string, UserFlags & { ts: number }>();
-const FLAGS_CACHE_TTL = 60_000;
-
+// Estado y rol vigentes: nunca autorizar con una caché local o el JWT antiguo.
+export type UserFlags = { active: boolean; mustChangePassword: boolean; role: Person['role'] };
 export async function getUserFlags(userId: string): Promise<UserFlags> {
-  const cached = flagsCache.get(userId);
-  if (cached && Date.now() - cached.ts < FLAGS_CACHE_TTL) {
-    return { active: cached.active, mustChangePassword: cached.mustChangePassword };
-  }
-
   const [user] = await db
-    .select({ active: persons.active, mustChangePassword: persons.mustChangePassword })
+    .select({ active: persons.active, mustChangePassword: persons.mustChangePassword, role: persons.role })
     .from(persons)
     .where(eq(persons.id, userId))
     .limit(1);
@@ -41,16 +33,8 @@ export async function getUserFlags(userId: string): Promise<UserFlags> {
   const flags: UserFlags = {
     active: user?.active ?? false,
     mustChangePassword: user?.mustChangePassword ?? false,
+    role: user?.role ?? 'observador',
   };
-  flagsCache.set(userId, { ...flags, ts: Date.now() });
-
-  // Evict stale entries
-  if (flagsCache.size > 500) {
-    const cutoff = Date.now() - FLAGS_CACHE_TTL;
-    for (const [key, val] of flagsCache) {
-      if (val.ts < cutoff) flagsCache.delete(key);
-    }
-  }
 
   return flags;
 }
@@ -121,7 +105,8 @@ export async function requireSession(options?: { allowPasswordChange?: boolean }
     throw new Error('PASSWORD_CHANGE_REQUIRED');
   }
 
-  return session;
+  // Rol autoritativo desde DB: anula el valor potencialmente obsoleto del JWT
+  return { ...session, role: flags.role };
 }
 
 export async function requireRole(
@@ -145,10 +130,11 @@ export async function authenticate(
   email: string,
   password: string,
 ): Promise<AuthenticatedUser | null> {
+  const normalizedEmail = email.toLowerCase().trim();
   const [user] = await db
     .select()
     .from(persons)
-    .where(eq(persons.email, email))
+    .where(eq(sql`lower(${persons.email})`, normalizedEmail))
     .limit(1);
 
   if (!user || !user.active) return null;
@@ -163,8 +149,4 @@ export async function authenticate(
     role: user.role,
     mustChangePassword: user.mustChangePassword,
   };
-}
-
-export function invalidateActiveCache(userId: string): void {
-  flagsCache.delete(userId);
 }

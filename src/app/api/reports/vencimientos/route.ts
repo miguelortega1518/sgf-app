@@ -3,8 +3,9 @@ import { db } from '@/lib/db';
 import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { handleError } from '@/lib/api-utils';
+import { accessibleSpaceIds } from '@/lib/project-access';
 import { todayRD } from '@/lib/date-utils';
-import { eq, and, ne, lte, asc, sql } from 'drizzle-orm';
+import { eq, and, ne, lte, asc, inArray } from 'drizzle-orm';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 
@@ -24,7 +25,8 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
+    const allowedSpaces = await accessibleSpaceIds(session);
     const format = req.nextUrl.searchParams.get('format') || 'xlsx';
     const days = parseInt(req.nextUrl.searchParams.get('days') || '7', 10);
 
@@ -54,6 +56,7 @@ export async function GET(req: NextRequest) {
         eq(tasks.archived, false),
         ne(tasks.status, 'completada'),
         lte(tasks.dueDateOriginal, futureDateStr),
+        allowedSpaces === null ? undefined : inArray(tasks.spaceId, allowedSpaces),
       ))
       .orderBy(asc(tasks.dueDateOriginal));
 

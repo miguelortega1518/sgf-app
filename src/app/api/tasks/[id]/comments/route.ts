@@ -1,15 +1,16 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { comments, tasks } from '@/lib/db/schema';
+import { comments } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { canComment } from '@/lib/permissions';
 import { success, error, handleError } from '@/lib/api-utils';
 import { stripHtml } from '@/lib/sanitize';
+import { requireTaskAccess, assertValidUuid } from '@/lib/project-access';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 
 const addCommentSchema = z.object({
-  content: z.string().min(1, 'Contenido requerido').max(2000),
+  content: z.string().transform(stripHtml).pipe(z.string().trim().min(1, 'Contenido requerido').max(2000)),
 });
 
 export async function POST(
@@ -19,6 +20,7 @@ export async function POST(
   try {
     const session = await requireSession();
     const { id: taskId } = await params;
+    await requireTaskAccess(session, taskId, 'write');
     const body = await req.json();
     const input = addCommentSchema.parse(body);
 
@@ -26,13 +28,7 @@ export async function POST(
       return error('Sin permisos para comentar', 403);
     }
 
-    const [task] = await db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1);
 
-    if (!task) return error('Tarea no encontrada', 404);
 
     const [created] = await db
       .insert(comments)
@@ -56,10 +52,11 @@ export async function PATCH(
   try {
     const session = await requireSession();
     const { id: taskId } = await params;
+    await requireTaskAccess(session, taskId, 'write');
     const body = await req.json();
     const { commentId, content } = z.object({
       commentId: z.string().uuid(),
-      content: z.string().min(1).max(2000),
+      content: addCommentSchema.shape.content,
     }).parse(body);
 
     const [comment] = await db
@@ -92,10 +89,12 @@ export async function DELETE(
   try {
     const session = await requireSession();
     const { id: taskId } = await params;
+    await requireTaskAccess(session, taskId, 'write');
     const { searchParams } = new URL(req.url);
     const commentId = searchParams.get('commentId');
 
     if (!commentId) return error('commentId requerido', 400);
+    assertValidUuid(commentId);
 
     const [comment] = await db
       .select()

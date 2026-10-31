@@ -1,9 +1,10 @@
 import { db } from '@/lib/db';
-import { tasks, spaces, persons, companies } from '@/lib/db/schema';
+import { tasks, spaces, persons } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
-import { ilike, or, eq, and } from 'drizzle-orm';
+import { ilike, or, eq, and, inArray } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
+import { accessibleSpaceIds, visiblePersonIds } from '@/lib/project-access';
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,14 +13,13 @@ export async function GET(req: NextRequest) {
     if (!q || q.length < 2) return error('Búsqueda muy corta', 400);
 
     const pattern = `%${q}%`;
+    const [allowed, people] = await Promise.all([accessibleSpaceIds(session), visiblePersonIds(session)]);
 
     const taskConditions = [
       eq(tasks.archived, false),
       or(ilike(tasks.title, pattern), ilike(tasks.description, pattern)),
     ];
-    if (session.role !== 'admin') {
-      taskConditions.push(eq(tasks.responsibleId, session.id));
-    }
+    if (allowed !== null) taskConditions.push(inArray(tasks.spaceId, allowed));
 
     const [matchedTasks, matchedSpaces, matchedPersons] = await Promise.all([
       db
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
           status: spaces.status,
         })
         .from(spaces)
-        .where(ilike(spaces.name, pattern))
+        .where(and(ilike(spaces.name, pattern), allowed === null ? undefined : inArray(spaces.id, allowed)))
         .limit(10),
 
       db
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
           role: persons.role,
         })
         .from(persons)
-        .where(or(ilike(persons.name, pattern), ilike(persons.email, pattern)))
+        .where(and(or(ilike(persons.name, pattern), ilike(persons.email, pattern)), people === null ? undefined : inArray(persons.id, people)))
         .limit(10),
     ]);
 

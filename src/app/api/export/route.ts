@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { tasks, spaces, persons, companies, spaceMembers } from '@/lib/db/schema';
+import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
+import { accessibleSpaceIds } from '@/lib/project-access';
 import { handleError } from '@/lib/api-utils';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -30,25 +31,13 @@ export async function GET(req: NextRequest) {
 
     const reviewer = alias(persons, 'reviewer');
 
+    const allowedSpaceIds = await accessibleSpaceIds(session);
     let taskFilter;
-    if (session.role === 'admin') {
+    if (allowedSpaceIds === null) {
       taskFilter = eq(tasks.archived, false);
     } else {
-      const memberOf = await db
-        .select({ spaceId: spaceMembers.spaceId })
-        .from(spaceMembers)
-        .where(eq(spaceMembers.personId, session.id));
-      const leaderOf = await db
-        .select({ id: spaces.id })
-        .from(spaces)
-        .where(eq(spaces.leaderId, session.id));
-      const idSet = new Set([
-        ...memberOf.map(r => r.spaceId),
-        ...leaderOf.map(r => r.id),
-      ]);
-      const spaceIds = [...idSet];
-      taskFilter = spaceIds.length > 0
-        ? and(eq(tasks.archived, false), inArray(tasks.spaceId, spaceIds))
+      taskFilter = allowedSpaceIds.length > 0
+        ? and(eq(tasks.archived, false), inArray(tasks.spaceId, allowedSpaceIds))
         : and(eq(tasks.archived, false), eq(tasks.spaceId, '00000000-0000-0000-0000-000000000000'));
     }
 

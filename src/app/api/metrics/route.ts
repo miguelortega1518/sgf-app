@@ -2,15 +2,16 @@ import { db } from '@/lib/db';
 import { tasks, persons } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
-import { eq } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
+import { accessibleSpaceIds } from '@/lib/project-access';
 import {
   weeklyVelocity, cycleTime, workInProgress, blockersByArea, doneByKind, type MetricTask,
 } from '@/lib/metrics';
 
 export async function GET() {
   try {
-    await requireSession();
-
+    const session = await requireSession();
+    const allowedSpaceIds = await accessibleSpaceIds(session);
     const rows: MetricTask[] = await db
       .select({
         status: tasks.status,
@@ -24,7 +25,7 @@ export async function GET() {
       })
       .from(tasks)
       .innerJoin(persons, eq(tasks.responsibleId, persons.id))
-      .where(eq(tasks.archived, false));
+      .where(and(eq(tasks.archived, false), allowedSpaceIds === null ? undefined : inArray(tasks.spaceId, allowedSpaceIds)));
 
     const velocity = weeklyVelocity(rows, 8);
     const last4 = velocity.slice(-4);

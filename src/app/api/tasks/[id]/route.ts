@@ -2,12 +2,14 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { tasks, spaces, evidence, subtasks, comments, persons, auditLog, taskDependencies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
-import { canChangeDueDate, canApproveTask } from '@/lib/permissions';
+import { canChangeDueDate } from '@/lib/permissions';
 import { updateTaskSchema, updateTaskStatusSchema } from '@/lib/schemas/task';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
 import { notify } from '@/lib/notify';
 import { isOverdue } from '@/lib/date-utils';
+import { requireTaskAccess, requireProjectAccess, validateTaskReferences } from '@/lib/project-access';
+import { applyStatusTransition } from '@/lib/task-transitions';
 import { eq, desc } from 'drizzle-orm';
 
 export async function GET(
@@ -15,16 +17,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { id } = await params;
 
-    const [task] = await db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.id, id))
-      .limit(1);
-
-    if (!task) return error('Tarea no encontrada', 404);
+    const task = await requireTaskAccess(session, id, 'read');
 
     const [responsible] = await db
       .select({ name: persons.name, email: persons.email })
@@ -115,22 +111,33 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
-    if (!task) return error('Tarea no encontrada', 404);
+    const task = await requireTaskAccess(session, id, 'write');
 
     const [space] = await db.select().from(spaces).where(eq(spaces.id, task.spaceId)).limit(1);
     if (!space) return error('Proyecto no encontrado', 404);
 
-    if (session.role === 'observador') {
-      return error('Sin permisos', 403);
-    }
-
     if (body.status !== undefined) {
       const statusInput = updateTaskStatusSchema.parse(body);
-      return await handleStatusChange(session, task, space, statusInput, id);
+      let updated: typeof tasks.$inferSelect;
+      let notifyIntents: import('@/lib/task-transitions').NotificationIntent[] = [];
+
+      await db.transaction(async (tx) => {
+        const [current] = await tx.select().from(tasks).where(eq(tasks.id, id)).for('update');
+        const currentSpace = await requireProjectAccess(session, current.spaceId, 'write', tx);
+        const result = await applyStatusTransition(tx, session, current, currentSpace, statusInput);
+        updated = result.task;
+        notifyIntents = result.notifications;
+      });
+
+      for (const intent of notifyIntents) {
+        notify(intent).catch(() => {});
+      }
+
+      return success(updated!);
     }
 
     const input = updateTaskSchema.parse(body);
+    if (Object.keys(input).length === 0) return error('Debe proporcionar al menos un campo para actualizar', 400);
 
     if (input.dueDate !== undefined) {
       const isOwner = space.ownerId === session.id;
@@ -139,157 +146,26 @@ export async function PATCH(
         return error('Sin permisos para cambiar la fecha límite', 403);
       }
 
-      if (input.dueDate !== task.dueDate) {
-        await logAudit({
-          actorId: session.id,
-          action: 'due_date_changed',
-          taskId: id,
-          previousValue: task.dueDate ?? undefined,
-          newValue: input.dueDate ?? undefined,
-        });
+    }
+    const updated = await db.transaction(async tx => {
+      const [current] = await tx.select().from(tasks).where(eq(tasks.id, id)).for('update');
+      await requireProjectAccess(session, current.spaceId, 'write', tx);
+      await validateTaskReferences(current.spaceId, input, tx);
+      if (!Object.keys(input).length) return current;
+      const [row] = await tx.update(tasks).set(input).where(eq(tasks.id, id)).returning();
+      if (input.dueDate !== undefined && input.dueDate !== current.dueDate) {
+        await logAudit({ actorId: session.id, action: 'due_date_changed', taskId: id,
+          previousValue: current.dueDate ?? undefined, newValue: input.dueDate ?? undefined }, tx);
       }
-    }
-
-    if (input.responsibleId && input.responsibleId !== task.responsibleId) {
-      await logAudit({
-        actorId: session.id,
-        action: 'responsible_changed',
-        taskId: id,
-        previousValue: task.responsibleId,
-        newValue: input.responsibleId,
-      });
-    }
-
-    const [updated] = await db
-      .update(tasks)
-      .set(input)
-      .where(eq(tasks.id, id))
-      .returning();
+      if (input.responsibleId && input.responsibleId !== current.responsibleId) {
+        await logAudit({ actorId: session.id, action: 'responsible_changed', taskId: id,
+          previousValue: current.responsibleId, newValue: input.responsibleId }, tx);
+      }
+      return row;
+    });
 
     return success(updated);
   } catch (err) {
     return handleError(err);
   }
-}
-
-async function handleStatusChange(
-  session: { id: string; role: string },
-  task: typeof tasks.$inferSelect,
-  space: typeof spaces.$inferSelect,
-  input: { status: string; delayReason?: string; delayReasonText?: string; blockedByArea?: string; blockedByAreaText?: string },
-  taskId: string,
-) {
-  const isOwnTask = task.responsibleId === session.id;
-  const isAdmin = session.role === 'admin';
-
-  if (session.role === 'observador') {
-    return error('Sin permisos', 403);
-  }
-
-  if (input.status === 'completada' && task.requiresApproval) {
-    if (!canApproveTask(session.role as 'admin' | 'miembro' | 'observador', session.id, task.reviewerId)) {
-      return error('Solo el revisor asignado o un admin puede aprobar esta tarea', 403);
-    }
-    if (task.status !== 'en_revision') {
-      return error('La tarea debe estar en code review para ser aprobada', 400);
-    }
-
-    const isAdminOverride = session.id !== task.reviewerId && isAdmin;
-
-    await logAudit({
-      actorId: session.id,
-      action: isAdminOverride ? 'task_approved_admin_override' : 'task_approved',
-      taskId,
-    });
-  }
-
-  if (input.status === 'completada' && task.requiresEvidence) {
-    const evidenceCount = await db
-      .select()
-      .from(evidence)
-      .where(eq(evidence.taskId, taskId));
-    if (evidenceCount.length === 0) {
-      return error('Se requiere evidencia para completar esta tarea', 400);
-    }
-  }
-
-  if (input.status === 'bloqueada') {
-    if (!input.blockedByArea) {
-      return error('Indique qué bloquea la tarea', 400);
-    }
-    if (input.blockedByArea === 'otro' && !input.blockedByAreaText) {
-      return error('Especifique qué bloquea la tarea', 400);
-    }
-  }
-
-  const updateData: Record<string, unknown> = {
-    status: input.status,
-  };
-
-  if (input.status === 'completada') {
-    updateData.completedAt = new Date();
-    if (input.delayReason) {
-      updateData.delayReason = input.delayReason;
-      updateData.delayReasonText = input.delayReasonText;
-    }
-  }
-
-  if (input.status === 'bloqueada') {
-    updateData.blockedByArea = input.blockedByArea;
-    updateData.blockedByAreaText = input.blockedByAreaText;
-    updateData.blockedSince = new Date().toISOString().slice(0, 10);
-  }
-
-  if (task.status === 'bloqueada' && input.status !== 'bloqueada') {
-    updateData.blockedByArea = null;
-    updateData.blockedByAreaText = null;
-    updateData.blockedSince = null;
-  }
-
-  const [updated] = await db
-    .update(tasks)
-    .set(updateData)
-    .where(eq(tasks.id, taskId))
-    .returning();
-
-  await logAudit({
-    actorId: session.id,
-    action: 'status_changed',
-    taskId,
-    previousValue: task.status,
-    newValue: input.status,
-    reason: input.delayReason,
-  });
-
-  if (input.status === 'completada' && task.reviewerId && task.reviewerId !== session.id) {
-    notify({
-      recipientId: task.reviewerId,
-      type: 'task_completed',
-      title: `Hecho: ${task.title}`,
-      body: 'Una tarea que revisas ya está hecha.',
-      taskId,
-    }).catch(() => {});
-  }
-
-  if (input.status === 'en_revision' && task.reviewerId) {
-    notify({
-      recipientId: task.reviewerId,
-      type: 'task_review',
-      title: `En code review: ${task.title}`,
-      body: 'Hay cambios esperando tu revisión.',
-      taskId,
-    }).catch(() => {});
-  }
-
-  if (input.status === 'bloqueada' && task.responsibleId !== session.id) {
-    notify({
-      recipientId: task.responsibleId,
-      type: 'task_blocked',
-      title: `Tarea bloqueada: ${task.title}`,
-      body: `Bloqueada por: ${input.blockedByArea || 'sin especificar'}`,
-      taskId,
-    }).catch(() => {});
-  }
-
-  return success(updated);
 }

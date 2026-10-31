@@ -3,12 +3,14 @@ import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
-import { eq, and, ne, asc } from 'drizzle-orm';
+import { eq, and, ne, asc, inArray } from 'drizzle-orm';
+import { accessibleSpaceIds } from '@/lib/project-access';
 import { alias } from 'drizzle-orm/pg-core';
 
 export async function GET() {
   try {
     const session = await requireSession();
+    const allowedSpaceIds = await accessibleSpaceIds(session);
     const today = todayRD();
 
     const responsible = alias(persons, 'responsible');
@@ -39,6 +41,7 @@ export async function GET() {
           eq(tasks.reviewerId, session.id),
           eq(tasks.archived, false),
           ne(tasks.status, 'completada'),
+          allowedSpaceIds === null ? undefined : inArray(tasks.spaceId, allowedSpaceIds),
         ),
       )
       .orderBy(asc(tasks.dueDate));
