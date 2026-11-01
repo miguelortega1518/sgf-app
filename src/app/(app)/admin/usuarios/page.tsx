@@ -38,7 +38,7 @@ export default function UsuariosPage() {
   const [form, setForm] = useState<{ name: string; email: string; password: string; role: User['role'] }>({ name: '', email: '', password: '', role: 'miembro' });
 
   useEffect(() => {
-    fetch('/api/users')
+    fetch('/api/users?includeInactive=true')
       .then(r => r.json())
       .then(setUsers)
       .finally(() => setLoading(false));

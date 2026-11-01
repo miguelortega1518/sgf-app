@@ -7,10 +7,17 @@ import { success, handleError } from '@/lib/api-utils';
 import { visiblePersonIds } from '@/lib/project-access';
 import { inArray, and, eq } from 'drizzle-orm';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const session = await requireSession();
+    const includeInactive = req.nextUrl.searchParams.get('includeInactive') === 'true';
+    const session = includeInactive
+      ? await requireRole('admin')
+      : await requireSession();
     const ids = await visiblePersonIds(session);
+    const filters = [];
+    if (ids !== null) filters.push(inArray(persons.id, ids));
+    if (!includeInactive) filters.push(eq(persons.active, true));
+    const userFilter = filters.length > 1 ? and(...filters) : filters[0];
     const users = await db.select({
       id: persons.id,
       name: persons.name,
@@ -18,7 +25,7 @@ export async function GET() {
       role: persons.role,
       active: persons.active,
       createdAt: persons.createdAt,
-    }).from(persons).where(ids === null ? undefined : and(inArray(persons.id, ids), eq(persons.active, true)));
+    }).from(persons).where(userFilter);
     return success(users);
   } catch (err) {
     return handleError(err);
