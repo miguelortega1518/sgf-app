@@ -4,7 +4,7 @@
 # Requisitos (Settings → Secrets and variables → Actions):
 #   - CLAUDE_CODE_OAUTH_TOKEN (obligatorio): token de tu suscripción de Claude. Genéralo en tu equipo
 #     con `claude setup-token`. Las ejecuciones consumen la cuota de la suscripción, no API de pago.
-#   - FACTORY_GH_TOKEN  (recomendado): token personal con permiso de contenido y PR sobre este repo.
+#   - FACTORY_GH_TOKEN  (recomendado): token personal con permiso de escritura en Contents, Pull requests e Issues.
 #     Sin él, los push y PR de la fábrica usan GITHUB_TOKEN y GitHub NO lanza el CI sobre ellos.
 # Y en Settings → Actions → General: "Allow GitHub Actions to create and approve pull requests".
 name: AI Factory
@@ -21,7 +21,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  issues: read
+  issues: write   # la fábrica comenta el resultado y cierra el issue
 
 # Una ejecución cada vez: dos fábricas fusionando en master a la vez se pisarían.
 concurrency:
