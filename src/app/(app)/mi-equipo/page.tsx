@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from '@/lib/hooks/use-session';
 import { useToast } from '@/components/providers/toast-provider';
-import { formatDateRD } from '@/lib/date-utils';
+import { formatDateRD, isOverdue } from '@/lib/date-utils';
 import {
   Users, ChevronDown, ChevronRight, AlertTriangle,
   Calendar, Building2, Lock,
@@ -206,13 +206,13 @@ export default function MiEquipoPage() {
                 <div className="border-t border-gray-100 px-4 pb-3">
                   <div className="divide-y divide-gray-100">
                     {member.tasks.map(task => {
-                      const isOverdue = !!(task.dueDateOriginal && task.dueDateOriginal < new Date().toISOString().slice(0, 10));
+                      const overdue = isOverdue(task.dueDateOriginal, task.status);
                       const nextStatus = task.status === 'en_revision' ? 'completada' : null;
 
                       return (
                         <div
                           key={task.id}
-                          className={`py-3 ${isOverdue ? 'bg-red-50/40' : ''}`}
+                          className={`py-3 ${overdue ? 'bg-red-50/40' : ''}`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
@@ -238,10 +238,10 @@ export default function MiEquipoPage() {
                               </div>
                               <div className="flex items-center gap-2 mt-1">
                                 {task.dueDate && (
-                                  <span className={`inline-flex items-center gap-1 text-xs ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                                  <span className={`inline-flex items-center gap-1 text-xs ${overdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
                                     <Calendar size={12} />
                                     {formatDateRD(task.dueDate)}
-                                    {isOverdue && <AlertTriangle size={12} />}
+                                    {overdue && <AlertTriangle size={12} />}
                                   </span>
                                 )}
                                 {task.status === 'bloqueada' && (

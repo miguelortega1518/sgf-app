@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { isOverdue, formatDateRD, daysOverdue } from '../src/lib/date-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { isOverdue, formatDateRD, daysOverdue, todayRD } from '../src/lib/date-utils';
 
 describe('isOverdue', () => {
   it('returns false when no due date', () => {
@@ -37,5 +37,37 @@ describe('daysOverdue', () => {
 
   it('returns positive number for past due date', () => {
     expect(daysOverdue('2020-01-01')).toBeGreaterThan(0);
+  });
+});
+
+describe('con el reloj a las 21:00 RD (01:00 UTC del día siguiente)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-06T01:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('la fecha UTC ya es mañana, pero todayRD() sigue en hoy', () => {
+    expect(new Date().toISOString().slice(0, 10)).toBe('2026-11-06');
+    expect(todayRD()).toBe('2026-11-05');
+  });
+
+  it('una tarea que vence hoy en RD no está vencida', () => {
+    expect(isOverdue('2026-11-05', 'en_proceso')).toBe(false);
+    expect(isOverdue('2026-11-05', 'no_iniciada')).toBe(false);
+    expect(isOverdue('2026-11-05', 'en_revision')).toBe(false);
+  });
+
+  it('una tarea que venció ayer en RD sí está vencida (salvo completada)', () => {
+    expect(isOverdue('2026-11-04', 'en_proceso')).toBe(true);
+    expect(isOverdue('2026-11-04', 'completada')).toBe(false);
+  });
+
+  it('daysOverdue cuenta días según la fecha RD', () => {
+    expect(daysOverdue('2026-11-04')).toBe(1);
+    expect(daysOverdue('2026-11-05')).toBe(0);
   });
 });

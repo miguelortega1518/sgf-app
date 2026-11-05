@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/lib/hooks/use-session';
-import { formatDateRD } from '@/lib/date-utils';
+import { formatDateRD, todayRD } from '@/lib/date-utils';
 import {
   Plus, Users, Calendar, Target, Building2, ChevronDown,
   ChevronRight, Play, XCircle, CheckCircle2, Pencil, Heart,
@@ -446,7 +446,7 @@ function SpaceHeader({
   const total = tasks.length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const badge = SPACE_STATUS_BADGES[space.status];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayRD();
   const overdue = tasks.filter(t =>
     t.dueDate && t.dueDate < today && t.status !== 'completada'
   ).length;
@@ -586,7 +586,7 @@ function CompanyGroup({
   const completed = tasks.filter(t => t.status === 'completada').length;
   const total = tasks.length;
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayRD();
 
   return (
     <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg overflow-hidden">
@@ -713,7 +713,7 @@ function FlatTaskList({
 }) {
   const activeTasks = tasks.filter(t => t.status !== 'completada');
   const completedTasks = tasks.filter(t => t.status === 'completada');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayRD();
 
   return (
     <>
@@ -887,7 +887,7 @@ function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boo
       {milestones.length > 0 ? (
         <div className="space-y-2">
           {milestones.map(m => {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = todayRD();
             const isPast = !m.completed && m.targetDate < today;
             return (
               <div key={m.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
