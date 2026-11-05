@@ -1,0 +1,79 @@
+# AI Factory: convierte issues etiquetados en cambios probados y revisados.
+# https://github.com/miguelortega1518/ai-factory
+#
+# Requisitos (Settings → Secrets and variables → Actions):
+#   - ANTHROPIC_API_KEY (obligatorio)
+#   - FACTORY_GH_TOKEN  (recomendado): token personal con permiso de contenido y PR sobre este repo.
+#     Sin él, los push y PR de la fábrica usan GITHUB_TOKEN y GitHub NO lanza el CI sobre ellos.
+# Y en Settings → Actions → General: "Allow GitHub Actions to create and approve pull requests".
+name: AI Factory
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Tarea en texto libre"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+# Una ejecución cada vez: dos fábricas fusionando en master a la vez se pisarían.
+concurrency:
+  group: ai-factory
+  cancel-in-progress: false
+
+jobs:
+  factory:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'ai-factory'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar AI Factory
+        run: pip install "ai-factory @ git+https://github.com/miguelortega1518/ai-factory@main"
+
+      - name: Configurar git
+        run: |
+          git config user.name "ai-factory[bot]"
+          git config user.email "ai-factory@users.noreply.github.com"
+
+      - name: Ejecutar la fábrica
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
+          # Se pasan por variable de entorno, no interpolados en el script, para evitar inyección.
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          TASK_TEXT: ${{ github.event.inputs.task }}
+        run: |
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            factory run --github-issue "$ISSUE_NUMBER"
+          else
+            factory run --task "$TASK_TEXT"
+          fi
+
+      - name: Guardar auditoría
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-factory-${{ github.run_id }}
+          path: .factory/runs/
+          include-hidden-files: true
+          if-no-files-found: ignore
