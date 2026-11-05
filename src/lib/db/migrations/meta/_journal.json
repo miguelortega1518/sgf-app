@@ -15,6 +15,13 @@
       "when": 1793100875919,
       "tag": "0001_cambio_obligatorio_de_contrasena",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793853356362,
+      "tag": "0002_sesiones_revocables",
+      "breakpoints": true
     }
   ]
 }

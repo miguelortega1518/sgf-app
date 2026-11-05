@@ -6,7 +6,7 @@ import { handleError } from '@/lib/api-utils';
 import { accessibleSpaceIds } from '@/lib/project-access';
 import { todayRD } from '@/lib/date-utils';
 import { eq, and, ne, lte, asc, inArray } from 'drizzle-orm';
-import * as XLSX from 'xlsx';
+import { buildWorkbook, XLSX_CONTENT_TYPE } from '@/lib/excel';
 import PDFDocument from 'pdfkit';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -144,8 +144,6 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const wb = XLSX.utils.book_new();
-
     const summaryData = [
       { 'Métrica': 'Fecha del reporte', 'Valor': today },
       { 'Métrica': 'Ventana', 'Valor': `Vencidas + próximos ${days} días` },
@@ -153,20 +151,12 @@ export async function GET(req: NextRequest) {
       { 'Métrica': 'Próximas a vencer', 'Valor': String(upcoming.length) },
       { 'Métrica': 'Total', 'Valor': String(rows.length) },
     ];
-    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = Object.keys(data[0] || {}).map(key => ({
-      wch: Math.max(key.length, ...data.map(r => String((r as Record<string, string>)[key] || '').length)) + 2,
-    }));
-    XLSX.utils.book_append_sheet(wb, ws, 'Vencimientos');
-
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = await buildWorkbook([{ name: 'Resumen', rows: summaryData }, { name: 'Vencimientos', rows: data }]);
 
     return new Response(buf, {
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': XLSX_CONTENT_TYPE,
         'Content-Disposition': `attachment; filename="${filename}.xlsx"`,
       },
     });

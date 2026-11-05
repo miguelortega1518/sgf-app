@@ -6,7 +6,7 @@ import { accessibleSpaceIds } from '@/lib/project-access';
 import { handleError } from '@/lib/api-utils';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import * as XLSX from 'xlsx';
+import { buildWorkbook, XLSX_CONTENT_TYPE } from '@/lib/excel';
 import PDFDocument from 'pdfkit';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -136,20 +136,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-
-    const colWidths = Object.keys(data[0] || {}).map(key => ({
-      wch: Math.max(key.length, ...data.map(r => String((r as Record<string, string>)[key] || '').length)) + 2,
-    }));
-    ws['!cols'] = colWidths;
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Tareas');
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = await buildWorkbook([{ name: 'Tareas', rows: data }]);
 
     return new Response(buf, {
       headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Type': XLSX_CONTENT_TYPE,
         'Content-Disposition': `attachment; filename="sgf-tareas-${new Date().toISOString().slice(0, 10)}.xlsx"`,
       },
     });

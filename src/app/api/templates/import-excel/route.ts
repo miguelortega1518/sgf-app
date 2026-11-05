@@ -4,7 +4,7 @@ import { spaceTemplates, taskTemplates, companies, persons } from '@/lib/db/sche
 import { requireRole } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
 import { eq, ilike } from 'drizzle-orm';
-import * as XLSX from 'xlsx';
+import { readWorkbook, InvalidSpreadsheetError, MAX_UPLOAD_BYTES } from '@/lib/excel';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,9 +16,15 @@ export async function POST(req: NextRequest) {
     const targetCycleDays = parseInt(formData.get('targetCycleDays') as string) || 10;
 
     if (!file) return error('Archivo requerido', 400);
+    if (file.size > MAX_UPLOAD_BYTES) return error('El archivo supera el tamaño máximo de 5 MB.', 400);
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    let sheets;
+    try {
+      sheets = await readWorkbook(Buffer.from(await file.arrayBuffer()));
+    } catch (err) {
+      if (err instanceof InvalidSpreadsheetError) return error(err.message, 400);
+      throw err;
+    }
 
     const allCompanies = await db.select().from(companies);
     const allPersons = await db.select().from(persons);
@@ -33,9 +39,7 @@ export async function POST(req: NextRequest) {
     let totalTasks = 0;
     const skippedSheets: string[] = [];
 
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    for (const { name: sheetName, rows } of sheets) {
 
       if (rows.length === 0) {
         skippedSheets.push(sheetName);
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
     return success({
       template,
       tasksImported: totalTasks,
-      sheetsProcessed: workbook.SheetNames.length - skippedSheets.length,
+      sheetsProcessed: sheets.length - skippedSheets.length,
       skippedSheets,
     }, 201);
   } catch (err) {

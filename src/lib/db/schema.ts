@@ -92,6 +92,9 @@ export const persons = pgTable('persons', {
   active: boolean('active').notNull().default(true),
   passwordHash: text('password_hash').notNull(),
   mustChangePassword: boolean('must_change_password').notNull().default(false),
+  // Sube cada vez que hay que invalidar las sesiones abiertas (cambio o restablecimiento de contraseña,
+  // desactivación, «cerrar las demás sesiones»). El token guarda la versión con la que se emitió.
+  sessionVersion: integer('session_version').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

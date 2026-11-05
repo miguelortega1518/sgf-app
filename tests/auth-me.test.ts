@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/auth', () => ({
+vi.mock('@/lib/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth')>()),
   getSession: vi.fn(),
   getUserFlags: vi.fn(),
 }));
@@ -31,6 +32,7 @@ describe('GET /api/auth/me', () => {
       active: true,
       mustChangePassword: false,
       role: 'miembro',
+      sessionVersion: 0,
     });
 
     const response = await GET();
@@ -38,5 +40,24 @@ describe('GET /api/auth/me', () => {
 
     expect(response.status).toBe(200);
     expect(body.user.role).toBe('miembro');
+  });
+
+  it('responde 401 si la sesión es de una versión anterior, para que la pantalla no muestre la app', async () => {
+    mockedGetSession.mockResolvedValue({
+      id: 'user-1',
+      name: 'Ana',
+      email: 'ana@example.invalid',
+      role: 'miembro',
+      sv: 1,
+    });
+    mockedGetUserFlags.mockResolvedValue({
+      active: true,
+      mustChangePassword: false,
+      role: 'miembro',
+      sessionVersion: 2,
+    });
+
+    const response = await GET();
+    expect(response.status).toBe(401);
   });
 });

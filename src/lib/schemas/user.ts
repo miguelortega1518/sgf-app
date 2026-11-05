@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { newPasswordSchema } from '@/lib/password-policy';
 
 export const createUserSchema = z.object({
   name: z.string().trim().min(1, 'El nombre es requerido').max(200),
   email: z.string().trim().toLowerCase().email('Correo electrónico inválido'),
-  password: z.string().min(8, 'Mínimo 8 caracteres'),
+  password: newPasswordSchema,
   role: z.enum(['admin', 'miembro', 'observador']).default('miembro'),
 });
 
@@ -12,7 +13,7 @@ export const updateUserSchema = z.object({
   email: z.string().trim().toLowerCase().email().optional(),
   role: z.enum(['admin', 'miembro', 'observador']).optional(),
   active: z.boolean().optional(),
-  password: z.string().min(8).optional(),
+  password: newPasswordSchema.optional(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

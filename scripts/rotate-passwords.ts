@@ -46,7 +46,7 @@ async function main() {
       for (const a of targets) {
         const password = randomBytes(12).toString('base64url');
         const hash = await bcrypt.hash(password, 12);
-        await tx`update persons set password_hash = ${hash}, must_change_password = true, updated_at = now() where id = ${a.id}`;
+        await tx`update persons set password_hash = ${hash}, must_change_password = true, session_version = session_version + 1, updated_at = now() where id = ${a.id}`;
         lines.push(`${a.name} <${a.email}>: ${password}`);
       }
     });

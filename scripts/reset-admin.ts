@@ -17,11 +17,11 @@ async function reset() {
 
   const rows = email
     ? await client`
-        UPDATE persons SET password_hash = ${hash}, must_change_password = true, updated_at = now()
+        UPDATE persons SET password_hash = ${hash}, must_change_password = true, session_version = session_version + 1, updated_at = now()
         WHERE email = ${email} AND role = 'admin' AND active = true
         RETURNING email`
     : await client`
-        UPDATE persons SET password_hash = ${hash}, must_change_password = true, updated_at = now()
+        UPDATE persons SET password_hash = ${hash}, must_change_password = true, session_version = session_version + 1, updated_at = now()
         WHERE id = (SELECT id FROM persons WHERE role = 'admin' AND active = true ORDER BY created_at LIMIT 1)
         RETURNING email`;
 

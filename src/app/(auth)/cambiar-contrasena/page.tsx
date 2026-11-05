@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2, ShieldAlert } from 'lucide-react';
 import { useSession } from '@/lib/hooks/use-session';
 import { Wordmark } from '@/components/ui/logo';
+import { MIN_PASSWORD_LENGTH, PASSWORD_HINT, passwordProblem } from '@/lib/password-policy';
 
 const INPUT =
   'w-full h-10 pl-3 pr-10 rounded-md border border-[var(--border-strong)] text-sm transition-colors hover:border-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30';
@@ -28,7 +29,8 @@ export default function CambiarContrasenaPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (next.length < 8) return setError('La nueva contraseña debe tener al menos 8 caracteres.');
+    const problem = passwordProblem(next, { email: user?.email });
+    if (problem) return setError(problem);
     if (next !== confirm) return setError('Las contraseñas nuevas no coinciden.');
     if (next === current) return setError('La nueva contraseña debe ser distinta de la actual.');
 
@@ -96,14 +98,14 @@ export default function CambiarContrasenaPage() {
               </label>
               <div className="relative">
                 <input id="next" type={show ? 'text' : 'password'} autoComplete="new-password" value={next}
-                  onChange={(e) => setNext(e.target.value)} className={INPUT} required minLength={8} aria-describedby="next-hint" />
+                  onChange={(e) => setNext(e.target.value)} className={INPUT} required minLength={MIN_PASSWORD_LENGTH} aria-describedby="next-hint" />
                 <button type="button" onClick={() => setShow((v) => !v)} aria-pressed={show}
                   aria-label={show ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
                   className="absolute inset-y-0 right-0 w-10 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-r-md">
                   {show ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              <p id="next-hint" className="mt-1 text-xs text-[var(--text-muted)]">Mínimo 8 caracteres. Usa una que no uses en otro sitio.</p>
+              <p id="next-hint" className="mt-1 text-xs text-[var(--text-muted)]">{PASSWORD_HINT} Usa una que no uses en otro sitio.</p>
             </div>
 
             <div>

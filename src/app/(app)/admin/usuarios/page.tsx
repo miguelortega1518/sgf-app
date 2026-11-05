@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, X, Pencil, KeyRound, Check } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
+import { MIN_PASSWORD_LENGTH, passwordProblem } from '@/lib/password-policy';
 
 type User = {
   id: string;
@@ -101,8 +102,9 @@ export default function UsuariosPage() {
   }
 
   async function handleResetPassword(id: string) {
-    if (!newPassword || newPassword.length < 8) {
-      toast('La contraseña debe tener mínimo 8 caracteres', 'warning');
+    const problem = passwordProblem(newPassword);
+    if (problem) {
+      toast(problem, 'warning');
       return;
     }
     setSaving(true);
@@ -178,8 +180,9 @@ export default function UsuariosPage() {
             <input
               required
               type="password"
-              placeholder="Contraseña (mín. 8 caracteres)"
-              minLength={8}
+              placeholder={`Contraseña temporal (mín. ${MIN_PASSWORD_LENGTH} caracteres)`}
+              aria-label="Contraseña temporal"
+              minLength={MIN_PASSWORD_LENGTH}
               value={form.password}
               onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -304,7 +307,8 @@ export default function UsuariosPage() {
                     <div className="mt-3 flex items-center gap-2 pt-3 border-t border-gray-100">
                       <input
                         type="password"
-                        placeholder="Nueva contraseña (mín. 8 caracteres)"
+                        placeholder={`Nueva contraseña temporal (mín. ${MIN_PASSWORD_LENGTH} caracteres)`}
+                        aria-label="Nueva contraseña temporal"
                         value={newPassword}
                         onChange={e => setNewPassword(e.target.value)}
                         className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"

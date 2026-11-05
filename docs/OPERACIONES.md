@@ -110,6 +110,8 @@ con la causa real. Dos casos tienen mensaje propio:
 - Las contraseñas puestas por un administrador (crear usuario o restablecer) son temporales: la persona debe cambiarlas.
 - `npx tsx scripts/reset-admin.ts [correo]` genera una contraseña temporal aleatoria, la muestra una vez y obliga a cambiarla.
 - `npx tsx scripts/rotate-passwords.ts --out <archivo>` anula **todas** las contraseñas actuales con temporales aleatorias. No las imprime: solo las escribe en el archivo indicado, que hay que borrar después de entregarlas por un canal privado. Acepta `--emails=a@x.com,b@x.com` para limitarlo y respeta `EXPECT_DB_NAME`.
+- Una contraseña nueva (alta, cambio o restablecimiento) debe tener al menos 10 caracteres y no ser una secuencia, una repetición, una de uso común ni contener el correo. Las contraseñas que ya existen siguen sirviendo. Regla única en `src/lib/password-policy.ts`.
+- **Sesiones:** cada cuenta tiene una versión de sesión (`persons.session_version`) que va dentro del token. Cambiar la contraseña, que un admin la restablezca, desactivar la cuenta, los scripts de arriba y el botón «Cerrar sesión en los demás dispositivos» (Mi perfil) suben la versión: las sesiones abiertas dejan de servir en la siguiente petición. Quien cambia su propia contraseña sigue dentro. Rotar `JWT_SECRET` ya solo hace falta si se filtra el secreto.
 - Ninguna contraseña debe escribirse en el código ni en los scripts. Las pruebas leen `SGF_TEST_PASSWORD`.
 - El repositorio es público: lo que se haya escrito en él alguna vez se considera conocido, aunque se borre después.
 
@@ -139,6 +141,5 @@ pública ya no funciona.
 
 **Para el próximo ensayo:** instalar los triggers (`db:custom`) en la copia *antes* de migrar, como en producción; si no, el ensayo no muestra el cambio de `updated_at`.
 
-**Sesiones abiertas:** el login emite un JWT de hasta 7 días que no se puede revocar desde el servidor. El cambio obligatorio de contraseña bloquea la API mientras esté pendiente,
-pero una sesión emitida antes de rotar volvería a servir cuando su dueño cambie la contraseña. Para cerrarlas todas, cambiar `JWT_SECRET` en Render (desconecta a todos). Pendiente
-como mejora de código: que cambiar la contraseña invalide las sesiones anteriores.
+**Sesiones abiertas:** el login emite un JWT de hasta 7 días. Desde la migración 0002 se pueden revocar por cuenta (ver sección 7); los tokens emitidos antes
+de esa migración no traen versión y cuentan como la versión inicial, así que el despliegue no cierra la sesión de nadie.

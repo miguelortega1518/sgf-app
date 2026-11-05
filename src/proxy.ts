@@ -12,7 +12,7 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret);
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   if (!req.nextUrl.pathname.startsWith('/api/')) return NextResponse.next();
 
   // CSRF check for mutations
@@ -48,6 +48,8 @@ export async function middleware(req: NextRequest) {
           name: payload.name,
           email: payload.email,
           role: payload.role,
+          // Conservar la versión de sesión: renovar el token no debe revivir una sesión revocada.
+          sv: payload.sv,
         })
           .setProtectedHeader({ alg: 'HS256' })
           .setExpirationTime(`${SESSION_DURATION}s`)

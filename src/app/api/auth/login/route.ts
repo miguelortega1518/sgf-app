@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
     }
 
     await clearFailures(accountKey);
-    const { mustChangePassword, ...sessionUser } = user;
-    await createSession(sessionUser);
+    const { mustChangePassword, sessionVersion, ...sessionUser } = user;
+    await createSession(sessionUser, sessionVersion);
     logger.info('auth_success', { userId: user.id, email });
     return success({ user: { ...sessionUser, mustChangePassword }, mustChangePassword });
   } catch (err) {

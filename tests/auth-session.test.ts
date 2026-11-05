@@ -106,3 +106,42 @@ describe('requireSession — rol autoritativo desde DB', () => {
     await expect(requireSession()).rejects.toThrow('UNAUTHORIZED');
   });
 });
+
+describe('requireSession — versión de sesión (revocación)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('acepta un token sin versión mientras la cuenta siga en la versión inicial (sesiones previas al cambio)', async () => {
+    setupCookie('valid-token');
+    setupJwt({ id: 'u1', name: 'Ana', email: 'a@test.com', role: 'miembro' });
+    buildChain([{ active: true, mustChangePassword: false, role: 'miembro', sessionVersion: 0 }]);
+
+    await expect(requireSession()).resolves.toMatchObject({ id: 'u1' });
+  });
+
+  it('acepta un token emitido con la versión vigente y no expone la versión', async () => {
+    setupCookie('valid-token');
+    setupJwt({ id: 'u1', name: 'Ana', email: 'a@test.com', role: 'miembro', sv: 3, iat: 1, exp: 2 });
+    buildChain([{ active: true, mustChangePassword: false, role: 'miembro', sessionVersion: 3 }]);
+
+    const session = await requireSession();
+    expect(session).toEqual({ id: 'u1', name: 'Ana', email: 'a@test.com', role: 'miembro' });
+  });
+
+  it('rechaza un token de una versión anterior (contraseña cambiada o sesiones cerradas)', async () => {
+    setupCookie('valid-token');
+    setupJwt({ id: 'u1', name: 'Ana', email: 'a@test.com', role: 'miembro', sv: 1 });
+    buildChain([{ active: true, mustChangePassword: false, role: 'miembro', sessionVersion: 2 }]);
+
+    await expect(requireSession()).rejects.toThrow('UNAUTHORIZED');
+  });
+
+  it('rechaza un token sin versión cuando la cuenta ya cerró sesiones alguna vez', async () => {
+    setupCookie('valid-token');
+    setupJwt({ id: 'u1', name: 'Ana', email: 'a@test.com', role: 'miembro' });
+    buildChain([{ active: true, mustChangePassword: false, role: 'miembro', sessionVersion: 1 }]);
+
+    await expect(requireSession()).rejects.toThrow('UNAUTHORIZED');
+  });
+});

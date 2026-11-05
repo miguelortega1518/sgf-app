@@ -98,7 +98,7 @@ export default function PlantillasPage() {
           <label className={`inline-flex items-center gap-2 border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm font-medium cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
             <Upload size={16} />
             {importing ? 'Importando...' : 'Importar Excel'}
-            <input type="file" accept=".xlsx,.xls" onChange={handleImportExcel} className="hidden" />
+            <input type="file" accept=".xlsx" onChange={handleImportExcel} className="hidden" />
           </label>
           <Link
             href="/admin/plantillas/nueva"

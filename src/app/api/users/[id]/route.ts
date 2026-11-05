@@ -4,7 +4,7 @@ import { persons } from '@/lib/db/schema';
 import { requireRole, hashPassword } from '@/lib/auth';
 import { updateUserSchema } from '@/lib/schemas/user';
 import { success, error, handleError } from '@/lib/api-utils';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -28,6 +28,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       updates.passwordHash = await hashPassword(input.password);
       // Una contraseña restablecida por un administrador es temporal.
       updates.mustChangePassword = true;
+    }
+    // Restablecer la contraseña o desactivar la cuenta cierra sus sesiones abiertas: si después se
+    // reactiva, las sesiones viejas no vuelven a servir.
+    if (input.password !== undefined || input.active === false) {
+      updates.sessionVersion = sql`${persons.sessionVersion} + 1`;
     }
 
     const updated = await db.transaction(async tx => {
