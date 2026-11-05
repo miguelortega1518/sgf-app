@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { CalendarDays, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
+import { todayRD } from '@/lib/date-utils';
 
 type Holiday = { date: string; description: string };
 
@@ -66,9 +67,9 @@ export default function FeriadosPage() {
     }
   }
 
-  const now = new Date().toISOString().slice(0, 10);
-  const upcoming = holidays.filter(h => h.date >= now);
-  const past = holidays.filter(h => h.date < now);
+  const today = todayRD();
+  const upcoming = holidays.filter(h => h.date >= today);
+  const past = holidays.filter(h => h.date < today);
 
   return (
     <div className="p-6 max-w-3xl">

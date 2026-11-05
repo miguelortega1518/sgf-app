@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { isOverdue, formatDateRD, daysOverdue, todayRD } from '../src/lib/date-utils';
+import {
+  isOverdue,
+  formatDateRD,
+  daysOverdue,
+  todayRD,
+  toLocalDateString,
+  lastDayOfPreviousMonth,
+} from '../src/lib/date-utils';
 
 describe('isOverdue', () => {
   it('returns false when no due date', () => {
@@ -69,5 +76,67 @@ describe('con el reloj a las 21:00 RD (01:00 UTC del día siguiente)', () => {
   it('daysOverdue cuenta días según la fecha RD', () => {
     expect(daysOverdue('2026-11-04')).toBe(1);
     expect(daysOverdue('2026-11-05')).toBe(0);
+  });
+
+  it('el feriado de hoy en RD cuenta como próximo y el de ayer como pasado', () => {
+    expect('2026-11-05' >= todayRD()).toBe(true);
+    expect('2026-11-04' < todayRD()).toBe(true);
+  });
+});
+
+// Cambiar process.env.TZ en caliente afecta a todo el worker: restaurarlo siempre.
+const ORIGINAL_TZ = process.env.TZ;
+
+function restoreTZ() {
+  if (ORIGINAL_TZ === undefined) {
+    delete process.env.TZ;
+  } else {
+    process.env.TZ = ORIGINAL_TZ;
+  }
+}
+
+describe('toLocalDateString', () => {
+  afterEach(restoreTZ);
+
+  it('rellena mes y día a 2 dígitos', () => {
+    expect(toLocalDateString(new Date(2026, 0, 3))).toBe('2026-01-03');
+  });
+
+  it('usa la fecha local, no la UTC (UTC+14)', () => {
+    process.env.TZ = 'Pacific/Kiritimati';
+    expect(toLocalDateString(new Date(2026, 10, 5, 0, 30))).toBe('2026-11-05');
+  });
+});
+
+describe('lastDayOfPreviousMonth en varias zonas horarias', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTZ();
+  });
+
+  it('control: con TZ Asia/Tokyo, toISOString da el día anterior', () => {
+    process.env.TZ = 'Asia/Tokyo';
+    expect(new Date(2026, 9, 31).toISOString().slice(0, 10)).toBe('2026-10-30');
+  });
+
+  it.each(['UTC', 'America/Santo_Domingo', 'Asia/Tokyo', 'Pacific/Kiritimati'])(
+    'con TZ %s devuelve el 31 de octubre para el 5 de noviembre',
+    (tz) => {
+      process.env.TZ = tz;
+      expect(lastDayOfPreviousMonth(new Date(2026, 10, 5))).toBe('2026-10-31');
+    },
+  );
+
+  it.each(['UTC', 'Asia/Tokyo'])('con TZ %s gestiona cambio de año y bisiestos', (tz) => {
+    process.env.TZ = tz;
+    expect(lastDayOfPreviousMonth(new Date(2027, 0, 15))).toBe('2026-12-31');
+    expect(lastDayOfPreviousMonth(new Date(2028, 2, 1))).toBe('2028-02-29');
+    expect(lastDayOfPreviousMonth(new Date(2026, 2, 31))).toBe('2026-02-28');
+  });
+
+  it('sin argumento usa la fecha actual', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 5, 12));
+    expect(lastDayOfPreviousMonth()).toBe('2026-10-31');
   });
 });
