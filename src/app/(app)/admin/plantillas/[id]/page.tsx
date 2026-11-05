@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Plus, Trash2, Play, ArrowLeft } from 'lucide-react';
+import { lastDayOfPreviousMonth } from '@/lib/date-utils';
 
 type TaskTemplateRow = {
   id: string;
@@ -358,8 +359,7 @@ function GenerateCycleDialog({
 }) {
   const now = new Date();
   const defaultPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-  const defaultAnchor = lastDayPrevMonth.toISOString().slice(0, 10);
+  const defaultAnchor = lastDayOfPreviousMonth(now);
 
   const [period, setPeriod] = useState(defaultPeriod);
   const [anchorDate, setAnchorDate] = useState(defaultAnchor);

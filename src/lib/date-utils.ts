@@ -1,12 +1,23 @@
 const RD_TIMEZONE = 'America/Santo_Domingo';
 
+// Formatea una fecha como YYYY-MM-DD según la fecha local (nunca UTC).
+export function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function todayRD(): string {
   const now = new Date();
   const rdDate = new Date(now.toLocaleString('en-US', { timeZone: RD_TIMEZONE }));
-  const year = rdDate.getFullYear();
-  const month = String(rdDate.getMonth() + 1).padStart(2, '0');
-  const day = String(rdDate.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return toLocalDateString(rdDate);
+}
+
+// Último día del mes anterior a `ref`, en fecha local. El día 0 de un mes es el
+// último día del mes anterior; el constructor gestiona el cambio de año.
+export function lastDayOfPreviousMonth(ref: Date = new Date()): string {
+  return toLocalDateString(new Date(ref.getFullYear(), ref.getMonth(), 0));
 }
 
 export function isOverdue(dueDate: string | null, status: string): boolean {
