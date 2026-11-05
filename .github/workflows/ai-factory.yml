@@ -51,7 +51,10 @@ jobs:
       - name: Instalar AI Factory y Claude Code
         run: |
           pip install "ai-factory @ git+https://github.com/miguelortega1518/ai-factory@main"
-          npm install -g @anthropic-ai/claude-code
+          # Instalador nativo: trae siempre la última versión (los modelos nuevos exigen versiones recientes).
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/claude" --version
 
       - name: Configurar git
         run: |
