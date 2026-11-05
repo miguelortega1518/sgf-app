@@ -2,6 +2,10 @@
 
 base_branch = "master"
 
+# Los agentes corren con Claude Code y la suscripción de Claude (CLAUDE_CODE_OAUTH_TOKEN),
+# sin coste de API. Para usar una API key de pago por uso en su lugar: backend = "api".
+backend = "claude-code"
+
 # Cada worktree es una copia limpia del repo: hay que instalar dependencias.
 setup_command = "npm ci --no-audit --no-fund"
 
@@ -74,4 +78,3 @@ NEXT_TELEMETRY_DISABLED = "1"
 [agents.builder]
 model = "claude-opus-5-5"
 effort = "high"
-max_tokens = 64000
