@@ -1,0 +1,77 @@
+# AI Factory para Forja (sgf-app). Documentación: https://github.com/miguelortega1518/ai-factory
+
+base_branch = "master"
+
+# Cada worktree es una copia limpia del repo: hay que instalar dependencias.
+setup_command = "npm ci --no-audit --no-fund"
+
+# Lo mismo que verifica el CI, salvo los pasos que necesitan Postgres (migraciones). Por eso todo
+# cambio en la base de datos está en core_paths y pasa siempre por un humano y por el CI completo.
+test_command = "npm run lint && npm run typecheck && npm test && npm run build"
+
+# Sin npx a propósito: evita que un agente ejecute herramientas arbitrarias (p. ej. `drizzle-kit push`).
+allowed_commands = ["npm", "node", "ls", "cat", "git"]
+
+max_iterations = 3
+
+# Núcleo de Forja: si un cambio toca algo de esto, SIEMPRE requiere aprobación humana.
+core_paths = [
+  # Autenticación, sesión, CSRF y permisos
+  "src/middleware.ts",
+  "src/lib/auth.ts",
+  "src/app/api/auth/**",
+  "src/app/(auth)/**",
+  "src/lib/permissions.ts",
+  "src/lib/project-access.ts",
+  "src/lib/rate-limit*.ts",
+  "src/lib/sanitize.ts",
+  "src/lib/audit.ts",
+  "src/app/api/audit-log/**",
+  "src/app/api/users/**",
+  # Base de datos: esquema, migraciones, triggers y verificación
+  "src/lib/db/**",
+  "drizzle.config.ts",
+  # Scripts que tocan datos reales
+  "scripts/migrate.ts",
+  "scripts/apply-custom-migrations.ts",
+  "scripts/check-migrations.ts",
+  "scripts/verify-schema.ts",
+  "scripts/backup.ts",
+  "scripts/restore.ts",
+  "scripts/lib/**",
+  "scripts/reset-admin.ts",
+  "scripts/rotate-passwords.ts",
+  "scripts/scratch-db.ts",
+  "scripts/seed.ts",
+  # Despliegue, dependencias y la propia fábrica
+  "render.yaml",
+  "next.config.ts",
+  "package.json",
+  "package-lock.json",
+  ".node-version",
+  ".github/workflows/**",
+  "factory.toml",
+  ".factory/brain/decisions/**",
+]
+
+# Riesgo bajo: se fusiona en master. Render tiene autoDeploy=false, así que NO llega a producción
+# hasta que alguien despliegue. Para desplegar automáticamente, pon aquí el Deploy Hook de Render:
+#   deploy_command = 'curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"'
+auto_ship = "merge"
+push = true
+deploy_command = ""
+
+github_repo = "miguelortega1518/sgf-app"
+github_label = "ai-factory"
+
+# Valores de prueba, NO secretos (los mismos que usa el CI).
+[env]
+JWT_SECRET = "ci-solo-para-pruebas-no-es-un-secreto-real-0123456789abcdef"
+DATABASE_URL = "postgresql://sgf:sgf@localhost:5432/sgf_ci"
+NEXT_PUBLIC_APP_URL = "http://localhost:3000"
+NEXT_TELEMETRY_DISABLED = "1"
+
+[agents.builder]
+model = "claude-opus-5-5"
+effort = "high"
+max_tokens = 64000
