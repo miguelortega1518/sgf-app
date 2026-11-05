@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSession } from '@/lib/hooks/use-session';
 import { ChevronLeft, ChevronRight, CalendarDays, Users } from 'lucide-react';
+import { todayRD } from '@/lib/date-utils';
 
 type CalTask = {
   id: string;
@@ -101,7 +102,7 @@ export default function CalendarioPage() {
     return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayRD();
 
   if (loading) {
     return (

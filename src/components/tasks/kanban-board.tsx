@@ -8,7 +8,7 @@ import {
   BLOCK_AREAS, taskKey, prLabel, initials,
   type TaskStatus, type TaskKind,
 } from '@/lib/labels';
-import { formatDateRD } from '@/lib/date-utils';
+import { formatDateRD, isOverdue } from '@/lib/date-utils';
 
 export type BoardTask = {
   id: string;
@@ -35,11 +35,6 @@ type Props = {
   /** Devuelve true si el cambio se aplicó. */
   onMove: (taskId: string, status: TaskStatus, extra?: { blockedByArea?: string; blockedByAreaText?: string }) => Promise<boolean>;
 };
-
-function isOverdue(t: BoardTask): boolean {
-  if (t.status === 'completada' || !t.dueDate) return false;
-  return t.dueDate < new Date().toISOString().slice(0, 10);
-}
 
 export function KanbanBoard({ tasks, readOnly = false, onMove }: Props) {
   const [dragId, setDragId] = useState<string | null>(null);
@@ -160,7 +155,7 @@ function TaskCardBoard({
   onDragStart: () => void; onDragEnd: () => void; onMove: (s: TaskStatus) => void;
 }) {
   const kind = (task.kind ?? 'feature') as TaskKind;
-  const overdue = isOverdue(task);
+  const overdue = isOverdue(task.dueDate, task.status);
   return (
     <article
       draggable={!readOnly}
