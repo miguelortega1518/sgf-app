@@ -1,6 +1,9 @@
 // Vocabulario compartido de Forja: etiquetas y estilos de tipos, estados y áreas.
 // Los valores de la base de datos se conservan; aquí solo se decide cómo se muestran.
 
+/** Nombre visible del producto. */
+export const APP_NAME = 'Forja';
+
 export const STATUS_ORDER = ['no_iniciada', 'en_proceso', 'en_revision', 'completada', 'bloqueada'] as const;
 export type TaskStatus = (typeof STATUS_ORDER)[number];
 

@@ -1,6 +1,7 @@
 import { db } from './db';
 import { notifications } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { APP_NAME } from './labels';
 
 type EmailPayload = {
   to: string;
@@ -33,26 +34,50 @@ async function sendEmail(payload: EmailPayload): Promise<boolean> {
   }
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+/** Escapa los caracteres especiales de HTML para interpolar texto de usuario sin riesgo. */
+export function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, ch => HTML_ENTITIES[ch]);
+}
+
+/** Construye el asunto (texto plano) y el HTML (escapado) de un correo de notificación. */
+export function buildNotificationEmail(
+  title: string,
+  body: string | null,
+): { subject: string; html: string } {
+  const safeTitle = escapeHtml(title);
+  const safeBody = body ? escapeHtml(body) : null;
+
+  return {
+    subject: `${APP_NAME}: ${title}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
+        <h2 style="color: #1e40af; font-size: 16px;">${safeTitle}</h2>
+        ${safeBody ? `<p style="color: #374151; font-size: 14px;">${safeBody}</p>` : ''}
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
+        <p style="color: #9ca3af; font-size: 12px;">
+          Este correo fue enviado por ${APP_NAME}.
+        </p>
+      </div>
+    `,
+  };
+}
+
 export async function sendNotificationEmail(
   notificationId: string,
   recipientEmail: string,
   title: string,
   body: string | null,
 ) {
-  const sent = await sendEmail({
-    to: recipientEmail,
-    subject: `SGF: ${title}`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
-        <h2 style="color: #1e40af; font-size: 16px;">${title}</h2>
-        ${body ? `<p style="color: #374151; font-size: 14px;">${body}</p>` : ''}
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-        <p style="color: #9ca3af; font-size: 12px;">
-          Este correo fue enviado por el Sistema de Gestión Financiera (SGF).
-        </p>
-      </div>
-    `,
-  });
+  const { subject, html } = buildNotificationEmail(title, body);
+  const sent = await sendEmail({ to: recipientEmail, subject, html });
 
   if (sent) {
     await db
