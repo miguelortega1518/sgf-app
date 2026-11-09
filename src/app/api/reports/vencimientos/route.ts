@@ -5,23 +5,10 @@ import { requireSession } from '@/lib/auth';
 import { handleError } from '@/lib/api-utils';
 import { accessibleSpaceIds } from '@/lib/project-access';
 import { todayRD, addDaysRD } from '@/lib/date-utils';
+import { dueReportRow } from '@/lib/export-rows';
 import { eq, and, ne, lte, asc, inArray } from 'drizzle-orm';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
-
-const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  bloqueada: 'Bloqueada',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  critica: 'Crítica',
-  alta: 'Alta',
-  normal: 'Normal',
-  baja: 'Baja',
-};
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,24 +48,7 @@ export async function GET(req: NextRequest) {
     const overdue = rows.filter(r => r.dueDateOriginal && r.dueDateOriginal < today);
     const upcoming = rows.filter(r => r.dueDateOriginal && r.dueDateOriginal >= today);
 
-    const data = rows.map(r => {
-      const isOverdue = r.dueDateOriginal ? r.dueDateOriginal < today : false;
-      const daysLeft = r.dueDateOriginal
-        ? Math.ceil((new Date(r.dueDateOriginal).getTime() - new Date(today).getTime()) / 86400000)
-        : null;
-      return {
-        'Estado vencimiento': isOverdue ? `VENCIDA (${Math.abs(daysLeft!)} días)` : `${daysLeft} días restantes`,
-        'Espacio': r.spaceName,
-        'Tarea': r.title,
-        'Responsable': r.responsibleName,
-        'Estado': STATUS_LABELS[r.status] || r.status,
-        'Prioridad': PRIORITY_LABELS[r.priority] || r.priority,
-        'Empresa': r.companyName || '',
-        'Fecha límite': r.dueDateOriginal || '',
-        'Fecha ajustada': r.dueDate !== r.dueDateOriginal ? (r.dueDate || '') : '',
-        'Bloqueada por': r.blockedByArea || '',
-      };
-    });
+    const data = rows.map(r => dueReportRow(r, today));
 
     const filename = `reporte-vencimientos-${today}`;
 
@@ -99,7 +69,7 @@ export async function GET(req: NextRequest) {
       doc.text(`Vencidas: ${overdue.length}  |  Próximas a vencer: ${upcoming.length}  |  Total: ${rows.length}`);
       doc.moveDown(1);
 
-      const cols = ['Vencimiento', 'Espacio', 'Tarea', 'Responsable', 'Estado', 'Fecha límite'];
+      const cols = ['Vencimiento', 'Proyecto', 'Tarea', 'Responsable', 'Estado', 'Fecha límite'];
       const colW = [100, 100, 170, 90, 70, 80];
       const startX = 40;
       let y = doc.y;
@@ -116,7 +86,7 @@ export async function GET(req: NextRequest) {
       for (let idx = 0; idx < data.length; idx++) {
         if (y > 560) { doc.addPage(); y = 40; }
         const row = data[idx];
-        const vals = [row['Estado vencimiento'], row['Espacio'], row['Tarea'], row['Responsable'], row['Estado'], row['Fecha límite']];
+        const vals = [row['Estado vencimiento'], row['Proyecto'], row['Tarea'], row['Responsable'], row['Estado'], row['Fecha límite']];
         const isOverdueRow = row['Estado vencimiento'].startsWith('VENCIDA');
         if (isOverdueRow) {
           doc.rect(startX, y, colW.reduce((a, b) => a + b, 0), 14).fill('#fef2f2');

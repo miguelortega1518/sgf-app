@@ -5,25 +5,11 @@ import { requireSession } from '@/lib/auth';
 import { accessibleSpaceIds, visiblePersonIds, assertValidUuid } from '@/lib/project-access';
 import { handleError, error } from '@/lib/api-utils';
 import { todayRD, toDateRD } from '@/lib/date-utils';
+import { personaReportRow } from '@/lib/export-rows';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
-
-const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  completada: 'Completada',
-  bloqueada: 'Bloqueada',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  critica: 'Crítica',
-  alta: 'Alta',
-  normal: 'Normal',
-  baja: 'Baja',
-};
 
 export async function GET(req: NextRequest) {
   try {
@@ -93,18 +79,7 @@ export async function GET(req: NextRequest) {
       ? Math.round((onTimeCount / completedWithDue.length) * 100)
       : 100;
 
-    const data = rows.map(r => ({
-      'Espacio': r.spaceName,
-      'Tarea': r.title,
-      'Estado': STATUS_LABELS[r.status] || r.status,
-      'Prioridad': PRIORITY_LABELS[r.priority] || r.priority,
-      'Empresa': r.companyName || '',
-      'Revisor': r.reviewerName || '',
-      'Fecha límite': r.dueDate || '',
-      'Fecha original': r.dueDateOriginal || '',
-      'Completada': r.completedAt ? toDateRD(r.completedAt) : '',
-      'Bloqueada por': r.blockedByArea || '',
-    }));
+    const data = rows.map(personaReportRow);
 
     const filename = `reporte-${person.name.replace(/\s+/g, '-').toLowerCase()}-${today}`;
 
@@ -113,7 +88,7 @@ export async function GET(req: NextRequest) {
       const chunks: Buffer[] = [];
       doc.on('data', (c: Buffer) => chunks.push(c));
 
-      doc.fontSize(16).text(`Reporte de Tareas — ${person.name}`, { align: 'center' });
+      doc.fontSize(16).text(`Reporte de tareas — ${person.name}`, { align: 'center' });
       doc.moveDown(0.3);
       doc.fontSize(9).fillColor('#666').text(
         `${person.email}  |  Generado: ${today}`,
@@ -126,7 +101,7 @@ export async function GET(req: NextRequest) {
       doc.text(`Cumplimiento a tiempo: ${onTimeRate}%  |  Promedio resolución: ${avgDays} días`);
       doc.moveDown(1);
 
-      const cols = ['Espacio', 'Tarea', 'Estado', 'Prioridad', 'Fecha límite', 'Completada'];
+      const cols = ['Proyecto', 'Tarea', 'Estado', 'Prioridad', 'Fecha límite', 'Completada'];
       const colW = [110, 190, 70, 60, 80, 80];
       const startX = 40;
       let y = doc.y;
@@ -143,7 +118,7 @@ export async function GET(req: NextRequest) {
       for (let idx = 0; idx < data.length; idx++) {
         if (y > 560) { doc.addPage(); y = 40; }
         const row = data[idx];
-        const vals = [row['Espacio'], row['Tarea'], row['Estado'], row['Prioridad'], row['Fecha límite'], row['Completada']];
+        const vals = [row['Proyecto'], row['Tarea'], row['Estado'], row['Prioridad'], row['Fecha límite'], row['Completada']];
         if (idx % 2 === 0) {
           doc.rect(startX, y, colW.reduce((a, b) => a + b, 0), 14).fill('#f9fafb');
         }
