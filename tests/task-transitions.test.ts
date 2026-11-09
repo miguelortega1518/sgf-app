@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { validateStatusTransition } from '../src/lib/task-transitions';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// applyStatusTransition importa db y audit: se mockean para no tocar una BD real.
+vi.mock('@/lib/db', () => ({ db: {} }));
+vi.mock('@/lib/audit', () => ({ logAudit: vi.fn() }));
+
+import { validateStatusTransition, applyStatusTransition } from '../src/lib/task-transitions';
 
 const makeTask = (overrides: Partial<Parameters<typeof validateStatusTransition>[0]['task']> = {}) => ({
   status: 'no_iniciada' as const,
@@ -178,5 +183,45 @@ describe('validateStatusTransition', () => {
       evidenceCount: 0,
     });
     expect(result).toBeNull();
+  });
+});
+
+describe('applyStatusTransition — blockedSince en hora RD', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a las 21:30 RD guarda blockedSince con la fecha RD, no la UTC', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-10T01:30:00Z'));
+
+    const task = {
+      id: 'task-1',
+      title: 'Tarea',
+      status: 'en_proceso',
+      requiresApproval: false,
+      requiresEvidence: false,
+      reviewerId: null,
+      responsibleId: 'user-1',
+    };
+
+    const set = vi.fn(() => ({
+      where: () => ({ returning: () => Promise.resolve([task]) }),
+    }));
+    const tx = {
+      select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }),
+      update: () => ({ set }),
+      insert: vi.fn(),
+    };
+
+    await applyStatusTransition(
+      tx as never,
+      memberSession,
+      task as never,
+      { status: 'activo' },
+      { status: 'bloqueada', blockedByArea: 'cliente' },
+    );
+
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ blockedSince: '2026-03-09' }));
   });
 });

@@ -4,6 +4,7 @@ import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { accessibleSpaceIds } from '@/lib/project-access';
 import { handleError } from '@/lib/api-utils';
+import { todayRD, toDateRD } from '@/lib/date-utils';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await requireSession();
     const format = req.nextUrl.searchParams.get('format') || 'xlsx';
+    const today = todayRD();
 
     const reviewer = alias(persons, 'reviewer');
 
@@ -77,7 +79,7 @@ export async function GET(req: NextRequest) {
       'Prioridad': PRIORITY_LABELS[r.priority] || r.priority,
       'Fecha límite': r.dueDate || '',
       'Fecha original': r.dueDateOriginal || '',
-      'Completada': r.completedAt ? new Date(r.completedAt).toISOString().slice(0, 10) : '',
+      'Completada': r.completedAt ? toDateRD(r.completedAt) : '',
       'Bloqueada por': r.blockedByArea || '',
       'Razón retraso': r.delayReason || '',
     }));
@@ -90,7 +92,7 @@ export async function GET(req: NextRequest) {
       doc.fontSize(16).text('Reporte de Tareas - SGF', { align: 'center' });
       doc.moveDown(0.3);
       doc.fontSize(9).fillColor('#666').text(
-        `Generado: ${new Date().toISOString().slice(0, 10)}  |  Total: ${data.length} tareas`,
+        `Generado: ${today}  |  Total: ${data.length} tareas`,
         { align: 'center' },
       );
       doc.moveDown(1);
@@ -131,7 +133,7 @@ export async function GET(req: NextRequest) {
       return new Response(pdfBuf, {
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="sgf-tareas-${new Date().toISOString().slice(0, 10)}.pdf"`,
+          'Content-Disposition': `attachment; filename="sgf-tareas-${today}.pdf"`,
         },
       });
     }
@@ -150,7 +152,7 @@ export async function GET(req: NextRequest) {
     return new Response(buf, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="sgf-tareas-${new Date().toISOString().slice(0, 10)}.xlsx"`,
+        'Content-Disposition': `attachment; filename="sgf-tareas-${today}.xlsx"`,
       },
     });
   } catch (err) {

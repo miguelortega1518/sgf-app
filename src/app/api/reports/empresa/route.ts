@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { handleError, error } from '@/lib/api-utils';
-import { todayRD } from '@/lib/date-utils';
+import { todayRD, toDateRD } from '@/lib/date-utils';
 import { eq, and, asc, count, sql, inArray } from 'drizzle-orm';
 import { accessibleSpaceIds } from '@/lib/project-access';
 import { alias } from 'drizzle-orm/pg-core';
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
         'Estado': STATUS_LABELS[r.status] || r.status,
         'Prioridad': PRIORITY_LABELS[r.priority] || r.priority,
         'Fecha límite': r.dueDate || '',
-        'Completada': r.completedAt ? new Date(r.completedAt).toISOString().slice(0, 10) : '',
+        'Completada': r.completedAt ? toDateRD(r.completedAt) : '',
         'Bloqueada por': r.blockedByArea || '',
       }));
 

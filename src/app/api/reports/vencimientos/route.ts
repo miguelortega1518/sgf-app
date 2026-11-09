@@ -4,7 +4,7 @@ import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { handleError } from '@/lib/api-utils';
 import { accessibleSpaceIds } from '@/lib/project-access';
-import { todayRD } from '@/lib/date-utils';
+import { todayRD, addDaysRD } from '@/lib/date-utils';
 import { eq, and, ne, lte, asc, inArray } from 'drizzle-orm';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
@@ -31,9 +31,7 @@ export async function GET(req: NextRequest) {
     const days = parseInt(req.nextUrl.searchParams.get('days') || '7', 10);
 
     const today = todayRD();
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + days);
-    const futureDateStr = futureDate.toISOString().slice(0, 10);
+    const futureDateStr = addDaysRD(days);
 
     const rows = await db
       .select({

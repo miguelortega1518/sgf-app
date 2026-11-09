@@ -4,7 +4,7 @@ import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { accessibleSpaceIds, visiblePersonIds, assertValidUuid } from '@/lib/project-access';
 import { handleError, error } from '@/lib/api-utils';
-import { todayRD } from '@/lib/date-utils';
+import { todayRD, toDateRD } from '@/lib/date-utils';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
     let onTimeCount = 0;
     const completedWithDue = completed.filter(r => r.completedAt && r.dueDateOriginal);
     for (const r of completedWithDue) {
-      const completedDate = new Date(r.completedAt!).toISOString().slice(0, 10);
+      const completedDate = toDateRD(r.completedAt!);
       if (completedDate <= r.dueDateOriginal!) onTimeCount++;
     }
     const onTimeRate = completedWithDue.length > 0
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       'Revisor': r.reviewerName || '',
       'Fecha límite': r.dueDate || '',
       'Fecha original': r.dueDateOriginal || '',
-      'Completada': r.completedAt ? new Date(r.completedAt).toISOString().slice(0, 10) : '',
+      'Completada': r.completedAt ? toDateRD(r.completedAt) : '',
       'Bloqueada por': r.blockedByArea || '',
     }));
 
