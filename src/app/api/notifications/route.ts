@@ -3,7 +3,12 @@ import { db } from '@/lib/db';
 import { notifications } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { z } from 'zod';
+
+const markReadSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+});
 
 export async function GET(req: NextRequest) {
   try {
@@ -53,21 +58,18 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const session = await requireSession();
-    const { ids } = await req.json();
+    const { ids } = markReadSchema.parse(await req.json());
+    const uniqueIds = [...new Set(ids)];
 
-    if (Array.isArray(ids)) {
-      for (const id of ids) {
-        await db
-          .update(notifications)
-          .set({ read: true })
-          .where(
-            and(
-              eq(notifications.id, id),
-              eq(notifications.recipientId, session.id),
-            ),
-          );
-      }
-    }
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(
+        and(
+          inArray(notifications.id, uniqueIds),
+          eq(notifications.recipientId, session.id),
+        ),
+      );
 
     return success({ ok: true });
   } catch (err) {
