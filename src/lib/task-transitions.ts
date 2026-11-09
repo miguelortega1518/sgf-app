@@ -10,6 +10,7 @@ import { tasks, spaces, evidence } from './db/schema';
 import { eq } from 'drizzle-orm';
 import { canApproveTask } from './permissions';
 import { logAudit } from './audit';
+import { todayRD } from './date-utils';
 
 type Task = typeof tasks.$inferSelect;
 type Space = typeof spaces.$inferSelect;
@@ -145,7 +146,7 @@ export async function applyStatusTransition(
   if (input.status === 'bloqueada') {
     updateData.blockedByArea = input.blockedByArea;
     updateData.blockedByAreaText = input.blockedByAreaText ?? null;
-    updateData.blockedSince = new Date().toISOString().slice(0, 10);
+    updateData.blockedSince = todayRD();
   }
 
   // Desbloquear: limpiar campos de bloqueo

@@ -14,6 +14,35 @@ export function todayRD(): string {
   return toLocalDateString(rdDate);
 }
 
+const RD_DATE_FORMAT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: RD_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+// Fecha de calendario YYYY-MM-DD en hora RD para un instante dado, sin
+// depender de la TZ del proceso. Se monta a partir de las partes para no
+// confiar en el formato exacto que devuelve format().
+export function toDateRD(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const parts = RD_DATE_FORMAT.formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+// todayRD() + `days` días, con aritmética de fecha pura en UTC (independiente
+// de la hora y de la TZ del proceso). Acepta valores negativos.
+export function addDaysRD(days: number): string {
+  const [y, m, d] = todayRD().split('-').map(Number);
+  const target = new Date(Date.UTC(y, m - 1, d + days));
+  const year = target.getUTCFullYear();
+  const month = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(target.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Último día del mes anterior a `ref`, en fecha local. El día 0 de un mes es el
 // último día del mes anterior; el constructor gestiona el cambio de año.
 export function lastDayOfPreviousMonth(ref: Date = new Date()): string {

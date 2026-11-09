@@ -6,6 +6,8 @@ import {
   todayRD,
   toLocalDateString,
   lastDayOfPreviousMonth,
+  toDateRD,
+  addDaysRD,
 } from '../src/lib/date-utils';
 
 describe('isOverdue', () => {
@@ -138,5 +140,71 @@ describe('lastDayOfPreviousMonth en varias zonas horarias', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 10, 5, 12));
     expect(lastDayOfPreviousMonth()).toBe('2026-10-31');
+  });
+});
+
+describe('toDateRD', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTZ();
+  });
+
+  it('a las 21:30 RD devuelve el día RD, no el UTC', () => {
+    expect(toDateRD(new Date('2026-03-10T01:30:00Z'))).toBe('2026-03-09');
+  });
+
+  it('acepta cadenas ISO', () => {
+    expect(toDateRD('2026-03-10T05:00:00Z')).toBe('2026-03-10');
+  });
+
+  it('coincide con todayRD() para el instante actual', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-10T01:30:00Z'));
+    expect(toDateRD(new Date())).toBe(todayRD());
+    expect(todayRD()).toBe('2026-03-09');
+  });
+
+  it.each(['Asia/Tokyo', 'UTC', 'Pacific/Kiritimati'])(
+    'no depende de la TZ del proceso (%s)',
+    (tz) => {
+      process.env.TZ = tz;
+      expect(toDateRD(new Date('2026-03-10T01:30:00Z'))).toBe('2026-03-09');
+      expect(toDateRD('2026-03-10T05:00:00Z')).toBe('2026-03-10');
+    },
+  );
+});
+
+describe('addDaysRD a las 21:00 RD', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreTZ();
+  });
+
+  it('gestiona el cambio de mes', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-01T01:00:00Z'));
+    expect(addDaysRD(0)).toBe('2026-01-31');
+    expect(addDaysRD(1)).toBe('2026-02-01');
+  });
+
+  it('gestiona el cambio de año', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2027-01-01T01:00:00Z'));
+    expect(addDaysRD(1)).toBe('2027-01-01');
+    expect(addDaysRD(7)).toBe('2027-01-07');
+  });
+
+  it('resta días y respeta los bisiestos', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2028-03-01T15:00:00Z'));
+    expect(addDaysRD(-1)).toBe('2028-02-29');
+  });
+
+  it.each(['Asia/Tokyo', 'Pacific/Kiritimati'])('no depende de la TZ del proceso (%s)', (tz) => {
+    process.env.TZ = tz;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2027-01-01T01:00:00Z'));
+    expect(addDaysRD(0)).toBe('2026-12-31');
+    expect(addDaysRD(7)).toBe('2027-01-07');
   });
 });

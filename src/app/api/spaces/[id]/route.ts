@@ -6,6 +6,7 @@ import { requireSession } from '@/lib/auth';
 import { updateSpaceSchema } from '@/lib/schemas/space';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
+import { todayRD, toDateRD } from '@/lib/date-utils';
 import { eq, and, ne } from 'drizzle-orm';
 
 export async function GET(
@@ -154,7 +155,7 @@ export async function PATCH(
     let closeReport = null;
 
     if (input.status === 'cerrado') {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayRD();
       setValues.closeDate = today;
 
       const allTasks = await db
@@ -175,7 +176,7 @@ export async function PATCH(
       for (const t of allTasks) {
         if (t.completedAt && t.dueDate) {
           withDueDate++;
-          const completed = new Date(t.completedAt).toISOString().slice(0, 10);
+          const completed = toDateRD(t.completedAt);
           if (completed <= t.dueDate) onTime++;
           else late++;
         }
