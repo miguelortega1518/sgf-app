@@ -68,6 +68,12 @@ deploy_command = ""
 github_repo = "miguelortega1518/sgf-app"
 github_label = "ai-factory"
 
+# Mejora continua: retrospectiva tras cada tarea y revisión semanal del producto
+# (workflow ai-factory-improve.yml). Las propuestas llevan proposal_label y NO lanzan la fábrica.
+retro = true
+improve_max_issues = 3
+proposal_label = "ai-factory-propuesta"
+
 # Valores de prueba, NO secretos (los mismos que usa el CI).
 [env]
 JWT_SECRET = "ci-solo-para-pruebas-no-es-un-secreto-real-0123456789abcdef"
@@ -76,5 +82,13 @@ NEXT_PUBLIC_APP_URL = "http://localhost:3000"
 NEXT_TELEMETRY_DISABLED = "1"
 
 [agents.builder]
+model = "claude-opus-5-5"
+effort = "high"
+
+[agents.improver]   # retrospectiva tras cada tarea: ligera, corre siempre
+model = "claude-sonnet-5-5"
+effort = "medium"
+
+[agents.scout]      # revisión semanal del producto: profunda, una vez por semana
 model = "claude-opus-5-5"
 effort = "high"
