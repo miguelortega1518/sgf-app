@@ -4,26 +4,13 @@ import { tasks, spaces, persons, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { accessibleSpaceIds } from '@/lib/project-access';
 import { handleError } from '@/lib/api-utils';
-import { todayRD, toDateRD } from '@/lib/date-utils';
+import { todayRD } from '@/lib/date-utils';
+import { APP_NAME } from '@/lib/labels';
+import { taskExportRow } from '@/lib/export-rows';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
-
-const STATUS_LABELS: Record<string, string> = {
-  no_iniciada: 'No iniciada',
-  en_proceso: 'En proceso',
-  en_revision: 'En revisión',
-  completada: 'Completada',
-  bloqueada: 'Bloqueada',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  critica: 'Crítica',
-  alta: 'Alta',
-  normal: 'Normal',
-  baja: 'Baja',
-};
 
 export async function GET(req: NextRequest) {
   try {
@@ -68,28 +55,15 @@ export async function GET(req: NextRequest) {
       .where(taskFilter)
       .orderBy(asc(spaces.name), asc(tasks.dueDate));
 
-    const data = rows.map(r => ({
-      'Espacio': r.spaceName,
-      'Tipo': r.spaceType,
-      'Empresa': r.companyName || '',
-      'Tarea': r.taskTitle,
-      'Responsable': r.responsibleName,
-      'Revisor': r.reviewerName || '',
-      'Estado': STATUS_LABELS[r.status] || r.status,
-      'Prioridad': PRIORITY_LABELS[r.priority] || r.priority,
-      'Fecha límite': r.dueDate || '',
-      'Fecha original': r.dueDateOriginal || '',
-      'Completada': r.completedAt ? toDateRD(r.completedAt) : '',
-      'Bloqueada por': r.blockedByArea || '',
-      'Razón retraso': r.delayReason || '',
-    }));
+    const data = rows.map(taskExportRow);
+    const filename = `${APP_NAME.toLowerCase()}-tareas-${today}`;
 
     if (format === 'pdf') {
       const doc = new PDFDocument({ size: 'LETTER', layout: 'landscape', margin: 40 });
       const chunks: Buffer[] = [];
       doc.on('data', (c: Buffer) => chunks.push(c));
 
-      doc.fontSize(16).text('Reporte de Tareas - SGF', { align: 'center' });
+      doc.fontSize(16).text(`Reporte de tareas - ${APP_NAME}`, { align: 'center' });
       doc.moveDown(0.3);
       doc.fontSize(9).fillColor('#666').text(
         `Generado: ${today}  |  Total: ${data.length} tareas`,
@@ -97,7 +71,7 @@ export async function GET(req: NextRequest) {
       );
       doc.moveDown(1);
 
-      const cols = ['Espacio', 'Tarea', 'Responsable', 'Estado', 'Prioridad', 'Fecha límite'];
+      const cols = ['Proyecto', 'Tarea', 'Responsable', 'Estado', 'Prioridad', 'Fecha límite'];
       const colW = [120, 180, 100, 70, 60, 80];
       const startX = 40;
       let y = doc.y;
@@ -111,11 +85,11 @@ export async function GET(req: NextRequest) {
       y += 16;
 
       doc.fillColor('#111');
-      for (const row of data) {
+      for (let idx = 0; idx < data.length; idx++) {
         if (y > 560) { doc.addPage(); y = 40; }
-        const vals = [row['Espacio'], row['Tarea'], row['Responsable'], row['Estado'], row['Prioridad'], row['Fecha límite']];
-        const even = data.indexOf(row) % 2 === 0;
-        if (even) {
+        const row = data[idx];
+        const vals = [row['Proyecto'], row['Tarea'], row['Responsable'], row['Estado'], row['Prioridad'], row['Fecha límite']];
+        if (idx % 2 === 0) {
           doc.rect(startX, y, colW.reduce((a, b) => a + b, 0), 14).fill('#f9fafb');
         }
         doc.fillColor('#111').fontSize(7);
@@ -133,7 +107,7 @@ export async function GET(req: NextRequest) {
       return new Response(pdfBuf, {
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="sgf-tareas-${today}.pdf"`,
+          'Content-Disposition': `attachment; filename="${filename}.pdf"`,
         },
       });
     }
@@ -152,7 +126,7 @@ export async function GET(req: NextRequest) {
     return new Response(buf, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="sgf-tareas-${today}.xlsx"`,
+        'Content-Disposition': `attachment; filename="${filename}.xlsx"`,
       },
     });
   } catch (err) {
