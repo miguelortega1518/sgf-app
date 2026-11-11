@@ -5,9 +5,13 @@ import { requireSession } from '@/lib/auth';
 import { canComment } from '@/lib/permissions';
 import { success, error, handleError } from '@/lib/api-utils';
 import { stripHtml } from '@/lib/sanitize';
+import { logAudit } from '@/lib/audit';
 import { requireTaskAccess, assertValidUuid } from '@/lib/project-access';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+
+/** Motivo de auditoría cuando un admin edita o borra un comentario ajeno. */
+const MODERATED_REASON = 'Moderado por admin';
 
 const addCommentSchema = z.object({
   content: z.string().transform(stripHtml).pipe(z.string().trim().min(1, 'Contenido requerido').max(2000)),
@@ -70,11 +74,26 @@ export async function PATCH(
       return error('Solo puedes editar tus propios comentarios', 403);
     }
 
-    const [updated] = await db
-      .update(comments)
-      .set({ content: stripHtml(content), editedAt: new Date() })
-      .where(eq(comments.id, commentId))
-      .returning();
+    const sanitized = stripHtml(content);
+    const moderated = comment.authorId !== session.id;
+
+    const updated = await db.transaction(async tx => {
+      const [row] = await tx
+        .update(comments)
+        .set({ content: sanitized, editedAt: new Date() })
+        .where(eq(comments.id, commentId))
+        .returning();
+
+      await logAudit({
+        actorId: session.id,
+        action: 'comment_edited',
+        taskId,
+        previousValue: comment.content,
+        newValue: sanitized,
+        ...(moderated ? { reason: MODERATED_REASON } : {}),
+      }, tx);
+      return row;
+    });
 
     return success(updated);
   } catch (err) {
@@ -107,7 +126,20 @@ export async function DELETE(
       return error('Solo puedes eliminar tus propios comentarios', 403);
     }
 
-    await db.delete(comments).where(eq(comments.id, commentId));
+    const moderated = comment.authorId !== session.id;
+
+    await db.transaction(async tx => {
+      await tx.delete(comments).where(eq(comments.id, commentId));
+
+      await logAudit({
+        actorId: session.id,
+        action: 'comment_deleted',
+        taskId,
+        previousValue: comment.content,
+        ...(moderated ? { reason: MODERATED_REASON } : {}),
+      }, tx);
+    });
+
     return success({ ok: true });
   } catch (err) {
     return handleError(err);
