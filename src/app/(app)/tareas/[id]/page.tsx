@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
+import { TaskAuditDetail } from '@/components/audit/audit-entry-detail';
 import Link from 'next/link';
 import { GitPullRequest } from 'lucide-react';
 import {
@@ -469,11 +470,11 @@ export default function TaskDetailPage() {
                   <span className="text-gray-500 ml-1">
                     {auditActionLabel(entry.action)}
                   </span>
-                  {entry.previousValue && entry.newValue && (
-                    <span className="text-gray-400 ml-1">
-                      ({entry.previousValue} → {entry.newValue})
-                    </span>
-                  )}
+                  <TaskAuditDetail
+                    previousValue={entry.previousValue}
+                    newValue={entry.newValue}
+                    reason={entry.reason}
+                  />
                   <span className="text-gray-400 text-xs ml-2">
                     {toTimestampRD(new Date(entry.timestamp))}
                   </span>
