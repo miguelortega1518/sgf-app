@@ -73,6 +73,8 @@ github_label = "ai-factory"
 retro = true
 improve_max_issues = 3
 proposal_label = "ai-factory-propuesta"
+# Tareas de seguimiento por tarea, a partir de problemas previos que los revisores marcan fuera de alcance.
+followup_issues = 2
 
 # Valores de prueba, NO secretos (los mismos que usa el CI).
 [env]

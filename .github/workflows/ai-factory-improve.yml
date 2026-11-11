@@ -21,9 +21,9 @@ permissions:
   contents: read
   issues: write
 
-# No coincide con una ejecución de la fábrica: así no compiten por la cuota.
+# Una revisión a la vez.
 concurrency:
-  group: ai-factory
+  group: ai-factory-improve
   cancel-in-progress: false
 
 jobs:
