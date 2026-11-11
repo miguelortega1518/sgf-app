@@ -10,12 +10,18 @@ const markReadSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
-const PAGE_MESSAGE = 'El parámetro page debe ser un entero mayor o igual a 1';
+const MAX_PAGE = 10000;
+const PAGE_MESSAGE = `El parámetro page debe ser un entero entre 1 y ${MAX_PAGE}`;
 const LIMIT_MESSAGE = 'El parámetro limit debe ser un entero entre 1 y 50';
 
-// limit > 50 se rechaza con 400 (no se recorta).
+// page > MAX_PAGE y limit > 50 se rechazan con 400 (no se recortan).
 const listQuerySchema = z.object({
-  page: z.coerce.number({ error: PAGE_MESSAGE }).int(PAGE_MESSAGE).min(1, PAGE_MESSAGE).default(1),
+  page: z.coerce
+    .number({ error: PAGE_MESSAGE })
+    .int(PAGE_MESSAGE)
+    .min(1, PAGE_MESSAGE)
+    .max(MAX_PAGE, PAGE_MESSAGE)
+    .default(1),
   limit: z.coerce
     .number({ error: LIMIT_MESSAGE })
     .int(LIMIT_MESSAGE)
