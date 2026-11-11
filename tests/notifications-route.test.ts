@@ -163,7 +163,17 @@ describe('GET /api/notifications', () => {
     vi.restoreAllMocks();
   });
 
-  it.each(['page=abc', 'page=0', 'limit=abc', 'limit=0', 'limit=51', 'limit=500'])(
+  it.each([
+    'page=abc',
+    'page=0',
+    'page=1e20',
+    'page=9007199254740991',
+    'page=10001',
+    'limit=abc',
+    'limit=0',
+    'limit=51',
+    'limit=500',
+  ])(
     'responde 400 con %s sin consultar la base',
     async (query) => {
       const response = await GET(getRequest(`?${query}`));
@@ -174,6 +184,27 @@ describe('GET /api/notifications', () => {
       expect(loggerError).not.toHaveBeenCalled();
     },
   );
+
+  it('rechaza page fuera de rango con un mensaje que indica el rango', async () => {
+    const response = await GET(getRequest('?page=9007199254740991'));
+
+    expect(response.status).toBe(400);
+    const { error } = await response.json();
+    expect(error).toMatch(/page/);
+    expect(error).toMatch(/10000/);
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(loggerError).not.toHaveBeenCalled();
+  });
+
+  it('acepta page=10000 (máximo) con 200', async () => {
+    const response = await GET(getRequest('?page=10000&limit=20'));
+
+    expect(response.status).toBe(200);
+    expect(mocks.limit).toHaveBeenCalledWith(20);
+    expect(mocks.offset).toHaveBeenCalledWith(199980);
+    expect(await response.json()).toMatchObject({ page: 10000 });
+    expect(loggerError).not.toHaveBeenCalled();
+  });
 
   it('rechaza limit=500 con 400 (no se recorta a 50)', async () => {
     const response = await GET(getRequest('?limit=500'));
