@@ -81,6 +81,8 @@ const ACTION_LABELS: Record<string, string> = {
   due_date_changed: 'Fecha límite cambiada',
   task_approved: 'Tarea aprobada',
   task_approved_admin_override: 'Aprobada por admin (anulación)',
+  comment_edited: 'Comentario editado',
+  comment_deleted: 'Comentario eliminado',
 };
 
 export default function TaskDetailPage() {
