@@ -1,6 +1,9 @@
 import { test, expect } from 'vitest';
-import { taskKey, prLabel, initials, AREA_LABEL, STATUS_ORDER, STATUS_LABEL } from '../src/lib/labels';
-import { createTaskSchema, updateTaskSchema } from '../src/lib/schemas/task';
+import {
+  taskKey, prLabel, initials, AREA_LABEL, STATUS_ORDER, STATUS_LABEL,
+  DELAY_REASON_ORDER, DELAY_REASON_LABEL, delayReasonLabel,
+} from '../src/lib/labels';
+import { createTaskSchema, updateTaskSchema, updateTaskStatusSchema } from '../src/lib/schemas/task';
 
 test('taskKey', () => {
   expect(taskKey(142)).toBe('FOR-142');
@@ -25,6 +28,43 @@ test('todos los estados tienen etiqueta y las áreas heredadas siguen legibles',
   for (const s of STATUS_ORDER) expect(STATUS_LABEL[s]).toBeTruthy();
   expect(AREA_LABEL.tesoreria).toBe('Tesorería');
   expect(AREA_LABEL.qa).toBe('QA');
+});
+
+const delayReasonOptions: readonly string[] = updateTaskStatusSchema.shape.delayReason.unwrap().options;
+
+test('cada motivo de retraso del schema tiene etiqueta propia', () => {
+  expect(delayReasonOptions.length).toBeGreaterThan(0);
+  for (const v of delayReasonOptions) {
+    expect(Object.hasOwn(DELAY_REASON_LABEL, v)).toBe(true);
+    const label = (DELAY_REASON_LABEL as Record<string, string>)[v];
+    expect(label).toBeTruthy();
+    expect(label).not.toBe(v);
+  }
+});
+
+test('DELAY_REASON_ORDER coincide exactamente con el enum del schema', () => {
+  expect([...DELAY_REASON_ORDER]).toEqual([...delayReasonOptions]);
+});
+
+test('delayReasonLabel traduce los códigos de motivo de retraso', () => {
+  expect(delayReasonLabel('otro')).toBe('Otro');
+  expect(delayReasonLabel('error_sistema')).toBe('Fallo de entorno o infraestructura');
+  expect(delayReasonLabel('falta_informacion_terceros')).toBe('Falta información de un tercero');
+  expect(delayReasonLabel('documento_no_recibido_otra_area')).toBe('Falta una definición de otro equipo');
+  expect(delayReasonLabel('capacidad_insuficiente')).toBe('Capacidad insuficiente');
+  expect(delayReasonLabel('dependencia_atrasada')).toBe('Dependencia atrasada');
+  expect(delayReasonLabel('repriorizacion')).toBe('Repriorización');
+});
+
+test('delayReasonLabel devuelve el texto original si no es un código', () => {
+  expect(delayReasonLabel('Moderado por admin')).toBe('Moderado por admin');
+  expect(delayReasonLabel('')).toBe('');
+});
+
+test('delayReasonLabel no resuelve propiedades del prototipo', () => {
+  for (const k of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+    expect(delayReasonLabel(k)).toBe(k);
+  }
 });
 
 const base = { spaceId: '11111111-1111-4111-8111-111111111111', title: 'x', responsibleId: '22222222-2222-4222-8222-222222222222' };

@@ -40,6 +40,19 @@ describe('AuditLogDetail', () => {
     expect(html).toBe('<span class="text-xs text-gray-300">—</span>');
   });
 
+  it('translates a delay reason code without a change', () => {
+    const html = renderLog({ previousValue: null, newValue: null, reason: 'otro' });
+    expect(html).toContain('>Otro<');
+    expect(html).not.toContain('>otro<');
+  });
+
+  it('translates a delay reason code with a change', () => {
+    const html = renderLog({ previousValue: 'en_proceso', newValue: 'completada', reason: 'error_sistema' });
+    expect(html).toContain('en_proceso → completada');
+    expect(html).toContain('Fallo de entorno o infraestructura');
+    expect(html).not.toContain('error_sistema');
+  });
+
   it('escapes the reason', () => {
     const html = renderLog({ previousValue: 'a', newValue: 'b', reason: '<script>alert(1)</script>' });
     expect(html).toContain('&lt;script&gt;');
@@ -56,8 +69,20 @@ describe('TaskAuditDetail', () => {
 
   it('shows the reason without a change', () => {
     const html = renderTask({ previousValue: null, newValue: null, reason: 'otro' });
-    expect(html).toContain('otro');
+    expect(html).toContain('— Otro');
+    expect(html).not.toContain('— otro');
     expect(html).not.toContain('→');
+  });
+
+  it('translates delay reason codes into readable labels', () => {
+    const html = renderTask({ previousValue: 'en_proceso', newValue: 'completada', reason: 'error_sistema' });
+    expect(html).toContain('— Fallo de entorno o infraestructura');
+    expect(html).not.toContain('error_sistema');
+  });
+
+  it('keeps free-text reasons unchanged', () => {
+    const html = renderTask({ previousValue: null, newValue: null, reason: 'Moderado por admin' });
+    expect(html).toContain('— Moderado por admin');
   });
 
   it('shows only the change when there is no reason', () => {

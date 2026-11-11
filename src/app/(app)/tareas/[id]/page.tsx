@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { GitPullRequest } from 'lucide-react';
 import {
   KIND_ORDER, KIND_LABEL, KIND_CHIP, ESTIMATE_STEPS, BLOCK_AREAS, AREA_LABEL, taskKey, prLabel, auditActionLabel, type TaskKind,
+  DELAY_REASON_ORDER, DELAY_REASON_LABEL,
 } from '@/lib/labels';
 
 type DepTask = { id: string; title: string; status: string };
@@ -1047,16 +1048,6 @@ function BlockDialog({
   );
 }
 
-const DELAY_REASONS = [
-  { value: 'falta_informacion_terceros', label: 'Falta información de un tercero' },
-  { value: 'documento_no_recibido_otra_area', label: 'Falta una definición de otro equipo' },
-  { value: 'error_sistema', label: 'Fallo de entorno o infraestructura' },
-  { value: 'capacidad_insuficiente', label: 'Capacidad insuficiente' },
-  { value: 'dependencia_atrasada', label: 'Dependencia atrasada' },
-  { value: 'repriorizacion', label: 'Repriorización' },
-  { value: 'otro', label: 'Otro' },
-] as const;
-
 function DelayReasonDialog({
   onConfirm, onCancel,
 }: {
@@ -1088,8 +1079,8 @@ function DelayReasonDialog({
           autoFocus
         >
           <option value="">Seleccionar motivo...</option>
-          {DELAY_REASONS.map(r => (
-            <option key={r.value} value={r.value}>{r.label}</option>
+          {DELAY_REASON_ORDER.map(value => (
+            <option key={value} value={value}>{DELAY_REASON_LABEL[value]}</option>
           ))}
         </select>
         {reason === 'otro' && (
