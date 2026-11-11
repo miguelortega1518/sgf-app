@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ScrollText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { auditActionLabel, auditActionChip } from '@/lib/labels';
 
 type AuditEntry = {
   id: string;
@@ -14,26 +15,6 @@ type AuditEntry = {
   actorEmail: string;
   taskId: string | null;
   taskTitle: string | null;
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  status_changed: 'Cambio de estado',
-  due_date_changed: 'Cambio de fecha',
-  responsible_changed: 'Cambio de responsable',
-  task_approved: 'Tarea aprobada',
-  task_approved_admin_override: 'Aprobación admin',
-  space_health_updated: 'Actualización de salud',
-  space_closed: 'Proyecto cerrado',
-  comment_edited: 'Comentario editado',
-  comment_deleted: 'Comentario eliminado',
-};
-
-const ACTION_COLORS: Record<string, string> = {
-  status_changed: 'bg-blue-100 text-blue-700',
-  due_date_changed: 'bg-amber-100 text-amber-700',
-  responsible_changed: 'bg-purple-100 text-purple-700',
-  task_approved: 'bg-green-100 text-green-700',
-  task_approved_admin_override: 'bg-green-100 text-green-700',
 };
 
 export default function BitacoraPage() {
@@ -108,9 +89,9 @@ export default function BitacoraPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-                        ACTION_COLORS[entry.action] || 'bg-gray-100 text-gray-600'
+                        auditActionChip(entry.action)
                       }`}>
-                        {ACTION_LABELS[entry.action] || entry.action}
+                        {auditActionLabel(entry.action)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
