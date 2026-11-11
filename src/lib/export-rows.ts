@@ -1,7 +1,7 @@
 // Conversión de filas de la base a filas de exporte y reporte (XLSX/PDF).
 // Funciones puras: el vocabulario visible sale de src/lib/labels.ts.
 
-import { STATUS_LABEL, PRIORITY_LABEL, SPACE_TYPE_LABEL, AREA_LABEL } from '@/lib/labels';
+import { STATUS_LABEL, PRIORITY_LABEL, SPACE_TYPE_LABEL, AREA_LABEL, delayReasonLabel } from '@/lib/labels';
 import { toDateRD } from '@/lib/date-utils';
 
 type Nullable<T> = T | null | undefined;
@@ -65,7 +65,7 @@ export function taskExportRow(r: TaskExportInput): TaskExportRow {
     'Fecha original': r.dueDateOriginal ?? '',
     'Completada': completedDate(r.completedAt),
     'Bloqueada por': areaLabel(r.blockedByArea),
-    'Razón retraso': r.delayReason ?? '',
+    'Razón retraso': r.delayReason ? delayReasonLabel(r.delayReason) : '',
   };
 }
 

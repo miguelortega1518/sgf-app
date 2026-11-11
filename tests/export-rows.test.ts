@@ -66,6 +66,12 @@ describe('taskExportRow', () => {
     expect(row['Razón retraso']).toBe('');
   });
 
+  it('Razón retraso usa la etiqueta del motivo y deja el texto libre tal cual', () => {
+    expect(taskExportRow({ ...base, delayReason: 'repriorizacion' })['Razón retraso']).toBe('Repriorización');
+    expect(taskExportRow({ ...base, delayReason: 'otro' })['Razón retraso']).toBe('Otro');
+    expect(taskExportRow(base)['Razón retraso']).toBe('Esperando QA');
+  });
+
   it('los valores desconocidos caen al valor crudo', () => {
     const row = taskExportRow({ ...base, status: 'xyz', priority: 'xyz', spaceType: 'xyz', blockedByArea: 'xyz' });
     expect(row['Estado']).toBe('xyz');

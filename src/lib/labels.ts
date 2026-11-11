@@ -128,6 +128,40 @@ export function auditActionChip(action: string): string {
   return Object.hasOwn(AUDIT_ACTION_CHIP, action) ? AUDIT_ACTION_CHIP[action] : AUDIT_CHIP_FALLBACK;
 }
 
+// --- Motivos de retraso ---
+// Códigos de delayReason (updateTaskStatusSchema y delayReasonEnum de la BD, mismo orden).
+
+export const DELAY_REASON_ORDER = [
+  'falta_informacion_terceros',
+  'documento_no_recibido_otra_area',
+  'error_sistema',
+  'capacidad_insuficiente',
+  'dependencia_atrasada',
+  'repriorizacion',
+  'otro',
+] as const;
+export type DelayReason = (typeof DELAY_REASON_ORDER)[number];
+
+export const DELAY_REASON_LABEL: Record<DelayReason, string> = {
+  falta_informacion_terceros: 'Falta información de un tercero',
+  documento_no_recibido_otra_area: 'Falta una definición de otro equipo',
+  error_sistema: 'Fallo de entorno o infraestructura',
+  capacidad_insuficiente: 'Capacidad insuficiente',
+  dependencia_atrasada: 'Dependencia atrasada',
+  repriorizacion: 'Repriorización',
+  otro: 'Otro',
+};
+
+/**
+ * Etiqueta visible de un motivo de retraso. A diferencia de auditActionLabel, si el
+ * texto no es un código conocido se devuelve tal cual: audit_log.reason también
+ * guarda texto libre (p. ej. 'Moderado por admin'). Object.hasOwn evita resolver
+ * claves del prototipo como 'constructor' o '__proto__'.
+ */
+export function delayReasonLabel(reason: string): string {
+  return Object.hasOwn(DELAY_REASON_LABEL, reason) ? DELAY_REASON_LABEL[reason as DelayReason] : reason;
+}
+
 /** Clave legible de una tarea: FOR-142. */
 export function taskKey(n: number | null | undefined): string {
   return n ? `FOR-${n}` : '';
