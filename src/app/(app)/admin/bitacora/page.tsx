@@ -24,6 +24,8 @@ const ACTION_LABELS: Record<string, string> = {
   task_approved_admin_override: 'Aprobación admin',
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
+  comment_edited: 'Comentario editado',
+  comment_deleted: 'Comentario eliminado',
 };
 
 const ACTION_COLORS: Record<string, string> = {
