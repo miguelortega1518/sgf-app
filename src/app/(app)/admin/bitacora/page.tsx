@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ScrollText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { auditActionLabel, auditActionChip } from '@/lib/labels';
+import { AuditLogDetail } from '@/components/audit/audit-entry-detail';
 
 type AuditEntry = {
   id: string;
@@ -110,15 +111,11 @@ export default function BitacoraPage() {
                       <p className="text-sm text-gray-900">{entry.actorName}</p>
                     </td>
                     <td className="px-4 py-3">
-                      {entry.previousValue && entry.newValue ? (
-                        <span className="text-xs text-gray-500">
-                          {entry.previousValue} → {entry.newValue}
-                        </span>
-                      ) : entry.reason ? (
-                        <span className="text-xs text-gray-500">{entry.reason}</span>
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
+                      <AuditLogDetail
+                        previousValue={entry.previousValue}
+                        newValue={entry.newValue}
+                        reason={entry.reason}
+                      />
                     </td>
                   </tr>
                 ))}
