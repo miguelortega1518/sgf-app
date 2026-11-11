@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   set: vi.fn(),
   where: vi.fn(),
   select: vi.fn(),
+  from: vi.fn(),
+  selectWhere: vi.fn(),
+  orderBy: vi.fn(),
+  limit: vi.fn(),
+  offset: vi.fn(),
 }));
 
 vi.mock('@/lib/auth', () => ({
@@ -26,7 +31,7 @@ vi.mock('drizzle-orm', () => ({
   sql: (strings: TemplateStringsArray) => ({ operator: 'sql', text: strings.join('') }),
 }));
 
-import { PATCH } from '../src/app/api/notifications/route';
+import { GET, PATCH } from '../src/app/api/notifications/route';
 import { notifications } from '@/lib/db/schema';
 import { logger } from '../src/lib/logger';
 
@@ -128,5 +133,93 @@ describe('PATCH /api/notifications', () => {
 
     expect(response.status).toBe(401);
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+});
+
+function getRequest(query = '') {
+  return new NextRequest(`http://localhost/api/notifications${query}`);
+}
+
+describe('GET /api/notifications', () => {
+  let loggerError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loggerError = vi.spyOn(logger, 'error').mockImplementation(() => {});
+    mocks.requireSession.mockResolvedValue({ id: 'user-1', role: 'miembro' });
+    mocks.select.mockReturnValue({ from: mocks.from });
+    mocks.from.mockReturnValue({ where: mocks.selectWhere });
+    // Primera consulta: count (where resuelve). Segunda: listado (where → orderBy → limit → offset).
+    mocks.selectWhere.mockReset();
+    mocks.selectWhere
+      .mockReturnValueOnce(Promise.resolve([{ count: 45 }]))
+      .mockReturnValueOnce({ orderBy: mocks.orderBy });
+    mocks.orderBy.mockReturnValue({ limit: mocks.limit });
+    mocks.limit.mockReturnValue({ offset: mocks.offset });
+    mocks.offset.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(['page=abc', 'page=0', 'limit=abc', 'limit=0', 'limit=51', 'limit=500'])(
+    'responde 400 con %s sin consultar la base',
+    async (query) => {
+      const response = await GET(getRequest(`?${query}`));
+
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toEqual(expect.any(String));
+      expect(mocks.select).not.toHaveBeenCalled();
+      expect(loggerError).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rechaza limit=500 con 400 (no se recorta a 50)', async () => {
+    const response = await GET(getRequest('?limit=500'));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/limit/);
+    expect(mocks.select).not.toHaveBeenCalled();
+    expect(mocks.limit).not.toHaveBeenCalled();
+  });
+
+  it('sin parámetros usa page=1 y limit=20', async () => {
+    const response = await GET(getRequest());
+
+    expect(response.status).toBe(200);
+    expect(mocks.limit).toHaveBeenCalledWith(20);
+    expect(mocks.offset).toHaveBeenCalledWith(0);
+    expect(await response.json()).toEqual({ data: [], total: 45, page: 1, totalPages: 3 });
+    expect(loggerError).not.toHaveBeenCalled();
+  });
+
+  it('con page=3&limit=10 calcula offset 20', async () => {
+    const response = await GET(getRequest('?page=3&limit=10'));
+
+    expect(response.status).toBe(200);
+    expect(mocks.limit).toHaveBeenCalledWith(10);
+    expect(mocks.offset).toHaveBeenCalledWith(20);
+    expect(await response.json()).toEqual({ data: [], total: 45, page: 3, totalPages: 5 });
+  });
+
+  it('countOnly=true sin page ni limit devuelve { unreadCount }', async () => {
+    mocks.selectWhere.mockReset();
+    mocks.selectWhere.mockResolvedValue([{ count: 7 }]);
+
+    const response = await GET(getRequest('?countOnly=true'));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ unreadCount: 7 });
+    expect(mocks.select).toHaveBeenCalledTimes(1);
+  });
+
+  it('responde 401 sin sesión, antes de validar y sin consultar la base', async () => {
+    mocks.requireSession.mockRejectedValue(new Error('UNAUTHORIZED'));
+
+    const response = await GET(getRequest('?page=abc'));
+
+    expect(response.status).toBe(401);
+    expect(mocks.select).not.toHaveBeenCalled();
   });
 });

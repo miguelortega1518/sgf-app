@@ -9,13 +9,29 @@ import { dueReportRow } from '@/lib/export-rows';
 import { eq, and, ne, lte, asc, inArray } from 'drizzle-orm';
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
+import { z } from 'zod';
+
+const DAYS_MESSAGE = 'El parámetro days debe ser un número entero entre 0 y 365';
+
+const vencimientosQuerySchema = z.object({
+  days: z.coerce
+    .number({ error: DAYS_MESSAGE })
+    .int(DAYS_MESSAGE)
+    .min(0, DAYS_MESSAGE)
+    .max(365, DAYS_MESSAGE)
+    .default(7),
+  format: z.enum(['xlsx', 'pdf'], { error: "El formato debe ser 'xlsx' o 'pdf'" }).default('xlsx'),
+});
 
 export async function GET(req: NextRequest) {
   try {
     const session = await requireSession();
+    const { searchParams } = req.nextUrl;
+    const { days, format } = vencimientosQuerySchema.parse({
+      days: searchParams.get('days') ?? undefined,
+      format: searchParams.get('format') ?? undefined,
+    });
     const allowedSpaces = await accessibleSpaceIds(session);
-    const format = req.nextUrl.searchParams.get('format') || 'xlsx';
-    const days = parseInt(req.nextUrl.searchParams.get('days') || '7', 10);
 
     const today = todayRD();
     const futureDateStr = addDaysRD(days);

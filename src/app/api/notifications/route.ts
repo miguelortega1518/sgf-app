@@ -10,12 +10,28 @@ const markReadSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
+const PAGE_MESSAGE = 'El parámetro page debe ser un entero mayor o igual a 1';
+const LIMIT_MESSAGE = 'El parámetro limit debe ser un entero entre 1 y 50';
+
+// limit > 50 se rechaza con 400 (no se recorta).
+const listQuerySchema = z.object({
+  page: z.coerce.number({ error: PAGE_MESSAGE }).int(PAGE_MESSAGE).min(1, PAGE_MESSAGE).default(1),
+  limit: z.coerce
+    .number({ error: LIMIT_MESSAGE })
+    .int(LIMIT_MESSAGE)
+    .min(1, LIMIT_MESSAGE)
+    .max(50, LIMIT_MESSAGE)
+    .default(20),
+});
+
 export async function GET(req: NextRequest) {
   try {
     const session = await requireSession();
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')));
+    const { page, limit } = listQuerySchema.parse({
+      page: searchParams.get('page') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
+    });
     const countOnly = searchParams.get('countOnly') === 'true';
 
     if (countOnly) {
