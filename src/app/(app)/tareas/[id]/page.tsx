@@ -15,7 +15,7 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import Link from 'next/link';
 import { GitPullRequest } from 'lucide-react';
 import {
-  KIND_ORDER, KIND_LABEL, KIND_CHIP, ESTIMATE_STEPS, BLOCK_AREAS, AREA_LABEL, taskKey, prLabel, type TaskKind,
+  KIND_ORDER, KIND_LABEL, KIND_CHIP, ESTIMATE_STEPS, BLOCK_AREAS, AREA_LABEL, taskKey, prLabel, auditActionLabel, type TaskKind,
 } from '@/lib/labels';
 
 type DepTask = { id: string; title: string; status: string };
@@ -72,17 +72,6 @@ const STATUS_COLORS: Record<string, string> = {
   en_revision: 'bg-purple-100 text-purple-700',
   completada: 'bg-green-100 text-green-700',
   bloqueada: 'bg-red-100 text-red-700',
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  task_created: 'Tarea creada',
-  status_changed: 'Cambio de estado',
-  responsible_changed: 'Responsable cambiado',
-  due_date_changed: 'Fecha límite cambiada',
-  task_approved: 'Tarea aprobada',
-  task_approved_admin_override: 'Aprobada por admin (anulación)',
-  comment_edited: 'Comentario editado',
-  comment_deleted: 'Comentario eliminado',
 };
 
 export default function TaskDetailPage() {
@@ -478,7 +467,7 @@ export default function TaskDetailPage() {
                 <div>
                   <span className="text-gray-700 font-medium">{entry.actorName}</span>
                   <span className="text-gray-500 ml-1">
-                    {ACTION_LABELS[entry.action] || entry.action}
+                    {auditActionLabel(entry.action)}
                   </span>
                   {entry.previousValue && entry.newValue && (
                     <span className="text-gray-400 ml-1">

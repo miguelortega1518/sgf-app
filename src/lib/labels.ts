@@ -81,6 +81,53 @@ export const SPACE_TYPE_LABEL: Record<string, string> = {
   recurrente: 'Sprint', proyecto: 'Iniciativa', continuo: 'Backlog',
 };
 
+// --- Auditoría ---
+// Acciones que registra logAudit (src/lib/audit.ts). 'space' se muestra como 'Proyecto'.
+
+export const AUDIT_ACTION_LABEL: Record<string, string> = {
+  task_created: 'Tarea creada',
+  status_changed: 'Cambio de estado',
+  responsible_changed: 'Cambio de responsable',
+  due_date_changed: 'Cambio de fecha límite',
+  task_approved: 'Tarea aprobada',
+  task_approved_admin_override: 'Aprobada por admin (anulación)',
+  comment_edited: 'Comentario editado',
+  comment_deleted: 'Comentario eliminado',
+  evidence_added: 'Evidencia añadida',
+  evidence_removed: 'Evidencia eliminada',
+  space_created: 'Proyecto creado',
+  space_updated: 'Proyecto actualizado',
+  // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
+  space_health_updated: 'Actualización de salud',
+  space_closed: 'Proyecto cerrado',
+};
+
+export const AUDIT_ACTION_CHIP: Record<string, string> = {
+  task_created: 'bg-sky-100 text-sky-700',
+  status_changed: 'bg-blue-100 text-blue-700',
+  due_date_changed: 'bg-amber-100 text-amber-700',
+  responsible_changed: 'bg-purple-100 text-purple-700',
+  task_approved: 'bg-green-100 text-green-700',
+  task_approved_admin_override: 'bg-green-100 text-green-700',
+  evidence_added: 'bg-sky-100 text-sky-700',
+  evidence_removed: 'bg-red-100 text-red-700',
+  space_created: 'bg-sky-100 text-sky-700',
+  space_updated: 'bg-amber-100 text-amber-700',
+};
+
+const AUDIT_ACTION_FALLBACK = 'Acción registrada';
+const AUDIT_CHIP_FALLBACK = 'bg-gray-100 text-gray-600';
+
+/** Etiqueta visible de una acción de auditoría; nunca devuelve el identificador crudo. */
+export function auditActionLabel(action: string): string {
+  return Object.hasOwn(AUDIT_ACTION_LABEL, action) ? AUDIT_ACTION_LABEL[action] : AUDIT_ACTION_FALLBACK;
+}
+
+/** Clases del chip de una acción de auditoría (gris por defecto). */
+export function auditActionChip(action: string): string {
+  return Object.hasOwn(AUDIT_ACTION_CHIP, action) ? AUDIT_ACTION_CHIP[action] : AUDIT_CHIP_FALLBACK;
+}
+
 /** Clave legible de una tarea: FOR-142. */
 export function taskKey(n: number | null | undefined): string {
   return n ? `FOR-${n}` : '';
