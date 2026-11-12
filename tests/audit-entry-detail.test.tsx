@@ -58,6 +58,53 @@ describe('AuditLogDetail', () => {
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
   });
+
+  it('shows only newValue when there is no previousValue (creation)', () => {
+    const html = renderLog({ previousValue: null, newValue: 'Hito A: 2026-12-01', reason: null });
+    expect(html).toBe('<span class="text-xs text-gray-500">Hito A: 2026-12-01</span>');
+    expect(html).not.toContain('→');
+    expect(html).not.toContain('—');
+  });
+
+  it('shows only previousValue when there is no newValue (deletion)', () => {
+    const html = renderLog({ previousValue: 'Hito A: 2026-12-01', newValue: null, reason: null });
+    expect(html).toBe('<span class="text-xs text-gray-500">Hito A: 2026-12-01</span>');
+    expect(html).not.toContain('→');
+  });
+
+  it('shows a single value and the reason', () => {
+    const html = renderLog({ previousValue: 'texto', newValue: null, reason: 'Moderado por admin' });
+    expect(html).toBe(
+      '<span class="text-xs text-gray-500">texto</span><span class="block text-xs text-gray-400">Moderado por admin</span>',
+    );
+    expect(html).toContain('texto');
+    expect(html).toContain('Moderado por admin');
+    expect(html).not.toContain('→');
+    expect(spanCount(html)).toBe(2);
+  });
+
+  it('translates the reason code next to a single value', () => {
+    const html = renderLog({ previousValue: null, newValue: 'x', reason: 'otro' });
+    expect(html).toContain('<span class="block text-xs text-gray-400">Otro</span>');
+  });
+
+  it('treats empty strings as missing values', () => {
+    expect(renderLog({ previousValue: '', newValue: 'b', reason: null })).toBe(
+      '<span class="text-xs text-gray-500">b</span>',
+    );
+    expect(renderLog({ previousValue: 'a', newValue: '', reason: null })).toBe(
+      '<span class="text-xs text-gray-500">a</span>',
+    );
+    expect(renderLog({ previousValue: '', newValue: '', reason: '' })).toBe(
+      '<span class="text-xs text-gray-300">—</span>',
+    );
+  });
+
+  it('escapes a single value', () => {
+    const html = renderLog({ previousValue: null, newValue: '<script>alert(1)</script>', reason: null });
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).not.toContain('<script>');
+  });
 });
 
 describe('TaskAuditDetail', () => {
@@ -97,6 +144,38 @@ describe('TaskAuditDetail', () => {
 
   it('escapes the reason', () => {
     const html = renderTask({ previousValue: null, newValue: null, reason: '<script>alert(1)</script>' });
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).not.toContain('<script>');
+  });
+
+  it('shows only newValue', () => {
+    const html = renderTask({ previousValue: null, newValue: 'Hito A', reason: null });
+    expect(html).toBe('<span class="text-gray-400 ml-1">(Hito A)</span>');
+    expect(html).not.toContain('→');
+  });
+
+  it('shows only previousValue', () => {
+    const html = renderTask({ previousValue: 'Hito A', newValue: null, reason: null });
+    expect(html).toBe('<span class="text-gray-400 ml-1">(Hito A)</span>');
+    expect(html).not.toContain('→');
+  });
+
+  it('shows a single value and the reason', () => {
+    const html = renderTask({ previousValue: 'x', newValue: null, reason: 'otro' });
+    expect(html).toContain('(x)');
+    expect(html).toContain('— Otro');
+    expect(html).not.toContain('→');
+  });
+
+  it('treats empty strings as missing values', () => {
+    expect(renderTask({ previousValue: '', newValue: 'b', reason: null })).toBe(
+      '<span class="text-gray-400 ml-1">(b)</span>',
+    );
+    expect(renderTask({ previousValue: '', newValue: '', reason: '' })).toBe('');
+  });
+
+  it('escapes a single value', () => {
+    const html = renderTask({ previousValue: '<script>alert(1)</script>', newValue: null, reason: null });
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
   });
