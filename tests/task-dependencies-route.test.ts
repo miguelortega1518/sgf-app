@@ -265,6 +265,52 @@ describe('/api/tasks/[id]/dependencies', () => {
       expect(mocks.logAudit.mock.calls[0][0]).not.toHaveProperty('reason');
     });
 
+    it('acota al proyecto la lectura del título del predecesor', async () => {
+      const response = await DELETE(deleteRequest(predecessorId), ctx());
+
+      expect(response.status).toBe(200);
+      expect(mocks.txWhere).toHaveBeenCalledTimes(1);
+      expect(mocks.txWhere).toHaveBeenCalledWith({
+        operator: 'and',
+        conditions: [
+          { operator: 'eq', left: 'id', right: predecessorId },
+          { operator: 'eq', left: 'spaceId', right: spaceId },
+        ],
+      });
+      expect(mocks.txLimit).toHaveBeenCalledWith(1);
+    });
+
+    it('con un predecesor de otro proyecto audita el id y no el título', async () => {
+      // El filtro por spaceId excluye la fila del predecesor de otro proyecto.
+      mocks.txLimit.mockResolvedValue([]);
+
+      const response = await DELETE(deleteRequest(predecessorId), ctx());
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true });
+      expect(mocks.txDeleteReturning).toHaveBeenCalledTimes(1);
+      expect(mocks.txWhere).toHaveBeenCalledWith({
+        operator: 'and',
+        conditions: [
+          { operator: 'eq', left: 'id', right: predecessorId },
+          { operator: 'eq', left: 'spaceId', right: spaceId },
+        ],
+      });
+      expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        {
+          actorId: userId,
+          action: 'dependency_removed',
+          taskId,
+          previousValue: predecessorId,
+        },
+        mocks.tx,
+      );
+      const audited = JSON.stringify(mocks.logAudit.mock.calls[0][0]);
+      expect(audited).not.toContain('Pred');
+      expect(audited).not.toContain('Título predecesor');
+    });
+
     it('responde 404 si la dependencia no existe, sin auditar', async () => {
       mocks.txDeleteReturning.mockResolvedValue([]);
 
