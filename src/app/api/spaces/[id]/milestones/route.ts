@@ -7,6 +7,7 @@ import { eq, asc, count, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireProjectAccess } from '@/lib/project-access';
 import { isValidIsoDate } from '@/lib/validation';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(
   _req: NextRequest,
@@ -91,11 +92,31 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (updates.completed !== undefined) setValues.completed = updates.completed;
     if (updates.order !== undefined) setValues.order = updates.order;
 
-    const [updated] = await db.update(milestones)
-      .set(setValues)
-      .where(and(eq(milestones.id, milestoneId), eq(milestones.spaceId, id)))
-      .returning();
-    if (!updated) return error('Hito no encontrado', 404);
+    const updated = await db.transaction(async tx => {
+      const [current] = await tx.select().from(milestones)
+        .where(and(eq(milestones.id, milestoneId), eq(milestones.spaceId, id)))
+        .for('update');
+      if (!current) throw Object.assign(new Error('Hito no encontrado'), { httpStatus: 404 });
+
+      const [row] = await tx.update(milestones)
+        .set(setValues)
+        .where(and(eq(milestones.id, milestoneId), eq(milestones.spaceId, id)))
+        .returning();
+
+      // Fechas 'YYYY-MM-DD' (date mode 'string'): la comparación directa es válida.
+      // Se usa el nombre previo en ambos valores para que la Bitácora se lea igual.
+      if (updates.targetDate !== undefined && updates.targetDate !== current.targetDate) {
+        await logAudit({
+          actorId: session.id,
+          action: 'milestone_date_changed',
+          spaceId: id,
+          previousValue: `${current.name}: ${current.targetDate}`,
+          newValue: `${current.name}: ${updates.targetDate}`,
+        }, tx);
+      }
+
+      return row;
+    });
 
     return success(updated);
   } catch (err) {
