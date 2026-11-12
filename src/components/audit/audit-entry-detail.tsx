@@ -33,8 +33,16 @@ export function AuditLogDetail({ previousValue, newValue, reason }: AuditEntryDe
   );
 }
 
+export type TaskAuditDetailProps = AuditEntryDetailProps & {
+  /** Registro redactado por la API para quien no es admin: no se muestra contenido. */
+  redacted?: boolean;
+};
+
 /** Historial «Actividad» de la tarea: «(antes → después)» y el reason (traducido) como texto secundario. */
-export function TaskAuditDetail({ previousValue, newValue, reason }: AuditEntryDetailProps) {
+export function TaskAuditDetail({ previousValue, newValue, reason, redacted }: TaskAuditDetailProps) {
+  // Debe ir antes de cualquier rama de render: un registro redactado no muestra valores ni reason.
+  if (redacted) return null;
+
   const hasChange = Boolean(previousValue && newValue);
 
   if (!hasChange && !reason) return null;

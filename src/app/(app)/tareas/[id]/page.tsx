@@ -16,7 +16,7 @@ import { TaskAuditDetail } from '@/components/audit/audit-entry-detail';
 import Link from 'next/link';
 import { GitPullRequest } from 'lucide-react';
 import {
-  KIND_ORDER, KIND_LABEL, KIND_CHIP, ESTIMATE_STEPS, BLOCK_AREAS, AREA_LABEL, taskKey, prLabel, auditActionLabel, type TaskKind,
+  KIND_ORDER, KIND_LABEL, KIND_CHIP, ESTIMATE_STEPS, BLOCK_AREAS, AREA_LABEL, taskKey, prLabel, auditActionLabel, redactedCommentLabel, type TaskKind,
   DELAY_REASON_ORDER, DELAY_REASON_LABEL,
 } from '@/lib/labels';
 
@@ -56,7 +56,7 @@ type TaskDetail = {
   subtasks: { id: string; title: string; completed: boolean }[];
   evidence: { id: string; urlOrFile: string; type: string; uploadedBy: string }[];
   comments: { id: string; content: string; authorName: string; authorId: string; createdAt: string; editedAt: string | null }[];
-  audit: { id: string; action: string; actorName: string; previousValue: string | null; newValue: string | null; reason: string | null; timestamp: string }[];
+  audit: { id: string; action: string; actorName: string; previousValue: string | null; newValue: string | null; reason: string | null; timestamp: string; redacted?: boolean }[];
   dependencies: { predecessors: DepTask[]; successors: DepTask[] };
 };
 
@@ -469,12 +469,13 @@ export default function TaskDetailPage() {
                 <div>
                   <span className="text-gray-700 font-medium">{entry.actorName}</span>
                   <span className="text-gray-500 ml-1">
-                    {auditActionLabel(entry.action)}
+                    {entry.redacted ? redactedCommentLabel(entry.action, entry.reason) : auditActionLabel(entry.action)}
                   </span>
                   <TaskAuditDetail
                     previousValue={entry.previousValue}
                     newValue={entry.newValue}
                     reason={entry.reason}
+                    redacted={entry.redacted}
                   />
                   <span className="text-gray-400 text-xs ml-2">
                     {toTimestampRD(new Date(entry.timestamp))}
