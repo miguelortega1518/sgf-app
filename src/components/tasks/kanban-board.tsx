@@ -182,12 +182,15 @@ export function TaskCardBoard({
         <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-red-700"><Lock size={11} aria-hidden="true" />Bloqueada</p>
       )}
 
-      <div className="mt-2.5 flex items-center gap-2 text-[11px] text-[var(--text-muted)] relative z-10 pointer-events-none whitespace-nowrap">
+      {/* flex-wrap: en columnas estrechas (p. ej. 5 columnas a 1280 px) el avatar baja a otra línea
+          en lugar de recortar la fecha relativa. */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--text-muted)] relative z-10 pointer-events-none whitespace-nowrap">
         <span title={`Prioridad ${PRIORITY_LABEL[task.priority] ?? task.priority}`} className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.normal}`} />
         {task.estimate != null && <span className="tabular shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700">{task.estimate} pts</span>}
-        {task.dueDate && <span className={`tabular shrink-0 ${overdue ? 'text-red-700 font-medium' : ''}`}>{formatDateRD(task.dueDate)}</span>}
-        {/* El texto relativo cede espacio (min-w-0 + truncate) para que el avatar no se salga de la tarjeta. */}
-        {relativeDue && <span className={`-ml-1 min-w-0 truncate ${overdue ? 'text-red-700 font-medium' : ''}`} title={relativeDue}>· {relativeDue}</span>}
+        {task.dueDate && (
+          // Fecha absoluta y relativa forman un bloque que no se encoge ni se separa.
+          <span className="inline-flex shrink-0 items-center gap-1"><span className={`tabular shrink-0 ${overdue ? 'text-red-700 font-medium' : ''}`}>{formatDateRD(task.dueDate)}</span>{relativeDue && <span className={overdue ? 'text-red-700 font-medium' : ''}>· {relativeDue}</span>}</span>
+        )}
         <span className="ml-auto w-5 h-5 shrink-0 rounded-full bg-blue-100 text-blue-700 text-[9px] font-semibold flex items-center justify-center" title={task.responsibleName}>{initials(task.responsibleName)}</span>
       </div>
 

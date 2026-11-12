@@ -57,11 +57,16 @@ describe('TaskCardBoard: fecha límite relativa', () => {
     expect(html).toMatch(/<span class="[^"]*text-red-700[^"]*"[^>]*>·\s*Ayer<\/span>/);
   });
 
-  it('el texto relativo puede encogerse (min-w-0 + truncate) y lleva title con el texto completo', () => {
+  it('el texto relativo nunca se recorta: la fila hace wrap y fecha + relativo van juntos sin encogerse', () => {
     const html = render({ dueDate: '2026-07-15', estimate: 13 });
     expect(html).toContain('13 pts');
-    expect(html).toMatch(/<span class="[^"]*min-w-0[^"]*truncate[^"]*" title="hace 120 días">·\s*hace 120 días<\/span>/);
-    // El avatar sigue fijo al final de la fila.
+    // Nada de truncate/ellipsis en la tarjeta del tablero para la fecha.
+    expect(html).not.toMatch(/<span class="[^"]*truncate[^"]*"[^>]*>·/);
+    // Fecha absoluta y relativa dentro de un mismo bloque que no se encoge.
+    expect(html).toMatch(/<span class="[^"]*shrink-0[^"]*"><span class="[^"]*">15\/07\/2026<\/span><span class="[^"]*">·\s*hace 120 días<\/span><\/span>/);
+    // La fila de metadatos puede pasar a una segunda línea en columnas estrechas.
+    expect(html).toMatch(/<div class="[^"]*flex-wrap[^"]*"/);
+    // El avatar sigue alineado al final.
     expect(html).toMatch(/<span class="ml-auto[^"]*shrink-0[^"]*" title="Ileana Pérez">IP<\/span>/);
   });
 
