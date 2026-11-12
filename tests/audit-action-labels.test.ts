@@ -19,6 +19,8 @@ const KNOWN_ACTIONS = [
   'comment_deleted',
   'evidence_added',
   'evidence_removed',
+  'dependency_added',
+  'dependency_removed',
   'space_created',
   'space_updated',
 ];

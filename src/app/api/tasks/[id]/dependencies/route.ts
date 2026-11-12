@@ -6,6 +6,7 @@ import { success, error, handleError } from '@/lib/api-utils';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireTaskAccess, assertValidUuid } from '@/lib/project-access';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(
   _req: NextRequest,
@@ -69,7 +70,15 @@ export async function POST(
         select d.predecessor_id from task_dependencies d join ancestors a on d.task_id = a.id
       ) select id from ancestors where id = ${taskId}::uuid`);
       if (cycle.length) throw Object.assign(new Error('La dependencia crea un ciclo'), { httpStatus: 400 });
-      await tx.insert(taskDependencies).values({ taskId, predecessorId }).onConflictDoNothing();
+      const inserted = await tx
+        .insert(taskDependencies)
+        .values({ taskId, predecessorId })
+        .onConflictDoNothing()
+        .returning();
+      // Sólo se audita si se creó la dependencia; un POST repetido es idempotente.
+      if (inserted.length > 0) {
+        await logAudit({ actorId: session.id, action: 'dependency_added', taskId, newValue: pred.title }, tx);
+      }
     });
 
     return success({ ok: true }, 201);
@@ -93,13 +102,32 @@ export async function DELETE(
     assertValidUuid(predecessorId);
     await requireTaskAccess(session, taskId, 'write');
 
-    await db
-      .delete(taskDependencies)
-      .where(and(
-        eq(taskDependencies.taskId, taskId),
-        eq(taskDependencies.predecessorId, predecessorId),
-      ));
+    const removed = await db.transaction(async tx => {
+      const rows = await tx
+        .delete(taskDependencies)
+        .where(and(
+          eq(taskDependencies.taskId, taskId),
+          eq(taskDependencies.predecessorId, predecessorId),
+        ))
+        .returning();
+      if (rows.length === 0) return false;
 
+      // La FK garantiza que el predecesor existe; el id es sólo un respaldo defensivo.
+      const [pred] = await tx
+        .select({ title: tasks.title })
+        .from(tasks)
+        .where(eq(tasks.id, predecessorId))
+        .limit(1);
+      await logAudit({
+        actorId: session.id,
+        action: 'dependency_removed',
+        taskId,
+        previousValue: pred?.title ?? predecessorId,
+      }, tx);
+      return true;
+    });
+
+    if (!removed) return error('Dependencia no encontrada', 404);
     return success({ ok: true });
   } catch (err) {
     return handleError(err);
