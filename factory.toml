@@ -94,3 +94,21 @@ effort = "medium"
 [agents.scout]      # revisión semanal del producto: profunda, una vez por semana
 model = "claude-opus-5-5"
 effort = "high"
+
+# Tester funcional: tras la verificación, arranca Forja con una base de datos de prueba (el Postgres
+# del workflow), la prueba en un navegador real con Playwright y pasa capturas al revisor de UI.
+# Sólo actúa si el cambio toca la interfaz. Las credenciales son las del seed de prueba, no reales.
+[qa]
+enabled = true
+paths = ["src/app/**", "src/components/**"]
+setup_command = "npm run db:migrate && npm run db:custom && npm run db:seed && psql \"$DATABASE_URL\" -c 'update persons set must_change_password = false'"
+prepare_command = "cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/"
+start_command = "node .next/standalone/server.js"
+port = 3100
+ready_path = "/api/health"
+credentials = "Admin de prueba: mortega@grupoblb.do / qa-forja-2026. Miembro: jleon@grupoblb.do / qa-forja-2026 (datos de ejemplo del seed, no son cuentas reales)."
+env = { SEED_PASSWORD = "qa-forja-2026" }
+
+[agents.qa]         # tester funcional
+model = "claude-sonnet-5-5"
+effort = "medium"
