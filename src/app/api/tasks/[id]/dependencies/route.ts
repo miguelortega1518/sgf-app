@@ -100,7 +100,7 @@ export async function DELETE(
     const predecessorId = searchParams.get('predecessorId');
     if (!predecessorId) return error('predecessorId requerido', 400);
     assertValidUuid(predecessorId);
-    await requireTaskAccess(session, taskId, 'write');
+    const task = await requireTaskAccess(session, taskId, 'write');
 
     const removed = await db.transaction(async tx => {
       const rows = await tx
@@ -112,11 +112,13 @@ export async function DELETE(
         .returning();
       if (rows.length === 0) return false;
 
-      // La FK garantiza que el predecesor existe; el id es sólo un respaldo defensivo.
+      // previousValue es visible para cualquier lector de la tarea: el título sólo se
+      // lee dentro del proyecto de la sucesora. Si el predecesor no existe o es de otro
+      // proyecto (fila heredada), se audita su id para no exponer un título ajeno.
       const [pred] = await tx
         .select({ title: tasks.title })
         .from(tasks)
-        .where(eq(tasks.id, predecessorId))
+        .where(and(eq(tasks.id, predecessorId), eq(tasks.spaceId, task.spaceId)))
         .limit(1);
       await logAudit({
         actorId: session.id,
