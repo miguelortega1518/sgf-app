@@ -8,7 +8,29 @@ import {
   lastDayOfPreviousMonth,
   toDateRD,
   addDaysRD,
+  relativeDueRD,
 } from '../src/lib/date-utils';
+
+describe('relativeDueRD', () => {
+  const today = '2026-11-12';
+
+  it('devuelve Hoy, Mañana y en N días hacia el futuro', () => {
+    expect(relativeDueRD('2026-11-12', today)).toBe('Hoy');
+    expect(relativeDueRD('2026-11-13', today)).toBe('Mañana');
+    expect(relativeDueRD('2026-11-14', today)).toBe('en 2 días');
+    expect(relativeDueRD('2026-11-22', today)).toBe('en 10 días');
+  });
+
+  it('devuelve Ayer y hace N días hacia el pasado', () => {
+    expect(relativeDueRD('2026-11-11', today)).toBe('Ayer');
+    expect(relativeDueRD('2026-11-09', today)).toBe('hace 3 días');
+  });
+
+  it('gestiona el cambio de mes y de año', () => {
+    expect(relativeDueRD('2027-01-01', '2026-12-31')).toBe('Mañana');
+    expect(relativeDueRD('2026-02-28', '2026-03-01')).toBe('Ayer');
+  });
+});
 
 describe('isOverdue', () => {
   it('returns false when no due date', () => {
@@ -78,6 +100,12 @@ describe('con el reloj a las 21:00 RD (01:00 UTC del día siguiente)', () => {
   it('daysOverdue cuenta días según la fecha RD', () => {
     expect(daysOverdue('2026-11-04')).toBe(1);
     expect(daysOverdue('2026-11-05')).toBe(0);
+  });
+
+  it('relativeDueRD usa la fecha RD por defecto, no la UTC', () => {
+    expect(relativeDueRD('2026-11-05')).toBe('Hoy');
+    expect(relativeDueRD('2026-11-06')).toBe('Mañana');
+    expect(relativeDueRD('2026-11-04')).toBe('Ayer');
   });
 
   it('el feriado de hoy en RD cuenta como próximo y el de ayer como pasado', () => {

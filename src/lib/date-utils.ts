@@ -43,6 +43,20 @@ export function addDaysRD(days: number): string {
   return `${year}-${month}-${day}`;
 }
 
+// Texto relativo de una fecha límite (YYYY-MM-DD) respecto a `today` (por
+// defecto el día actual en RD): "Hoy", "Mañana", "en N días", "Ayer" o
+// "hace N días". La diferencia se calcula con aritmética de calendario pura
+// en UTC, igual que addDaysRD, así que no depende de la hora ni de la TZ.
+export function relativeDueRD(dueDate: string, today: string = todayRD()): string {
+  const [dy, dm, dd] = dueDate.split('-').map(Number);
+  const [ty, tm, td] = today.split('-').map(Number);
+  const diff = Math.round((Date.UTC(dy, dm - 1, dd) - Date.UTC(ty, tm - 1, td)) / 86_400_000);
+  if (diff === 0) return 'Hoy';
+  if (diff === 1) return 'Mañana';
+  if (diff === -1) return 'Ayer';
+  return diff > 0 ? `en ${diff} días` : `hace ${-diff} días`;
+}
+
 // Último día del mes anterior a `ref`, en fecha local. El día 0 de un mes es el
 // último día del mes anterior; el constructor gestiona el cambio de año.
 export function lastDayOfPreviousMonth(ref: Date = new Date()): string {

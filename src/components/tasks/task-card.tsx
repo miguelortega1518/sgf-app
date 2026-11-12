@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { formatDateRD } from '@/lib/date-utils';
+import { formatDateRD, relativeDueRD } from '@/lib/date-utils';
 import { Calendar, AlertTriangle, Lock, GitBranch, GitPullRequest, Play, GitPullRequestArrow, Check } from 'lucide-react';
 import {
   STATUS_LABEL, KIND_CHIP, KIND_LABEL, PRIORITY_DOT, PRIORITY_LABEL, SPACE_TYPE_LABEL, AREA_LABEL,
@@ -88,6 +88,7 @@ export function TaskCard({ task, isOverdue, onStatusChange }: TaskCardProps) {
               <span className={`inline-flex items-center gap-1 tabular ${isOverdue ? 'text-red-700 font-medium' : 'text-[var(--text-muted)]'}`}>
                 <Calendar size={12} aria-hidden="true" />
                 {formatDateRD(task.dueDate)}
+                {task.status !== 'completada' && <span>· {relativeDueRD(task.dueDate)}</span>}
                 {isOverdue && <AlertTriangle size={12} aria-label="Vencida" />}
               </span>
             )}

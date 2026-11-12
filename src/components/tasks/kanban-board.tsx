@@ -8,7 +8,7 @@ import {
   BLOCK_AREAS, taskKey, prLabel, initials,
   type TaskStatus, type TaskKind,
 } from '@/lib/labels';
-import { formatDateRD, isOverdue } from '@/lib/date-utils';
+import { formatDateRD, isOverdue, relativeDueRD } from '@/lib/date-utils';
 
 export type BoardTask = {
   id: string;
@@ -148,7 +148,8 @@ export function KanbanBoard({ tasks, readOnly = false, onMove }: Props) {
   );
 }
 
-function TaskCardBoard({
+// Exportada para poder probarla con renderToStaticMarkup (sin hooks de datos).
+export function TaskCardBoard({
   task, dragging, readOnly, onDragStart, onDragEnd, onMove,
 }: {
   task: BoardTask; dragging: boolean; readOnly: boolean;
@@ -183,7 +184,7 @@ function TaskCardBoard({
       <div className="mt-2.5 flex items-center gap-2 text-[11px] text-[var(--text-muted)] relative z-10 pointer-events-none whitespace-nowrap">
         <span title={`Prioridad ${PRIORITY_LABEL[task.priority] ?? task.priority}`} className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.normal}`} />
         {task.estimate != null && <span className="tabular shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700">{task.estimate} pts</span>}
-        {task.dueDate && <span className={`tabular shrink-0 ${overdue ? 'text-red-700 font-medium' : ''}`}>{formatDateRD(task.dueDate)}</span>}
+        {task.dueDate && <span className={`tabular shrink-0 ${overdue ? 'text-red-700 font-medium' : ''}`}>{formatDateRD(task.dueDate)}{task.status !== 'completada' && ` · ${relativeDueRD(task.dueDate)}`}</span>}
         <span className="ml-auto w-5 h-5 shrink-0 rounded-full bg-blue-100 text-blue-700 text-[9px] font-semibold flex items-center justify-center" title={task.responsibleName}>{initials(task.responsibleName)}</span>
       </div>
 
