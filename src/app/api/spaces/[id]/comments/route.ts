@@ -4,9 +4,13 @@ import { comments, persons } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
 import { stripHtml } from '@/lib/sanitize';
+import { logAudit } from '@/lib/audit';
 import { eq, desc, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireProjectAccess } from '@/lib/project-access';
+
+/** Motivo de auditoría cuando un admin edita o borra un comentario ajeno. */
+const MODERATED_REASON = 'Moderado por admin';
 
 export async function GET(
   _req: NextRequest,
@@ -76,10 +80,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!existing) return error('Comentario no encontrado', 404);
     if (existing.authorId !== session.id && session.role !== 'admin') return error('Sin permisos', 403);
 
-    const [updated] = await db.update(comments)
-      .set({ content: stripHtml(content), editedAt: new Date() })
-      .where(and(eq(comments.id, commentId), eq(comments.spaceId, id)))
-      .returning();
+    const sanitized = stripHtml(content);
+    const moderated = existing.authorId !== session.id;
+
+    const updated = await db.transaction(async tx => {
+      const [row] = await tx.update(comments)
+        .set({ content: sanitized, editedAt: new Date() })
+        .where(and(eq(comments.id, commentId), eq(comments.spaceId, id)))
+        .returning();
+
+      await logAudit({
+        actorId: session.id,
+        action: 'comment_edited',
+        spaceId: id,
+        previousValue: existing.content,
+        newValue: sanitized,
+        ...(moderated ? { reason: MODERATED_REASON } : {}),
+      }, tx);
+      return row;
+    });
+
     return success(updated);
   } catch (err) {
     return handleError(err);
@@ -98,7 +118,20 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!existing) return error('Comentario no encontrado', 404);
     if (existing.authorId !== session.id && session.role !== 'admin') return error('Sin permisos', 403);
 
-    await db.delete(comments).where(and(eq(comments.id, commentId), eq(comments.spaceId, id)));
+    const moderated = existing.authorId !== session.id;
+
+    await db.transaction(async tx => {
+      await tx.delete(comments).where(and(eq(comments.id, commentId), eq(comments.spaceId, id)));
+
+      await logAudit({
+        actorId: session.id,
+        action: 'comment_deleted',
+        spaceId: id,
+        previousValue: existing.content,
+        ...(moderated ? { reason: MODERATED_REASON } : {}),
+      }, tx);
+    });
+
     return success({ deleted: true });
   } catch (err) {
     return handleError(err);
