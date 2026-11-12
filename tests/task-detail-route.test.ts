@@ -132,3 +132,54 @@ describe('GET /api/tasks/[id]: redacción de la auditoría de comentarios', () =
     expect(audit).toEqual(auditRows.map((e) => ({ ...e, redacted: false })));
   });
 });
+
+const chainedAuditRows = [
+  { id: 'b1', action: 'comment_deleted', previousValue: 'secreto final', newValue: null, reason: null, timestamp: '2026-11-12T10:00:00.000Z', actorName: 'Ana' },
+  { id: 'b2', action: 'comment_edited', previousValue: 'secreto inicial', newValue: 'secreto final', reason: null, timestamp: '2026-11-12T09:00:00.000Z', actorName: 'Ana' },
+  { id: 'b3', action: 'comment_edited', previousValue: 'vivo antes', newValue: 'vivo después', reason: null, timestamp: '2026-11-12T08:00:00.000Z', actorName: 'Luis' },
+];
+
+describe('GET /api/tasks/[id]: redacción de ediciones del autor de comentarios luego borrados', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requireTaskAccess.mockResolvedValue({
+      id: taskId,
+      spaceId: crypto.randomUUID(),
+      responsibleId: userId,
+      status: 'en_proceso',
+      dueDateOriginal: null,
+    });
+    // Mismo orden de las 8 consultas del GET que setupDb().
+    queueResults([
+      [{ name: 'Ana', email: 'ana@example.com' }],
+      [{ name: 'Proyecto' }],
+      [],
+      [],
+      [],
+      structuredClone(chainedAuditRows),
+      [],
+      [],
+    ]);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(['miembro', 'observador'])('%s no ve el texto de las ediciones previas al borrado', async (role) => {
+    const audit = await getAudit(role);
+    expect(audit.map((e) => e.id)).toEqual(['b1', 'b2', 'b3']);
+    for (const entry of audit.slice(0, 2)) {
+      expect(entry.previousValue).toBeNull();
+      expect(entry.newValue).toBeNull();
+      expect(entry.redacted).toBe(true);
+    }
+    expect(audit[2]).toEqual({ ...chainedAuditRows[2], redacted: false });
+    expect(JSON.stringify(audit)).not.toContain('secreto');
+  });
+
+  it('admin recibe toda la cadena intacta', async () => {
+    const audit = await getAudit('admin');
+    expect(audit).toEqual(chainedAuditRows.map((e) => ({ ...e, redacted: false })));
+  });
+});
