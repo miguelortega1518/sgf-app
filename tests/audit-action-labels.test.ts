@@ -24,6 +24,10 @@ const KNOWN_ACTIONS = [
   'space_created',
   'space_updated',
   'milestone_date_changed',
+  'milestone_created',
+  'milestone_deleted',
+  'milestone_renamed',
+  'milestone_completion_changed',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -124,6 +128,18 @@ describe('acciones de auditoría', () => {
     expect(AUDIT_ACTION_LABEL.milestone_date_changed).toBe('Cambio de fecha de hito');
     expect(auditActionLabel('milestone_date_changed')).toBe('Cambio de fecha de hito');
     expect(auditActionLabel('milestone_date_changed')).not.toBe(auditActionLabel('accion_inexistente'));
+  });
+
+  it.each([
+    ['milestone_created', 'Hito creado', 'bg-sky-100 text-sky-700'],
+    ['milestone_deleted', 'Hito eliminado', 'bg-red-100 text-red-700'],
+    ['milestone_renamed', 'Hito renombrado', 'bg-amber-100 text-amber-700'],
+    ['milestone_completion_changed', 'Cambio de estado de hito', 'bg-green-100 text-green-700'],
+  ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
+    expect(AUDIT_ACTION_LABEL[action]).toBe(label);
+    expect(auditActionLabel(action)).toBe(label);
+    expect(auditActionLabel(action)).not.toBe(auditActionLabel('accion_inexistente'));
+    expect(auditActionChip(action)).toBe(chip);
   });
 
   it('las acciones heredadas siguen legibles', () => {
