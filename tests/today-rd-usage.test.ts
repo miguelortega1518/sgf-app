@@ -72,6 +72,12 @@ describe('el código usa la fecha RD', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('scripts/seed.ts calcula las fechas en hora RD', () => {
+    const src = readFileSync(resolve(ROOT, 'scripts/seed.ts'), 'utf8');
+    expect(src).not.toContain(UTC_DATE);
+    expect(src).toMatch(/import \{[^}]*\baddDaysRD\b[^}]*\} from '\.\.\/src\/lib\/date-utils'/);
+  });
+
   it('kanban-board no define un isOverdue local', () => {
     const src = readFileSync(resolve(__dirname, '..', 'src/components/tasks/kanban-board.tsx'), 'utf8');
     expect(src).not.toMatch(/function isOverdue\s*\(/);
