@@ -38,6 +38,15 @@ Los nombres internos NO cambian aunque cambie la etiqueta visible (`DECISIONES.m
 `en_revision` → "En code review", `completada` → "Hecho".
 
 ## Núcleo (siempre con aprobación humana)
-Autenticación y sesión, permisos y acceso a proyectos, rate limiting, auditoría, esquema y
-migraciones, scripts de datos, despliegue y dependencias. La lista exacta está en `core_paths` de
-`factory.toml`.
+Autenticación y sesión, permisos y acceso a proyectos, rate limiting, el **mecanismo** de auditoría,
+esquema y migraciones, scripts de datos, despliegue y dependencias. La lista exacta está en
+`core_paths` de `factory.toml`: es la fuente de verdad sobre qué es núcleo.
+
+Qué NO es núcleo, aunque lo parezca:
+- **Usar la auditoría** no es tocar su núcleo. Añadir una llamada a `logAudit` en una ruta que muta
+  datos, dentro de su `db.transaction`, con su etiqueta en `labels.ts`, es exactamente lo que pide
+  la convención ("deja rastro en la auditoría en toda mutación") y se trata como cualquier otro
+  cambio. Es núcleo sólo si cambia el mecanismo: `src/lib/audit.ts`, la tabla `audit_log` o su
+  esquema, o la ruta de la Bitácora `src/app/api/audit-log/**`.
+- Lo mismo con los permisos: llamar a `requireSession`, `requireRole` o a las comprobaciones de
+  `src/lib/permissions.ts` desde una ruta no es núcleo; cambiar esos módulos sí.
