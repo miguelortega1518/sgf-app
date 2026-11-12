@@ -6,6 +6,7 @@ import { canChangeDueDate } from '@/lib/permissions';
 import { updateTaskSchema, updateTaskStatusSchema } from '@/lib/schemas/task';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
+import { redactTaskAuditForRole } from '@/lib/audit-redaction';
 import { notify } from '@/lib/notify';
 import { isOverdue } from '@/lib/date-utils';
 import { requireTaskAccess, requireProjectAccess, validateTaskReferences } from '@/lib/project-access';
@@ -94,7 +95,7 @@ export async function GET(
       subtasks: taskSubtasks,
       evidence: taskEvidence,
       comments: taskComments,
-      audit: taskAudit,
+      audit: redactTaskAuditForRole(taskAudit, session.role),
       dependencies: { predecessors, successors },
     });
   } catch (err) {

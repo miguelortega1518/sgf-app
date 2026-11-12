@@ -9,9 +9,7 @@ import { logAudit } from '@/lib/audit';
 import { requireTaskAccess, assertValidUuid } from '@/lib/project-access';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
-
-/** Motivo de auditoría cuando un admin edita o borra un comentario ajeno. */
-const MODERATED_REASON = 'Moderado por admin';
+import { COMMENT_MODERATED_REASON } from '@/lib/labels';
 
 const addCommentSchema = z.object({
   content: z.string().transform(stripHtml).pipe(z.string().trim().min(1, 'Contenido requerido').max(2000)),
@@ -90,7 +88,7 @@ export async function PATCH(
         taskId,
         previousValue: comment.content,
         newValue: sanitized,
-        ...(moderated ? { reason: MODERATED_REASON } : {}),
+        ...(moderated ? { reason: COMMENT_MODERATED_REASON } : {}),
       }, tx);
       return row;
     });
@@ -136,7 +134,7 @@ export async function DELETE(
         action: 'comment_deleted',
         taskId,
         previousValue: comment.content,
-        ...(moderated ? { reason: MODERATED_REASON } : {}),
+        ...(moderated ? { reason: COMMENT_MODERATED_REASON } : {}),
       }, tx);
     });
 

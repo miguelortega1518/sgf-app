@@ -137,6 +137,25 @@ export function auditActionLabel(action: string): string {
   return Object.hasOwn(AUDIT_ACTION_LABEL, action) ? AUDIT_ACTION_LABEL[action] : AUDIT_ACTION_FALLBACK;
 }
 
+/**
+ * Motivo que guardan las rutas de comentarios cuando un admin edita o borra un
+ * comentario ajeno. La redacción de la auditoría (src/lib/audit-redaction.ts)
+ * depende de este texto exacto: no cambiarlo sin migrar las filas antiguas.
+ */
+export const COMMENT_MODERATED_REASON = 'Moderado por admin';
+
+/**
+ * Etiqueta de un registro de comentario que llega redactado (sin texto) a quien
+ * no es admin. Para cualquier otro caso cae en auditActionLabel.
+ */
+export function redactedCommentLabel(action: string, reason: string | null): string {
+  const moderated = reason === COMMENT_MODERATED_REASON;
+  if (action === 'comment_deleted' && moderated) return 'Comentario eliminado por moderación';
+  if (action === 'comment_deleted') return 'Comentario eliminado';
+  if (action === 'comment_edited' && moderated) return 'Comentario editado por moderación';
+  return auditActionLabel(action);
+}
+
 /** Clases del chip de una acción de auditoría (gris por defecto). */
 export function auditActionChip(action: string): string {
   return Object.hasOwn(AUDIT_ACTION_CHIP, action) ? AUDIT_ACTION_CHIP[action] : AUDIT_CHIP_FALLBACK;

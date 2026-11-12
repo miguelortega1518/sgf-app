@@ -199,6 +199,13 @@ describe('las vistas usan el vocabulario de labels.ts', () => {
     expect(src).not.toContain('|| entry.action');
   });
 
+  it('la Actividad de la tarea usa redactedCommentLabel para los registros redactados', () => {
+    const src = readFileSync(resolve(ROOT, 'src/app/(app)/tareas/[id]/page.tsx'), 'utf8');
+    expect(src).toMatch(/import\s*\{[^}]*\bredactedCommentLabel\b[^}]*\}\s*from '@\/lib\/labels'/);
+    expect(src).toContain('redactedCommentLabel(entry.action, entry.reason)');
+    expect(src).toContain('redacted={entry.redacted}');
+  });
+
   it('la Bitácora importa auditActionChip desde @/lib/labels', () => {
     const src = readFileSync(resolve(ROOT, 'src/app/(app)/admin/bitacora/page.tsx'), 'utf8');
     expect(src).toMatch(/import\s*\{[^}]*\bauditActionChip\b[^}]*\}\s*from '@\/lib\/labels'/);

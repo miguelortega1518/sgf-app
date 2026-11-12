@@ -2,6 +2,7 @@ import { test, expect } from 'vitest';
 import {
   taskKey, prLabel, initials, AREA_LABEL, STATUS_ORDER, STATUS_LABEL,
   DELAY_REASON_ORDER, DELAY_REASON_LABEL, delayReasonLabel,
+  COMMENT_MODERATED_REASON, redactedCommentLabel, auditActionLabel,
 } from '../src/lib/labels';
 import { createTaskSchema, updateTaskSchema, updateTaskStatusSchema } from '../src/lib/schemas/task';
 
@@ -84,6 +85,24 @@ test('createTaskSchema rechaza datos inválidos', () => {
   expect(() => createTaskSchema.parse({ ...base, branch: 'rama con espacios' })).toThrow();
   expect(() => createTaskSchema.parse({ ...base, prUrl: 'javascript:alert(1)' })).toThrow();
   expect(() => createTaskSchema.parse({ ...base, labels: Array(9).fill('a') })).toThrow();
+});
+
+test('COMMENT_MODERATED_REASON es el texto guardado por las rutas de comentarios', () => {
+  expect(COMMENT_MODERATED_REASON).toBe('Moderado por admin');
+});
+
+test('redactedCommentLabel describe el comentario redactado sin su texto', () => {
+  expect(redactedCommentLabel('comment_deleted', null)).toBe('Comentario eliminado');
+  expect(redactedCommentLabel('comment_deleted', 'Moderado por admin')).toBe('Comentario eliminado por moderación');
+  expect(redactedCommentLabel('comment_edited', 'Moderado por admin')).toBe('Comentario editado por moderación');
+});
+
+test('redactedCommentLabel cae en auditActionLabel para otros casos', () => {
+  expect(redactedCommentLabel('status_changed', null)).toBe(auditActionLabel('status_changed'));
+  expect(redactedCommentLabel('comment_edited', null)).toBe(auditActionLabel('comment_edited'));
+  for (const k of ['constructor', '__proto__', 'toString']) {
+    expect(redactedCommentLabel(k, null)).toBe('Acción registrada');
+  }
 });
 
 test('updateTaskSchema permite vaciar rama y PR con cadena vacía', () => {

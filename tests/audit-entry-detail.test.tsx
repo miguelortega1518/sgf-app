@@ -100,4 +100,20 @@ describe('TaskAuditDetail', () => {
     expect(html).toContain('&lt;script&gt;');
     expect(html).not.toContain('<script>');
   });
+
+  it('renders nothing when the entry is redacted, even with values and reason', () => {
+    const html = renderToStaticMarkup(createElement(TaskAuditDetail, {
+      previousValue: 'texto secreto', newValue: 'otro texto', reason: 'Moderado por admin', redacted: true,
+    }));
+    expect(html).toBe('');
+    expect(html).not.toContain('texto secreto');
+    expect(html).not.toContain('Moderado por admin');
+  });
+
+  it('keeps the current render with redacted:false', () => {
+    const html = renderToStaticMarkup(createElement(TaskAuditDetail, {
+      previousValue: 'a', newValue: 'b', reason: null, redacted: false,
+    }));
+    expect(html).toBe('<span class="text-gray-400 ml-1">(a → b)</span>');
+  });
 });

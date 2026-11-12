@@ -8,9 +8,7 @@ import { logAudit } from '@/lib/audit';
 import { eq, desc, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireProjectAccess } from '@/lib/project-access';
-
-/** Motivo de auditoría cuando un admin edita o borra un comentario ajeno. */
-const MODERATED_REASON = 'Moderado por admin';
+import { COMMENT_MODERATED_REASON } from '@/lib/labels';
 
 export async function GET(
   _req: NextRequest,
@@ -95,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         spaceId: id,
         previousValue: existing.content,
         newValue: sanitized,
-        ...(moderated ? { reason: MODERATED_REASON } : {}),
+        ...(moderated ? { reason: COMMENT_MODERATED_REASON } : {}),
       }, tx);
       return row;
     });
@@ -128,7 +126,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         action: 'comment_deleted',
         spaceId: id,
         previousValue: existing.content,
-        ...(moderated ? { reason: MODERATED_REASON } : {}),
+        ...(moderated ? { reason: COMMENT_MODERATED_REASON } : {}),
       }, tx);
     });
 
