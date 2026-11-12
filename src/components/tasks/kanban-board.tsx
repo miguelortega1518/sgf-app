@@ -157,6 +157,7 @@ export function TaskCardBoard({
 }) {
   const kind = (task.kind ?? 'feature') as TaskKind;
   const overdue = isOverdue(task.dueDate, task.status);
+  const relativeDue = task.dueDate && task.status !== 'completada' ? relativeDueRD(task.dueDate) : null;
   return (
     <article
       draggable={!readOnly}
@@ -184,7 +185,9 @@ export function TaskCardBoard({
       <div className="mt-2.5 flex items-center gap-2 text-[11px] text-[var(--text-muted)] relative z-10 pointer-events-none whitespace-nowrap">
         <span title={`Prioridad ${PRIORITY_LABEL[task.priority] ?? task.priority}`} className={`w-2 h-2 rounded-full shrink-0 ${PRIORITY_DOT[task.priority] ?? PRIORITY_DOT.normal}`} />
         {task.estimate != null && <span className="tabular shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700">{task.estimate} pts</span>}
-        {task.dueDate && <span className={`tabular shrink-0 ${overdue ? 'text-red-700 font-medium' : ''}`}>{formatDateRD(task.dueDate)}{task.status !== 'completada' && ` · ${relativeDueRD(task.dueDate)}`}</span>}
+        {task.dueDate && <span className={`tabular shrink-0 ${overdue ? 'text-red-700 font-medium' : ''}`}>{formatDateRD(task.dueDate)}</span>}
+        {/* El texto relativo cede espacio (min-w-0 + truncate) para que el avatar no se salga de la tarjeta. */}
+        {relativeDue && <span className={`-ml-1 min-w-0 truncate ${overdue ? 'text-red-700 font-medium' : ''}`} title={relativeDue}>· {relativeDue}</span>}
         <span className="ml-auto w-5 h-5 shrink-0 rounded-full bg-blue-100 text-blue-700 text-[9px] font-semibold flex items-center justify-center" title={task.responsibleName}>{initials(task.responsibleName)}</span>
       </div>
 
