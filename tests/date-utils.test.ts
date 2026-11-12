@@ -228,6 +228,16 @@ describe('addDaysRD a las 21:00 RD', () => {
     expect(addDaysRD(-1)).toBe('2028-02-29');
   });
 
+  // Contrato del que depende scripts/seed.ts (iso = addDaysRD): una tarea con
+  // due: 1 debe mostrarse como 'Mañana' también entre las 20:00 y las 24:00 RD.
+  it('addDaysRD(1) es Mañana y addDaysRD(2) es en 2 días a las 21:00 RD', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-13T01:00:00Z'));
+    expect(addDaysRD(1)).toBe('2026-11-13');
+    expect(relativeDueRD(addDaysRD(1))).toBe('Mañana');
+    expect(relativeDueRD(addDaysRD(2))).toBe('en 2 días');
+  });
+
   it.each(['Asia/Tokyo', 'Pacific/Kiritimati'])('no depende de la TZ del proceso (%s)', (tz) => {
     process.env.TZ = tz;
     vi.useFakeTimers();

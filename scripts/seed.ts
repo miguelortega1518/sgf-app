@@ -3,16 +3,15 @@ import postgres from 'postgres';
 import { hashSync } from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import * as schema from '../src/lib/db/schema';
+import { addDaysRD } from '../src/lib/date-utils';
 
 const connectionString = process.env.DATABASE_URL!;
 const client = postgres(connectionString, { max: 1 });
 const db = drizzle(client, { schema });
 
-const iso = (offsetDays: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
-};
+// Fecha de calendario en hora RD (hoy RD + offsetDays), en formato YYYY-MM-DD.
+// No usar la fecha UTC: entre las 20:00 y las 24:00 RD adelantaría un día.
+const iso = (offsetDays: number): string => addDaysRD(offsetDays);
 
 async function seed() {
   console.log('Cargando datos de ejemplo de Forja...');
