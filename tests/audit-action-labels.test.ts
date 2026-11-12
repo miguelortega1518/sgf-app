@@ -21,6 +21,7 @@ const KNOWN_ACTIONS = [
   'evidence_removed',
   'space_created',
   'space_updated',
+  'milestone_date_changed',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -117,6 +118,12 @@ describe('acciones de auditoría', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('milestone_date_changed tiene etiqueta propia', () => {
+    expect(AUDIT_ACTION_LABEL.milestone_date_changed).toBe('Cambio de fecha de hito');
+    expect(auditActionLabel('milestone_date_changed')).toBe('Cambio de fecha de hito');
+    expect(auditActionLabel('milestone_date_changed')).not.toBe(auditActionLabel('accion_inexistente'));
+  });
+
   it('las acciones heredadas siguen legibles', () => {
     expect(AUDIT_ACTION_LABEL.space_health_updated).toBe('Actualización de salud');
     expect(AUDIT_ACTION_LABEL.space_closed).toBe('Proyecto cerrado');
@@ -145,6 +152,7 @@ describe('auditActionLabel / auditActionChip', () => {
     expect(auditActionChip('responsible_changed')).toBe('bg-purple-100 text-purple-700');
     expect(auditActionChip('task_approved')).toBe('bg-green-100 text-green-700');
     expect(auditActionChip('task_approved_admin_override')).toBe('bg-green-100 text-green-700');
+    expect(auditActionChip('milestone_date_changed')).toBe('bg-amber-100 text-amber-700');
     for (const a of ['constructor', '__proto__', 'toString', 'x']) {
       expect(auditActionChip(a)).toBe('bg-gray-100 text-gray-600');
     }
