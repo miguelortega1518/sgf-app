@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { spaceTemplates, taskTemplates, companies, persons } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth';
 import { success, error, handleError } from '@/lib/api-utils';
+import { clampTemplateName } from '@/lib/schemas/template';
 import { eq, ilike } from 'drizzle-orm';
 import * as XLSX from 'xlsx';
 
@@ -12,7 +13,8 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
-    const templateName = (formData.get('templateName') as string) || 'Cierre mensual (importado)';
+    const templateName =
+      clampTemplateName((formData.get('templateName') as string | null) ?? '') || 'Cierre mensual (importado)';
     const targetCycleDays = parseInt(formData.get('targetCycleDays') as string) || 10;
 
     if (!file) return error('Archivo requerido', 400);
@@ -53,10 +55,10 @@ export async function POST(req: NextRequest) {
       }
 
       for (const row of rows) {
-        const taskName = String(
+        const taskName = clampTemplateName(String(
           row['Actividad'] || row['ACTIVIDAD'] || row['Tarea'] || row['TAREA'] ||
           row['actividad'] || row['tarea'] || Object.values(row)[0] || ''
-        ).trim();
+        ));
 
         if (!taskName || taskName === '') continue;
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Plus, Trash2, Play, ArrowLeft } from 'lucide-react';
 import { lastDayOfPreviousMonth } from '@/lib/date-utils';
+import { TEMPLATE_NAME_MAX } from '@/lib/schemas/template';
 
 type TaskTemplateRow = {
   id: string;
@@ -262,6 +263,7 @@ function AddTaskDialog({
               type="text"
               value={taskName}
               onChange={e => setTaskName(e.target.value)}
+              maxLength={TEMPLATE_NAME_MAX}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
               required
             />

@@ -104,7 +104,9 @@ import { GET as GET_TEMPLATE, PATCH as PATCH_TEMPLATE } from '../src/app/api/tem
 import { POST as POST_TASK } from '../src/app/api/templates/[id]/tasks/route';
 import { POST as DUPLICATE } from '../src/app/api/templates/[id]/duplicate/route';
 import { PATCH as PATCH_TASK, DELETE as DELETE_TASK } from '../src/app/api/templates/[id]/tasks/[taskId]/route';
+import { POST as POST_TEMPLATE } from '../src/app/api/templates/route';
 import { logger } from '../src/lib/logger';
+import { TEMPLATE_NAME_MAX, TEMPLATE_TEXT_MAX } from '../src/lib/schemas/template';
 
 const templateId = crypto.randomUUID();
 const taskId = crypto.randomUUID();
@@ -125,7 +127,17 @@ function expectNoDbCalls() {
   expect(mocks.update).not.toHaveBeenCalled();
   expect(mocks.delete).not.toHaveBeenCalled();
   expect(mocks.transaction).not.toHaveBeenCalled();
+  expect(mocks.txSelect).not.toHaveBeenCalled();
+  expect(mocks.txInsert).not.toHaveBeenCalled();
+  expect(mocks.txUpdate).not.toHaveBeenCalled();
+  expect(mocks.txDelete).not.toHaveBeenCalled();
   expect(mocks.logAudit).not.toHaveBeenCalled();
+}
+
+async function expectTooLong(response: Response, max: number) {
+  expect(response.status).toBe(400);
+  const body = await response.json();
+  expect(body.error).toContain(`no puede superar ${max} caracteres`);
 }
 
 async function expectInvalidId(response: Response) {
@@ -269,6 +281,22 @@ describe('/api/templates/[id]/**', () => {
 
       expect(response.status).toBe(403);
       expectNoDbCalls();
+    });
+
+    it('devuelve 400 con taskName demasiado largo sin tocar la BD ni auditar', async () => {
+      const response = await PATCH_TASK(req({ taskName: 'a'.repeat(TEMPLATE_NAME_MAX + 1) }), ctx());
+
+      await expectTooLong(response, TEMPLATE_NAME_MAX);
+      expectNoDbCalls();
+      expect(loggerError).not.toHaveBeenCalled();
+    });
+
+    it('devuelve 400 con instructions demasiado largas sin tocar la BD ni auditar', async () => {
+      const response = await PATCH_TASK(req({ instructions: 'a'.repeat(TEMPLATE_TEXT_MAX + 1) }), ctx());
+
+      await expectTooLong(response, TEMPLATE_TEXT_MAX);
+      expectNoDbCalls();
+      expect(loggerError).not.toHaveBeenCalled();
     });
   });
 
@@ -661,6 +689,17 @@ describe('/api/templates/[id]/**', () => {
       expectNoDbCalls();
     });
 
+    it('PATCH con name demasiado largo devuelve 400 sin tocar la BD ni auditar', async () => {
+      const response = await PATCH_TEMPLATE(
+        jsonRequest(`/api/templates/${templateId}`, 'PATCH', { name: 'a'.repeat(TEMPLATE_NAME_MAX + 1) }),
+        ctx(templateId),
+      );
+
+      await expectTooLong(response, TEMPLATE_NAME_MAX);
+      expectNoDbCalls();
+      expect(loggerError).not.toHaveBeenCalled();
+    });
+
     it('GET con id inválido y sin permisos devuelve 403', async () => {
       mocks.requireRole.mockRejectedValue(new Error('FORBIDDEN'));
 
@@ -738,6 +777,60 @@ describe('/api/templates/[id]/**', () => {
 
       expect(response.status).toBe(403);
       expectNoDbCalls();
+    });
+
+    it('con taskName demasiado largo devuelve 400 sin insertar ni auditar', async () => {
+      const response = await POST_TASK(
+        jsonRequest(`/api/templates/${templateId}/tasks`, 'POST', {
+          ...validBody,
+          taskName: 'a'.repeat(TEMPLATE_NAME_MAX + 1),
+        }),
+        ctx(templateId),
+      );
+
+      await expectTooLong(response, TEMPLATE_NAME_MAX);
+      expectNoDbCalls();
+      expect(loggerError).not.toHaveBeenCalled();
+    });
+
+    it('con doneDefinition demasiado larga devuelve 400 sin insertar ni auditar', async () => {
+      const response = await POST_TASK(
+        jsonRequest(`/api/templates/${templateId}/tasks`, 'POST', {
+          ...validBody,
+          doneDefinition: 'a'.repeat(TEMPLATE_TEXT_MAX + 1),
+        }),
+        ctx(templateId),
+      );
+
+      await expectTooLong(response, TEMPLATE_TEXT_MAX);
+      expectNoDbCalls();
+      expect(loggerError).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /api/templates', () => {
+    const validBody = { name: 'Cierre', periodicity: 'mensual', targetCycleDays: 10 };
+
+    it('con name demasiado largo devuelve 400 sin insertar ni auditar', async () => {
+      const response = await POST_TEMPLATE(
+        jsonRequest('/api/templates', 'POST', { ...validBody, name: 'a'.repeat(TEMPLATE_NAME_MAX + 1) }),
+      );
+
+      await expectTooLong(response, TEMPLATE_NAME_MAX);
+      expectNoDbCalls();
+      expect(loggerError).not.toHaveBeenCalled();
+    });
+
+    it('con un body normal inserta la plantilla y responde 201', async () => {
+      const row = { id: templateId, ...validBody, autoGenerate: false, active: true };
+      const chain = makeChain(() => [row], ['values', 'returning']);
+      mocks.insert.mockReturnValue(chain);
+
+      const response = await POST_TEMPLATE(jsonRequest('/api/templates', 'POST', validBody));
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual(row);
+      expect(chain.values).toHaveBeenCalledWith({ ...validBody, autoGenerate: false });
     });
   });
 });
