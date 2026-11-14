@@ -5,6 +5,13 @@ export const TEMPLATE_NAME_MAX = 200;
 /** Longitud máxima de los textos libres de una tarea de plantilla. */
 export const TEMPLATE_TEXT_MAX = 5000;
 
+/** Tamaño máximo (bytes) del archivo Excel aceptado por POST /api/templates/import-excel. */
+export const IMPORT_EXCEL_MAX_BYTES = 5 * 1024 * 1024;
+/** Número máximo de hojas del libro que se importa. */
+export const IMPORT_EXCEL_MAX_SHEETS = 50;
+/** Número máximo de filas de datos, sumando todas las hojas del libro. */
+export const IMPORT_EXCEL_MAX_ROWS = 2000;
+
 const NAME_TOO_LONG = `El nombre no puede superar ${TEMPLATE_NAME_MAX} caracteres`;
 const textTooLong = (label: string) => `${label} no puede superar ${TEMPLATE_TEXT_MAX} caracteres`;
 
