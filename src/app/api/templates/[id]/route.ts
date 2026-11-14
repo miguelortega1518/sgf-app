@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { spaceTemplates, taskTemplates, templateDependencies, companies, persons } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
+import { describeTemplateChanges } from '@/lib/template-audit';
 import { assertValidUuid } from '@/lib/project-access';
 import { updateSpaceTemplateSchema } from '@/lib/schemas/template';
 import { success, error, handleError } from '@/lib/api-utils';
@@ -70,17 +72,38 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireRole('admin');
+    const session = await requireRole('admin');
     const { id } = await params;
     assertValidUuid(id, 'ID de plantilla');
     const body = await req.json();
     const input = updateSpaceTemplateSchema.parse(body);
 
-    const [updated] = await db
-      .update(spaceTemplates)
-      .set(input)
-      .where(eq(spaceTemplates.id, id))
-      .returning();
+    const updated = await db.transaction(async tx => {
+      const [current] = await tx
+        .select()
+        .from(spaceTemplates)
+        .where(eq(spaceTemplates.id, id))
+        .limit(1)
+        .for('update');
+      if (!current) return null;
+
+      const [row] = await tx
+        .update(spaceTemplates)
+        .set(input)
+        .where(eq(spaceTemplates.id, id))
+        .returning();
+
+      const diff = describeTemplateChanges(current, input);
+      if (diff) {
+        await logAudit({
+          actorId: session.id,
+          action: 'template_updated',
+          previousValue: diff.previousValue,
+          newValue: diff.newValue,
+        }, tx);
+      }
+      return row;
+    });
 
     if (!updated) return error('Plantilla no encontrada', 404);
 

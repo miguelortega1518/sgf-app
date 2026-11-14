@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { spaceTemplates, taskTemplates, templateDependencies } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 import { assertValidUuid } from '@/lib/project-access';
 import { success, error, handleError } from '@/lib/api-utils';
 import { eq, inArray } from 'drizzle-orm';
@@ -11,7 +12,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireRole('admin');
+    const session = await requireRole('admin');
     const { id } = await params;
     assertValidUuid(id, 'ID de plantilla');
 
@@ -72,6 +73,12 @@ export async function POST(
         }
       }
 
+      await logAudit({
+        actorId: session.id,
+        action: 'template_duplicated',
+        previousValue: source.name,
+        newValue: created.name,
+      }, tx);
       return created;
     });
 

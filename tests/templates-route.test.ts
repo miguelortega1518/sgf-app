@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   txInsert: vi.fn(),
   txDelete: vi.fn(),
   txUpdate: vi.fn(),
+  logAudit: vi.fn(),
   tx: {} as Record<string, unknown>,
 }));
 mocks.tx.select = mocks.txSelect;
@@ -44,6 +45,7 @@ mocks.tx.update = mocks.txUpdate;
 vi.mock('@/lib/auth', () => ({
   requireRole: mocks.requireRole,
 }));
+vi.mock('@/lib/audit', () => ({ logAudit: mocks.logAudit }));
 vi.mock('@/lib/db', () => ({
   db: {
     select: mocks.select,
@@ -58,6 +60,10 @@ vi.mock('@/lib/db/schema', () => ({
     __table: 'spaceTemplates',
     id: 'id',
     name: 'name',
+    periodicity: 'periodicity',
+    targetCycleDays: 'targetCycleDays',
+    autoGenerate: 'autoGenerate',
+    active: 'active',
   },
   taskTemplates: {
     __table: 'taskTemplates',
@@ -119,6 +125,7 @@ function expectNoDbCalls() {
   expect(mocks.update).not.toHaveBeenCalled();
   expect(mocks.delete).not.toHaveBeenCalled();
   expect(mocks.transaction).not.toHaveBeenCalled();
+  expect(mocks.logAudit).not.toHaveBeenCalled();
 }
 
 async function expectInvalidId(response: Response) {
@@ -149,33 +156,83 @@ describe('/api/templates/[id]/**', () => {
       return jsonRequest(`/api/templates/${templateId}/tasks/${taskId}`, 'PATCH', body);
     }
 
+    const ownTask = {
+      taskName: 'A',
+      templateName: 'Cierre',
+      order: 1,
+      businessDayLimit: 3,
+      requiresApproval: false,
+      requiresEvidence: false,
+      applies: true,
+      instructions: null,
+      doneDefinition: null,
+      notApplicableReason: null,
+      companyId: null,
+      defaultResponsibleId: null,
+      alternateId: null,
+      reviewerId: null,
+    };
+    const ownTaskFilter = {
+      operator: 'and',
+      conditions: [
+        { operator: 'eq', left: 'id', right: taskId },
+        { operator: 'eq', left: 'spaceTemplateId', right: templateId },
+      ],
+    };
+
     it('devuelve 404 si la tarea no pertenece a la plantilla y filtra por plantilla', async () => {
-      const chain = makeChain(() => [], ['set', 'where', 'returning']);
-      mocks.update.mockReturnValue(chain);
+      const selectChain = makeChain(() => [], ['from', 'innerJoin', 'where', 'limit', 'for']);
+      mocks.txSelect.mockReturnValue(selectChain);
 
       const response = await PATCH_TASK(req(), ctx());
 
       expect(response.status).toBe(404);
       expect(await response.json()).toEqual({ error: 'Tarea de plantilla no encontrada' });
-      expect(chain.where).toHaveBeenCalledWith({
-        operator: 'and',
-        conditions: [
-          { operator: 'eq', left: 'id', right: taskId },
-          { operator: 'eq', left: 'spaceTemplateId', right: templateId },
-        ],
-      });
+      expect(mocks.transaction).toHaveBeenCalledTimes(1);
+      expect(selectChain.where).toHaveBeenCalledWith(ownTaskFilter);
+      expect(selectChain.for).toHaveBeenCalledWith('update');
+      expect(mocks.txUpdate).not.toHaveBeenCalled();
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.logAudit).not.toHaveBeenCalled();
     });
 
-    it('actualiza la tarea propia y devuelve la fila', async () => {
-      const row = { id: taskId, spaceTemplateId: templateId, taskName: 'Nuevo nombre' };
-      const chain = makeChain(() => [row], ['set', 'where', 'returning']);
-      mocks.update.mockReturnValue(chain);
+    it('actualiza la tarea propia, audita el cambio y devuelve la fila', async () => {
+      const row = { id: taskId, spaceTemplateId: templateId, taskName: 'B' };
+      const selectChain = makeChain(() => [ownTask], ['from', 'innerJoin', 'where', 'limit', 'for']);
+      mocks.txSelect.mockReturnValue(selectChain);
+      const updateChain = makeChain(() => [row], ['set', 'where', 'returning']);
+      mocks.txUpdate.mockReturnValue(updateChain);
 
-      const response = await PATCH_TASK(req(), ctx());
+      const response = await PATCH_TASK(req({ taskName: 'B' }), ctx());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual(row);
-      expect(chain.set).toHaveBeenCalledWith({ taskName: 'Nuevo nombre' });
+      expect(mocks.transaction).toHaveBeenCalledTimes(1);
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(updateChain.set).toHaveBeenCalledWith({ taskName: 'B' });
+      expect(updateChain.where).toHaveBeenCalledWith(ownTaskFilter);
+      expect(selectChain.for).toHaveBeenCalledWith('update');
+      expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        {
+          actorId: adminId,
+          action: 'template_task_updated',
+          previousValue: 'Cierre › A: Nombre: A',
+          newValue: 'Cierre › A: Nombre: B',
+        },
+        mocks.tx,
+      );
+    });
+
+    it('no audita si el body no cambia nada', async () => {
+      const row = { id: taskId, spaceTemplateId: templateId, taskName: 'A' };
+      mocks.txSelect.mockReturnValue(makeChain(() => [ownTask], ['from', 'innerJoin', 'where', 'limit', 'for']));
+      mocks.txUpdate.mockReturnValue(makeChain(() => [row], ['set', 'where', 'returning']));
+
+      const response = await PATCH_TASK(req({ taskName: 'A' }), ctx());
+
+      expect(response.status).toBe(200);
+      expect(mocks.logAudit).not.toHaveBeenCalled();
     });
 
     it('devuelve 400 con taskId inválido sin tocar la BD ni registrar error', async () => {
@@ -224,7 +281,7 @@ describe('/api/templates/[id]/**', () => {
     }
 
     it('devuelve 404 sin borrar nada si la tarea es de otra plantilla', async () => {
-      const selectChain = makeChain(() => [], ['from', 'where', 'limit', 'for']);
+      const selectChain = makeChain(() => [], ['from', 'innerJoin', 'where', 'limit', 'for']);
       mocks.txSelect.mockReturnValue(selectChain);
 
       const response = await DELETE_TASK(req(), ctx());
@@ -242,10 +299,14 @@ describe('/api/templates/[id]/**', () => {
       expect(selectChain.for).toHaveBeenCalledWith('update');
       expect(mocks.txDelete).not.toHaveBeenCalled();
       expect(mocks.delete).not.toHaveBeenCalled();
+      expect(mocks.logAudit).not.toHaveBeenCalled();
     });
 
     it('borra dependencias y tarea dentro de una sola transacción', async () => {
-      const selectChain = makeChain(() => [{ id: taskId }], ['from', 'where', 'limit', 'for']);
+      const selectChain = makeChain(
+        () => [{ id: taskId, taskName: 'A', templateName: 'Cierre' }],
+        ['from', 'innerJoin', 'where', 'limit', 'for'],
+      );
       mocks.txSelect.mockReturnValue(selectChain);
       const deleteChains: Chain[] = [];
       mocks.txDelete.mockImplementation(() => {
@@ -277,6 +338,15 @@ describe('/api/templates/[id]/**', () => {
           { operator: 'eq', left: 'spaceTemplateId', right: templateId },
         ],
       });
+      expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        { actorId: adminId, action: 'template_task_deleted', previousValue: 'Cierre › A' },
+        mocks.tx,
+      );
+      const auditOrder = mocks.logAudit.mock.invocationCallOrder[0];
+      for (const order of mocks.txDelete.mock.invocationCallOrder) {
+        expect(order).toBeLessThan(auditOrder);
+      }
     });
 
     it('devuelve 400 con taskId inválido sin abrir transacción', async () => {
@@ -400,6 +470,31 @@ describe('/api/templates/[id]/**', () => {
         table: 'templateDependencies',
         values: { templateId: newTaskB, predecessorId: newTaskA },
       });
+      expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        {
+          actorId: adminId,
+          action: 'template_duplicated',
+          previousValue: 'Cierre mensual',
+          newValue: 'Cierre mensual (copia)',
+        },
+        mocks.tx,
+      );
+      const auditOrder = mocks.logAudit.mock.invocationCallOrder[0];
+      for (const order of mocks.txInsert.mock.invocationCallOrder) {
+        expect(order).toBeLessThan(auditOrder);
+      }
+    });
+
+    it('devuelve 404 si la plantilla de origen no existe, sin transacción ni auditoría', async () => {
+      mocks.select.mockReturnValue(makeChain(() => [], ['from', 'where', 'limit']));
+
+      const response = await DUPLICATE(req(), ctx());
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'Plantilla no encontrada' });
+      expect(mocks.transaction).not.toHaveBeenCalled();
+      expect(mocks.logAudit).not.toHaveBeenCalled();
     });
 
     it('si falla el insert de una tarea, propaga el error, responde 500 y no inserta dependencias', async () => {
@@ -419,6 +514,7 @@ describe('/api/templates/[id]/**', () => {
       await expect(txPromise).rejects.toThrow('boom');
       expect(valuesCalls.some(c => c.table === 'templateDependencies')).toBe(false);
       expect(mocks.insert).not.toHaveBeenCalled();
+      expect(mocks.logAudit).not.toHaveBeenCalled();
       expect(loggerError).toHaveBeenCalled();
     });
 
@@ -464,10 +560,21 @@ describe('/api/templates/[id]/**', () => {
       expect(loggerError).not.toHaveBeenCalled();
     });
 
+    const current = {
+      id: templateId,
+      name: 'Cierre',
+      periodicity: 'mensual',
+      targetCycleDays: 10,
+      autoGenerate: false,
+      active: true,
+    };
+    const byTemplateId = { operator: 'eq', left: 'id', right: templateId };
+
     it('PATCH con id válido sigue actualizando', async () => {
-      const row = { id: templateId, name: 'Otro' };
+      const row = { ...current, name: 'Otro' };
+      mocks.txSelect.mockReturnValue(makeChain(() => [current], ['from', 'where', 'limit', 'for']));
       const chain = makeChain(() => [row], ['set', 'where', 'returning']);
-      mocks.update.mockReturnValue(chain);
+      mocks.txUpdate.mockReturnValue(chain);
 
       const response = await PATCH_TEMPLATE(
         jsonRequest(`/api/templates/${templateId}`, 'PATCH', { name: 'Otro' }),
@@ -476,6 +583,82 @@ describe('/api/templates/[id]/**', () => {
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual(row);
+      expect(chain.set).toHaveBeenCalledWith({ name: 'Otro' });
+      expect(chain.where).toHaveBeenCalledWith(byTemplateId);
+    });
+
+    it('PATCH actualiza y audita dentro de una transacción', async () => {
+      const row = { ...current, targetCycleDays: 12 };
+      const selectChain = makeChain(() => [current], ['from', 'where', 'limit', 'for']);
+      mocks.txSelect.mockReturnValue(selectChain);
+      mocks.txUpdate.mockReturnValue(makeChain(() => [row], ['set', 'where', 'returning']));
+
+      const response = await PATCH_TEMPLATE(
+        jsonRequest(`/api/templates/${templateId}`, 'PATCH', { targetCycleDays: 12 }),
+        ctx(templateId),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(row);
+      expect(mocks.transaction).toHaveBeenCalledTimes(1);
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(selectChain.where).toHaveBeenCalledWith(byTemplateId);
+      expect(selectChain.for).toHaveBeenCalledWith('update');
+      expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'template_updated',
+          actorId: adminId,
+          previousValue: 'Cierre: Días de ciclo: 10',
+          newValue: 'Cierre: Días de ciclo: 12',
+        }),
+        mocks.tx,
+      );
+      const [params] = mocks.logAudit.mock.calls[0];
+      expect(params).not.toHaveProperty('taskId');
+      expect(params).not.toHaveProperty('spaceId');
+    });
+
+    it('PATCH devuelve 404 si la plantilla no existe, sin update ni auditoría', async () => {
+      const selectChain = makeChain(() => [], ['from', 'where', 'limit', 'for']);
+      mocks.txSelect.mockReturnValue(selectChain);
+
+      const response = await PATCH_TEMPLATE(
+        jsonRequest(`/api/templates/${templateId}`, 'PATCH', { name: 'Otro' }),
+        ctx(templateId),
+      );
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'Plantilla no encontrada' });
+      expect(selectChain.for).toHaveBeenCalledWith('update');
+      expect(mocks.txUpdate).not.toHaveBeenCalled();
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.logAudit).not.toHaveBeenCalled();
+    });
+
+    it('PATCH con un body igual al estado actual responde 200 sin auditar', async () => {
+      mocks.txSelect.mockReturnValue(makeChain(() => [current], ['from', 'where', 'limit', 'for']));
+      mocks.txUpdate.mockReturnValue(makeChain(() => [current], ['set', 'where', 'returning']));
+
+      const response = await PATCH_TEMPLATE(
+        jsonRequest(`/api/templates/${templateId}`, 'PATCH', { name: 'Cierre', active: true }),
+        ctx(templateId),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mocks.logAudit).not.toHaveBeenCalled();
+    });
+
+    it('PATCH sin permisos devuelve 403 sin tocar la BD', async () => {
+      mocks.requireRole.mockRejectedValue(new Error('FORBIDDEN'));
+
+      const response = await PATCH_TEMPLATE(
+        jsonRequest(`/api/templates/${templateId}`, 'PATCH', { name: 'Otro' }),
+        ctx(templateId),
+      );
+
+      expect(response.status).toBe(403);
+      expectNoDbCalls();
     });
 
     it('GET con id inválido y sin permisos devuelve 403', async () => {
@@ -505,10 +688,12 @@ describe('/api/templates/[id]/**', () => {
       expect(loggerError).not.toHaveBeenCalled();
     });
 
-    it('con id válido inserta la tarea en la plantilla', async () => {
+    it('con id válido inserta la tarea en la plantilla y la audita', async () => {
       const row = { id: taskId, spaceTemplateId: templateId, ...validBody };
+      const selectChain = makeChain(() => [{ id: templateId, name: 'Cierre' }], ['from', 'where', 'limit', 'for']);
+      mocks.txSelect.mockReturnValue(selectChain);
       const chain = makeChain(() => [row], ['values', 'returning']);
-      mocks.insert.mockReturnValue(chain);
+      mocks.txInsert.mockReturnValue(chain);
 
       const response = await POST_TASK(
         jsonRequest(`/api/templates/${templateId}/tasks`, 'POST', validBody),
@@ -518,6 +703,41 @@ describe('/api/templates/[id]/**', () => {
       expect(response.status).toBe(201);
       expect(await response.json()).toEqual(row);
       expect(chain.values).toHaveBeenCalledWith(expect.objectContaining({ spaceTemplateId: templateId }));
+      expect(mocks.transaction).toHaveBeenCalledTimes(1);
+      expect(mocks.insert).not.toHaveBeenCalled();
+      expect(selectChain.where).toHaveBeenCalledWith({ operator: 'eq', left: 'id', right: templateId });
+      expect(mocks.logAudit).toHaveBeenCalledTimes(1);
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        { actorId: adminId, action: 'template_task_created', newValue: 'Cierre › Conciliar' },
+        mocks.tx,
+      );
+    });
+
+    it('devuelve 404 si la plantilla no existe, sin insertar ni auditar', async () => {
+      mocks.txSelect.mockReturnValue(makeChain(() => [], ['from', 'where', 'limit', 'for']));
+
+      const response = await POST_TASK(
+        jsonRequest(`/api/templates/${templateId}/tasks`, 'POST', validBody),
+        ctx(templateId),
+      );
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'Plantilla no encontrada' });
+      expect(mocks.txInsert).not.toHaveBeenCalled();
+      expect(mocks.insert).not.toHaveBeenCalled();
+      expect(mocks.logAudit).not.toHaveBeenCalled();
+    });
+
+    it('sin permisos devuelve 403 sin tocar la BD', async () => {
+      mocks.requireRole.mockRejectedValue(new Error('FORBIDDEN'));
+
+      const response = await POST_TASK(
+        jsonRequest(`/api/templates/${templateId}/tasks`, 'POST', validBody),
+        ctx(templateId),
+      );
+
+      expect(response.status).toBe(403);
+      expectNoDbCalls();
     });
   });
 });

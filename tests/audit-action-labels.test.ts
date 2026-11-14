@@ -32,6 +32,11 @@ const KNOWN_ACTIONS = [
   'subtask_removed',
   'subtask_renamed',
   'subtask_completion_changed',
+  'template_updated',
+  'template_task_created',
+  'template_task_updated',
+  'template_task_deleted',
+  'template_duplicated',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -151,6 +156,19 @@ describe('acciones de auditoría', () => {
     ['subtask_removed', 'Subtarea eliminada', 'bg-red-100 text-red-700'],
     ['subtask_renamed', 'Subtarea renombrada', 'bg-amber-100 text-amber-700'],
     ['subtask_completion_changed', 'Cambio de estado de subtarea', 'bg-green-100 text-green-700'],
+  ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
+    expect(AUDIT_ACTION_LABEL[action]).toBe(label);
+    expect(auditActionLabel(action)).toBe(label);
+    expect(auditActionLabel(action)).not.toBe(auditActionLabel('accion_inexistente'));
+    expect(auditActionChip(action)).toBe(chip);
+  });
+
+  it.each([
+    ['template_updated', 'Plantilla actualizada', 'bg-amber-100 text-amber-700'],
+    ['template_task_created', 'Tarea de plantilla creada', 'bg-sky-100 text-sky-700'],
+    ['template_task_updated', 'Tarea de plantilla actualizada', 'bg-amber-100 text-amber-700'],
+    ['template_task_deleted', 'Tarea de plantilla eliminada', 'bg-red-100 text-red-700'],
+    ['template_duplicated', 'Plantilla duplicada', 'bg-sky-100 text-sky-700'],
   ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
     expect(AUDIT_ACTION_LABEL[action]).toBe(label);
     expect(auditActionLabel(action)).toBe(label);
