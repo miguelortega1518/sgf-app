@@ -112,6 +112,7 @@ export default function BitacoraPage() {
                     </td>
                     <td className="px-4 py-3">
                       <AuditLogDetail
+                        action={entry.action}
                         previousValue={entry.previousValue}
                         newValue={entry.newValue}
                         reason={entry.reason}

@@ -4,14 +4,53 @@
 // bajas, p. ej. milestone_created / milestone_deleted) se muestra ese valor sin flecha.
 // El reason se traduce con delayReasonLabel: los códigos de motivo de retraso se
 // muestran con su etiqueta y el texto libre se muestra tal cual.
+// Con `action`, los valores JSON heredados de task_created ({ title, responsible }) y
+// space_created ({ name, type }) se muestran legibles: el título, o «nombre (tipo)»;
+// el UUID del responsable se omite. Si el valor no tiene la forma esperada, se muestra tal cual.
 
-import { delayReasonLabel } from '@/lib/labels';
+import { delayReasonLabel, SPACE_TYPE_LABEL } from '@/lib/labels';
 
 export type AuditEntryDetailProps = {
   previousValue: string | null;
   newValue: string | null;
   reason: string | null;
+  /** Acción del registro (p. ej. 'task_created'); permite formatear valores JSON heredados. */
+  action?: string;
 };
+
+/** Lee una clave propia (no del prototipo) del objeto como string no vacío. */
+function ownNonEmptyString(obj: object, key: string): string | null {
+  if (!Object.hasOwn(obj, key)) return null;
+  const v: unknown = (obj as Record<string, unknown>)[key];
+  return typeof v === 'string' && v !== '' ? v : null;
+}
+
+/**
+ * Texto legible de un valor guardado como JSON por task_created o space_created.
+ * Cualquier otro caso (otra acción, JSON inválido, forma inesperada) devuelve el valor tal cual.
+ */
+function readableAuditValue(action: string | undefined, value: string | null): string | null {
+  if (!value || (action !== 'task_created' && action !== 'space_created')) return value;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return value;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return value;
+
+  if (action === 'task_created') {
+    return ownNonEmptyString(parsed, 'title') ?? value;
+  }
+
+  const name = ownNonEmptyString(parsed, 'name');
+  if (!name) return value;
+  const type = ownNonEmptyString(parsed, 'type');
+  if (!type) return name;
+  const label = Object.hasOwn(SPACE_TYPE_LABEL, type) ? SPACE_TYPE_LABEL[type] : type;
+  return `${name} (${label})`;
+}
 
 /**
  * Texto de los valores de una entrada: «antes → después» si existen los dos, el único
@@ -26,8 +65,8 @@ function formatAuditValues(previousValue: string | null, newValue: string | null
  * Celda «Detalle» de la bitácora: «antes → después» (o el único valor, si solo hay uno)
  * y, si existe, el reason (traducido) debajo.
  */
-export function AuditLogDetail({ previousValue, newValue, reason }: AuditEntryDetailProps) {
-  const detail = formatAuditValues(previousValue, newValue);
+export function AuditLogDetail({ previousValue, newValue, reason, action }: AuditEntryDetailProps) {
+  const detail = formatAuditValues(readableAuditValue(action, previousValue), readableAuditValue(action, newValue));
 
   if (!detail && !reason) {
     return <span className="text-xs text-gray-300">—</span>;
@@ -54,11 +93,11 @@ export type TaskAuditDetailProps = AuditEntryDetailProps & {
  * Historial «Actividad» de la tarea: «(antes → después)» (o «(valor)» si solo hay uno)
  * y el reason (traducido) como texto secundario.
  */
-export function TaskAuditDetail({ previousValue, newValue, reason, redacted }: TaskAuditDetailProps) {
+export function TaskAuditDetail({ previousValue, newValue, reason, redacted, action }: TaskAuditDetailProps) {
   // Debe ir antes de cualquier rama de render: un registro redactado no muestra valores ni reason.
   if (redacted) return null;
 
-  const detail = formatAuditValues(previousValue, newValue);
+  const detail = formatAuditValues(readableAuditValue(action, previousValue), readableAuditValue(action, newValue));
 
   if (!detail && !reason) return null;
 
