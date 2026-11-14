@@ -472,6 +472,7 @@ export default function TaskDetailPage() {
                     {entry.redacted ? redactedCommentLabel(entry.action, entry.reason) : auditActionLabel(entry.action)}
                   </span>
                   <TaskAuditDetail
+                    action={entry.action}
                     previousValue={entry.previousValue}
                     newValue={entry.newValue}
                     reason={entry.reason}
