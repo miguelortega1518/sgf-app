@@ -21,6 +21,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> 
   task_review: { label: 'Revisión', color: 'text-amber-700', bg: 'bg-amber-50' },
   task_blocked: { label: 'Bloqueada', color: 'text-red-700', bg: 'bg-red-50' },
   task_assigned: { label: 'Asignada', color: 'text-blue-700', bg: 'bg-blue-50' },
+  review_assigned: { label: 'Revisión asignada', color: 'text-purple-700', bg: 'bg-purple-50' },
 };
 
 function timeAgo(dateStr: string): string {

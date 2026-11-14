@@ -12,7 +12,16 @@ type NotifyParams = {
   spaceId?: string;
 };
 
+/** Crea la notificación (y el correo si hay RESEND_API_KEY). Devuelve null si la persona no existe o está inactiva. */
 export async function notify(params: NotifyParams) {
+  const [recipient] = await db
+    .select({ active: persons.active, email: persons.email })
+    .from(persons)
+    .where(eq(persons.id, params.recipientId))
+    .limit(1);
+
+  if (!recipient || !recipient.active) return null;
+
   const [notif] = await db
     .insert(notifications)
     .values({
@@ -25,21 +34,13 @@ export async function notify(params: NotifyParams) {
     })
     .returning();
 
-  if (process.env.RESEND_API_KEY) {
-    const [recipient] = await db
-      .select({ email: persons.email })
-      .from(persons)
-      .where(eq(persons.id, params.recipientId))
-      .limit(1);
-
-    if (recipient?.email) {
-      sendNotificationEmail(
-        notif.id,
-        recipient.email,
-        params.title,
-        params.body ?? null,
-      ).catch(() => {});
-    }
+  if (process.env.RESEND_API_KEY && recipient.email) {
+    sendNotificationEmail(
+      notif.id,
+      recipient.email,
+      params.title,
+      params.body ?? null,
+    ).catch(() => {});
   }
 
   return notif;

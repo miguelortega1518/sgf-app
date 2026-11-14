@@ -11,6 +11,7 @@ import { notify } from '@/lib/notify';
 import { isOverdue } from '@/lib/date-utils';
 import { requireTaskAccess, requireProjectAccess, validateTaskReferences } from '@/lib/project-access';
 import { applyStatusTransition } from '@/lib/task-transitions';
+import { buildAssignmentNotifications } from '@/lib/assignment-notifications';
 import { eq, desc } from 'drizzle-orm';
 
 export async function GET(
@@ -148,11 +149,11 @@ export async function PATCH(
       }
 
     }
-    const updated = await db.transaction(async tx => {
+    const { row: updated, intents } = await db.transaction(async tx => {
       const [current] = await tx.select().from(tasks).where(eq(tasks.id, id)).for('update');
       await requireProjectAccess(session, current.spaceId, 'write', tx);
       await validateTaskReferences(current.spaceId, input, tx);
-      if (!Object.keys(input).length) return current;
+      if (!Object.keys(input).length) return { row: current, intents: [] };
       const [row] = await tx.update(tasks).set(input).where(eq(tasks.id, id)).returning();
       if (input.dueDate !== undefined && input.dueDate !== current.dueDate) {
         await logAudit({ actorId: session.id, action: 'due_date_changed', taskId: id,
@@ -162,8 +163,19 @@ export async function PATCH(
         await logAudit({ actorId: session.id, action: 'responsible_changed', taskId: id,
           previousValue: current.responsibleId, newValue: input.responsibleId }, tx);
       }
-      return row;
+      const intents = buildAssignmentNotifications({
+        actorId: session.id,
+        task: row,
+        previous: current,
+        notifyReviewer: input.reviewerId !== undefined,
+      });
+      return { row, intents };
     });
+
+    // Fuera de la transacción: la fila ya no está bloqueada con FOR UPDATE.
+    for (const intent of intents) {
+      notify(intent).catch(() => {});
+    }
 
     return success(updated);
   } catch (err) {
