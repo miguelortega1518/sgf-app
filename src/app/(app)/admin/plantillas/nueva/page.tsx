@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { TEMPLATE_NAME_MAX } from '@/lib/schemas/template';
 
 export default function NuevaPlantillaPage() {
   const router = useRouter();
@@ -47,6 +48,7 @@ export default function NuevaPlantillaPage() {
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Ej: Cierre mensual estándar"
+            maxLength={TEMPLATE_NAME_MAX}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           />
