@@ -4,6 +4,7 @@
 # Requisitos (Settings → Secrets and variables → Actions):
 #   - CLAUDE_CODE_OAUTH_TOKEN (obligatorio): token de tu suscripción de Claude. Genéralo en tu equipo
 #     con `claude setup-token`. Las ejecuciones consumen la cuota de la suscripción, no API de pago.
+#   - FORJA_EMAIL y FORJA_PASSWORD (opcional): cuenta de la fábrica en Forja, para registrar su trabajo.
 #   - FACTORY_GH_TOKEN  (recomendado): token personal con permiso de escritura en Contents, Pull requests e Issues.
 #     Sin él, los push y PR de la fábrica usan GITHUB_TOKEN y GitHub NO lanza el CI sobre ellos.
 # Y en Settings → Actions → General: "Allow GitHub Actions to create and approve pull requests".
@@ -90,6 +91,9 @@ jobs:
       - name: Ejecutar la fábrica
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Cuenta de la fábrica en Forja (sección [forja] de factory.toml).
+          FORJA_EMAIL: ${{ secrets.FORJA_EMAIL }}
+          FORJA_PASSWORD: ${{ secrets.FORJA_PASSWORD }}
           GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
           # Se pasan por variable de entorno, no interpolados en el script, para evitar inyección.
           ISSUE_NUMBER: ${{ github.event.issue.number }}
