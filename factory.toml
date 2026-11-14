@@ -109,6 +109,14 @@ ready_path = "/api/health"
 credentials = "Admin de prueba: mortega@grupoblb.do / qa-forja-2026. Miembro: jleon@grupoblb.do / qa-forja-2026 (datos de ejemplo del seed, no son cuentas reales)."
 env = { SEED_PASSWORD = "qa-forja-2026" }
 
+# Actividad en Forja: la fábrica registra su trabajo como tareas del proyecto "AI Factory" de esta
+# misma Forja, con una cuenta propia. Credenciales en los secretos FORJA_EMAIL y FORJA_PASSWORD.
+# Si faltan o Forja no responde, la fábrica sigue funcionando y lo anota en su auditoría.
+[forja]
+enabled = true
+url = "https://sgf-app.onrender.com"
+project = "AI Factory"
+
 [agents.qa]         # tester funcional
 model = "claude-sonnet-5-5"
 effort = "medium"
