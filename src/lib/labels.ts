@@ -102,6 +102,10 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   evidence_removed: 'Evidencia eliminada',
   dependency_added: 'Dependencia añadida',
   dependency_removed: 'Dependencia eliminada',
+  subtask_added: 'Subtarea añadida',
+  subtask_removed: 'Subtarea eliminada',
+  subtask_renamed: 'Subtarea renombrada',
+  subtask_completion_changed: 'Cambio de estado de subtarea',
   space_created: 'Proyecto creado',
   space_updated: 'Proyecto actualizado',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
@@ -125,6 +129,10 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   evidence_removed: 'bg-red-100 text-red-700',
   dependency_added: 'bg-sky-100 text-sky-700',
   dependency_removed: 'bg-red-100 text-red-700',
+  subtask_added: 'bg-sky-100 text-sky-700',
+  subtask_removed: 'bg-red-100 text-red-700',
+  subtask_renamed: 'bg-amber-100 text-amber-700',
+  subtask_completion_changed: 'bg-green-100 text-green-700',
   space_created: 'bg-sky-100 text-sky-700',
   space_updated: 'bg-amber-100 text-amber-700',
 };
