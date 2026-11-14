@@ -1,10 +1,10 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { taskTemplates, templateDependencies } from '@/lib/db/schema';
+import { taskTemplates } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth';
+import { assertValidUuid } from '@/lib/project-access';
 import { createTaskTemplateSchema } from '@/lib/schemas/template';
-import { success, error, handleError } from '@/lib/api-utils';
-import { eq, asc } from 'drizzle-orm';
+import { success, handleError } from '@/lib/api-utils';
 
 export async function POST(
   req: NextRequest,
@@ -13,6 +13,7 @@ export async function POST(
   try {
     await requireRole('admin');
     const { id: spaceTemplateId } = await params;
+    assertValidUuid(spaceTemplateId, 'ID de plantilla');
     const body = await req.json();
     const input = createTaskTemplateSchema.parse(body);
 
