@@ -83,7 +83,7 @@ Velocidad semanal en puntos, tiempo de ciclo (mediana y percentil 85), trabajo e
 Neutros grafito fríos y un único acento ámbar ("brasa"). Azul cielo para "En progreso" y "Feature" (distinto del acento y del rojo de Bug). Tipografía Geist. Los colores salen de variables en `globals.css`, que reasigna las paletas de Tailwind: el modo claro, el oscuro y el del sistema salen de un único sitio. Contraste comprobado en claro y oscuro.
 
 ## Pendiente (no incluido en esta rama)
-- Integración real con GitHub/GitLab (hoy la rama y el PR se escriben a mano). Requiere definir el proveedor y un webhook.
+- Integración con GitHub: la fase 1 usa un webhook de repositorio firmado (`/api/integrations/github/webhook`, ver `docs/OPERACIONES.md` §10) que enlaza el PR y mueve el estado. La GitHub App con permisos mínimos queda para la fase 5; GitLab sigue sin definir.
 - Las plantillas de sprint siguen usando "días hábiles" y feriados de RD.
 - Los reportes exportados (PDF/Excel) conservan columnas y textos de la versión anterior.
 - Los 33 errores de ESLint y las pruebas antiguas que importan `vitest` (no instalado) ya existían antes de esta rama.

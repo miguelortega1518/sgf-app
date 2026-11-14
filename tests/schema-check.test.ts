@@ -59,8 +59,9 @@ describe('diffSchema', () => {
 describe('esquema real del proyecto', () => {
   const fromCode = expectedFromModule(appSchema);
 
-  it('el código declara las 18 tablas esperadas y los campos de Forja', () => {
-    expect(Object.keys(fromCode.tables)).toHaveLength(18);
+  it('el código declara las 19 tablas esperadas y los campos de Forja', () => {
+    expect(Object.keys(fromCode.tables)).toHaveLength(19);
+    expect(fromCode.tables.github_deliveries).toEqual(expect.arrayContaining(['delivery_id', 'event', 'received_at', 'outcome']));
     expect(fromCode.tables.tasks).toContain('number');
     expect(fromCode.tables.tasks).toContain('pr_url');
     expect(fromCode.tables.persons).toContain('password_hash');
