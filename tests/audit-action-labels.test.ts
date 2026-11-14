@@ -37,6 +37,7 @@ const KNOWN_ACTIONS = [
   'template_task_updated',
   'template_task_deleted',
   'template_duplicated',
+  'pr_linked',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -169,6 +170,15 @@ describe('acciones de auditoría', () => {
     ['template_task_updated', 'Tarea de plantilla actualizada', 'bg-amber-100 text-amber-700'],
     ['template_task_deleted', 'Tarea de plantilla eliminada', 'bg-red-100 text-red-700'],
     ['template_duplicated', 'Plantilla duplicada', 'bg-sky-100 text-sky-700'],
+  ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
+    expect(AUDIT_ACTION_LABEL[action]).toBe(label);
+    expect(auditActionLabel(action)).toBe(label);
+    expect(auditActionLabel(action)).not.toBe(auditActionLabel('accion_inexistente'));
+    expect(auditActionChip(action)).toBe(chip);
+  });
+
+  it.each([
+    ['pr_linked', 'PR enlazado', 'bg-sky-100 text-sky-700'],
   ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
     expect(AUDIT_ACTION_LABEL[action]).toBe(label);
     expect(auditActionLabel(action)).toBe(label);

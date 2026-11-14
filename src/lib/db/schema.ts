@@ -324,6 +324,14 @@ export const rateLimits = pgTable('rate_limits', {
   windowStart: timestamp('window_start', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Entregas del webhook de GitHub ya procesadas (idempotencia por X-GitHub-Delivery).
+export const githubDeliveries = pgTable('github_deliveries', {
+  deliveryId: text('delivery_id').primaryKey(),
+  event: text('event').notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+  outcome: text('outcome'),
+});
+
 // ─── Type exports ─────────────────────────────────────
 
 export type Company = typeof companies.$inferSelect;
@@ -362,3 +370,5 @@ export type Evidence = typeof evidence.$inferSelect;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 
 export type Notification = typeof notifications.$inferSelect;
+
+export type GithubDelivery = typeof githubDeliveries.$inferSelect;

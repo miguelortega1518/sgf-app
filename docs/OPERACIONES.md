@@ -142,3 +142,20 @@ pública ya no funciona.
 **Sesiones abiertas:** el login emite un JWT de hasta 7 días que no se puede revocar desde el servidor. El cambio obligatorio de contraseña bloquea la API mientras esté pendiente,
 pero una sesión emitida antes de rotar volvería a servir cuando su dueño cambie la contraseña. Para cerrarlas todas, cambiar `JWT_SECRET` en Render (desconecta a todos). Pendiente
 como mejora de código: que cambiar la contraseña invalide las sesiones anteriores.
+
+## 10. Webhook de GitHub
+
+Abrir, fusionar o cerrar un PR (y un push a la rama por defecto con `Closes FOR-<n>`) mueve la tarea sin tocar Forja. Los cambios
+quedan en la auditoría con la persona de sistema «GitHub» (`github@forja.system`, inactiva, creada por la migración 0002).
+
+1. Generar el secreto: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` y ponerlo en Render como
+   `GITHUB_WEBHOOK_SECRET`. Si la variable falta o está vacía, el webhook responde 401 a todo.
+2. En el repositorio de GitHub: *Settings → Webhooks → Add webhook*.
+   - **Payload URL:** `https://<forja>/api/integrations/github/webhook`
+   - **Content type:** `application/json`
+   - **Secret:** el mismo valor de `GITHUB_WEBHOOK_SECRET`
+   - **Eventos:** *Let me select individual events* → `Pull requests` y `Pushes`.
+3. GitHub manda un `ping` al guardar: debe responder 200 `{"ignored":true}`. Si responde 401, el secreto no coincide.
+
+La tarea se reconoce por la clave `FOR-<n>` en la rama, el título o la descripción del PR (en ese orden). Cada entrega se
+procesa una sola vez (tabla `github_deliveries`); si falla con 500, GitHub permite reenviarla desde *Recent Deliveries*.
