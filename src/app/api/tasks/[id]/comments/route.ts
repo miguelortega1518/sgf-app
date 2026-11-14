@@ -61,21 +61,25 @@ export async function PATCH(
       content: addCommentSchema.shape.content,
     }).parse(body);
 
-    const [comment] = await db
-      .select()
-      .from(comments)
-      .where(and(eq(comments.id, commentId), eq(comments.taskId, taskId)))
-      .limit(1);
-
-    if (!comment) return error('Comentario no encontrado', 404);
-    if (comment.authorId !== session.id && session.role !== 'admin') {
-      return error('Solo puedes editar tus propios comentarios', 403);
-    }
-
     const sanitized = stripHtml(content);
-    const moderated = comment.authorId !== session.id;
 
     const updated = await db.transaction(async tx => {
+      // Lectura con bloqueo: serializa PATCH/DELETE concurrentes para que
+      // previousValue sea siempre el texto realmente reemplazado.
+      const [comment] = await tx
+        .select()
+        .from(comments)
+        .where(and(eq(comments.id, commentId), eq(comments.taskId, taskId)))
+        .limit(1)
+        .for('update');
+
+      if (!comment) throw Object.assign(new Error('Comentario no encontrado'), { httpStatus: 404 });
+      if (comment.authorId !== session.id && session.role !== 'admin') {
+        throw Object.assign(new Error('Solo puedes editar tus propios comentarios'), { httpStatus: 403 });
+      }
+
+      const moderated = comment.authorId !== session.id;
+
       const [row] = await tx
         .update(comments)
         .set({ content: sanitized, editedAt: new Date() })
@@ -113,20 +117,23 @@ export async function DELETE(
     if (!commentId) return error('commentId requerido', 400);
     assertValidUuid(commentId);
 
-    const [comment] = await db
-      .select()
-      .from(comments)
-      .where(and(eq(comments.id, commentId), eq(comments.taskId, taskId)))
-      .limit(1);
-
-    if (!comment) return error('Comentario no encontrado', 404);
-    if (comment.authorId !== session.id && session.role !== 'admin') {
-      return error('Solo puedes eliminar tus propios comentarios', 403);
-    }
-
-    const moderated = comment.authorId !== session.id;
-
     await db.transaction(async tx => {
+      // Lectura con bloqueo: el texto auditado es el que realmente se borra,
+      // aunque un PATCH concurrente lo haya cambiado justo antes.
+      const [comment] = await tx
+        .select()
+        .from(comments)
+        .where(and(eq(comments.id, commentId), eq(comments.taskId, taskId)))
+        .limit(1)
+        .for('update');
+
+      if (!comment) throw Object.assign(new Error('Comentario no encontrado'), { httpStatus: 404 });
+      if (comment.authorId !== session.id && session.role !== 'admin') {
+        throw Object.assign(new Error('Solo puedes eliminar tus propios comentarios'), { httpStatus: 403 });
+      }
+
+      const moderated = comment.authorId !== session.id;
+
       await tx.delete(comments).where(eq(comments.id, commentId));
 
       await logAudit({
