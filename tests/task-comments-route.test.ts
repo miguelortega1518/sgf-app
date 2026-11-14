@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => {
+  const txSelect = vi.fn();
+  const txFrom = vi.fn();
+  const txWhere = vi.fn();
+  const txLimit = vi.fn();
+  const txFor = vi.fn();
   const txUpdate = vi.fn();
   const txSet = vi.fn();
   const txUpdateWhere = vi.fn();
@@ -17,13 +22,18 @@ const mocks = vi.hoisted(() => {
     where: vi.fn(),
     limit: vi.fn(),
     transaction: vi.fn(),
+    txSelect,
+    txFrom,
+    txWhere,
+    txLimit,
+    txFor,
     txUpdate,
     txSet,
     txUpdateWhere,
     txReturning,
     txDelete,
     txDeleteWhere,
-    tx: { update: txUpdate, delete: txDelete },
+    tx: { select: txSelect, update: txUpdate, delete: txDelete },
   };
 });
 
@@ -87,6 +97,16 @@ function existingComment(overrides: Partial<{ id: string; authorId: string; cont
   };
 }
 
+function expectedLockedFilter(commentId: string) {
+  return {
+    operator: 'and',
+    conditions: [
+      { operator: 'eq', left: 'id', right: commentId },
+      { operator: 'eq', left: 'taskId', right: taskId },
+    ],
+  };
+}
+
 describe('/api/tasks/[id]/comments', () => {
   let loggerError: ReturnType<typeof vi.spyOn>;
 
@@ -97,12 +117,18 @@ describe('/api/tasks/[id]/comments', () => {
     mocks.requireTaskAccess.mockResolvedValue({ id: taskId });
     mocks.logAudit.mockResolvedValue(undefined);
 
+    // Lectura fuera de la transacción: la ruta no debe usarla.
     mocks.select.mockReturnValue({ from: mocks.from });
     mocks.from.mockReturnValue({ where: mocks.where });
     mocks.where.mockReturnValue({ limit: mocks.limit });
     mocks.limit.mockResolvedValue([]);
 
     mocks.transaction.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(mocks.tx));
+    mocks.txSelect.mockReturnValue({ from: mocks.txFrom });
+    mocks.txFrom.mockReturnValue({ where: mocks.txWhere });
+    mocks.txWhere.mockReturnValue({ limit: mocks.txLimit });
+    mocks.txLimit.mockReturnValue({ for: mocks.txFor });
+    mocks.txFor.mockResolvedValue([]);
     mocks.txUpdate.mockReturnValue({ set: mocks.txSet });
     mocks.txSet.mockReturnValue({ where: mocks.txUpdateWhere });
     mocks.txUpdateWhere.mockReturnValue({ returning: mocks.txReturning });
@@ -117,7 +143,7 @@ describe('/api/tasks/[id]/comments', () => {
   describe('PATCH', () => {
     it('registra comment_edited en la misma transacción cuando edita el autor', async () => {
       const comment = existingComment();
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
       const updated = { ...comment, content: 'después' };
       mocks.txReturning.mockResolvedValue([updated]);
 
@@ -142,10 +168,38 @@ describe('/api/tasks/[id]/comments', () => {
       expect(mocks.logAudit.mock.calls[0][0]).not.toHaveProperty('reason');
     });
 
+    it('lee el comentario con FOR UPDATE dentro de la transacción y usa su contenido como previousValue', async () => {
+      const commentId = crypto.randomUUID();
+      // Fila obsoleta (C1) si se leyera fuera de la transacción; la bloqueada es C2.
+      mocks.limit.mockResolvedValue([existingComment({ id: commentId, content: 'C1' })]);
+      const locked = existingComment({ id: commentId, content: 'C2' });
+      mocks.txFor.mockResolvedValue([locked]);
+      mocks.txReturning.mockResolvedValue([{ ...locked, content: 'C3' }]);
+
+      const response = await PATCH(patchRequest({ commentId, content: 'C3' }), ctx());
+
+      expect(response.status).toBe(200);
+      expect(mocks.select).not.toHaveBeenCalled();
+      expect(mocks.txSelect).toHaveBeenCalledTimes(1);
+      expect(mocks.txWhere).toHaveBeenCalledWith(expectedLockedFilter(commentId));
+      expect(mocks.txLimit).toHaveBeenCalledWith(1);
+      expect(mocks.txFor).toHaveBeenCalledWith('update');
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        {
+          actorId: userId,
+          action: 'comment_edited',
+          taskId,
+          previousValue: 'C2',
+          newValue: 'C3',
+        },
+        mocks.tx,
+      );
+    });
+
     it('un admin que edita su propio comentario no añade reason', async () => {
       mocks.requireSession.mockResolvedValue({ id: userId, role: 'admin' });
       const comment = existingComment();
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
       mocks.txReturning.mockResolvedValue([{ ...comment, content: 'nuevo' }]);
 
       const response = await PATCH(patchRequest({ commentId: comment.id, content: 'nuevo' }), ctx());
@@ -158,7 +212,7 @@ describe('/api/tasks/[id]/comments', () => {
     it('añade reason cuando un admin modera un comentario ajeno', async () => {
       mocks.requireSession.mockResolvedValue({ id: userId, role: 'admin' });
       const comment = existingComment({ authorId: otherUserId });
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
       mocks.txReturning.mockResolvedValue([{ ...comment, content: 'moderado' }]);
 
       const response = await PATCH(patchRequest({ commentId: comment.id, content: 'moderado' }), ctx());
@@ -178,24 +232,29 @@ describe('/api/tasks/[id]/comments', () => {
       );
     });
 
-    it('responde 403 si no es autor ni admin, sin auditar', async () => {
+    it.each(['miembro', 'observador'])('responde 403 si no es autor ni admin (%s), sin auditar', async role => {
+      mocks.requireSession.mockResolvedValue({ id: userId, role });
       const comment = existingComment({ authorId: otherUserId });
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
 
       const response = await PATCH(patchRequest({ commentId: comment.id, content: 'x' }), ctx());
 
       expect(response.status).toBe(403);
-      expect(mocks.transaction).not.toHaveBeenCalled();
+      expect((await response.json()).error).toBe('Solo puedes editar tus propios comentarios');
+      expect(mocks.txFor).toHaveBeenCalledWith('update');
+      expect(mocks.txUpdate).not.toHaveBeenCalled();
       expect(mocks.logAudit).not.toHaveBeenCalled();
+      expect(loggerError).not.toHaveBeenCalled();
     });
 
     it('responde 404 si el comentario no existe, sin auditar', async () => {
-      mocks.limit.mockResolvedValue([]);
+      mocks.txFor.mockResolvedValue([]);
 
       const response = await PATCH(patchRequest({ commentId: crypto.randomUUID(), content: 'x' }), ctx());
 
       expect(response.status).toBe(404);
-      expect(mocks.transaction).not.toHaveBeenCalled();
+      expect((await response.json()).error).toBe('Comentario no encontrado');
+      expect(mocks.txUpdate).not.toHaveBeenCalled();
       expect(mocks.logAudit).not.toHaveBeenCalled();
       expect(loggerError).not.toHaveBeenCalled();
     });
@@ -226,7 +285,7 @@ describe('/api/tasks/[id]/comments', () => {
 
     it('no responde 200 si falla la auditoría dentro de la transacción', async () => {
       const comment = existingComment();
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
       mocks.txReturning.mockResolvedValue([{ ...comment, content: 'nuevo' }]);
       mocks.logAudit.mockRejectedValue(new Error('audit failed'));
 
@@ -241,7 +300,7 @@ describe('/api/tasks/[id]/comments', () => {
   describe('DELETE', () => {
     it('registra comment_deleted en la misma transacción cuando borra el autor', async () => {
       const comment = existingComment({ content: 'texto borrado' });
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
 
       const response = await DELETE(deleteRequest(comment.id), ctx());
 
@@ -264,10 +323,36 @@ describe('/api/tasks/[id]/comments', () => {
       expect(mocks.logAudit.mock.calls[0][0]).not.toHaveProperty('reason');
     });
 
+    it('lee el comentario con FOR UPDATE dentro de la transacción y audita el texto realmente borrado', async () => {
+      const commentId = crypto.randomUUID();
+      // Fila obsoleta (C1) si se leyera fuera de la transacción; la bloqueada es C2.
+      mocks.limit.mockResolvedValue([existingComment({ id: commentId, content: 'C1' })]);
+      mocks.txFor.mockResolvedValue([existingComment({ id: commentId, content: 'C2' })]);
+
+      const response = await DELETE(deleteRequest(commentId), ctx());
+
+      expect(response.status).toBe(200);
+      expect(mocks.select).not.toHaveBeenCalled();
+      expect(mocks.txSelect).toHaveBeenCalledTimes(1);
+      expect(mocks.txWhere).toHaveBeenCalledWith(expectedLockedFilter(commentId));
+      expect(mocks.txLimit).toHaveBeenCalledWith(1);
+      expect(mocks.txFor).toHaveBeenCalledWith('update');
+      expect(mocks.logAudit).toHaveBeenCalledWith(
+        {
+          actorId: userId,
+          action: 'comment_deleted',
+          taskId,
+          previousValue: 'C2',
+        },
+        mocks.tx,
+      );
+      expect(mocks.logAudit.mock.calls[0][0]).not.toHaveProperty('newValue');
+    });
+
     it('añade reason cuando un admin modera un comentario ajeno', async () => {
       mocks.requireSession.mockResolvedValue({ id: userId, role: 'admin' });
       const comment = existingComment({ authorId: otherUserId, content: 'ofensivo' });
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
 
       const response = await DELETE(deleteRequest(comment.id), ctx());
 
@@ -285,24 +370,29 @@ describe('/api/tasks/[id]/comments', () => {
       );
     });
 
-    it('responde 403 si no es autor ni admin, sin auditar', async () => {
+    it.each(['miembro', 'observador'])('responde 403 si no es autor ni admin (%s), sin auditar', async role => {
+      mocks.requireSession.mockResolvedValue({ id: userId, role });
       const comment = existingComment({ authorId: otherUserId });
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
 
       const response = await DELETE(deleteRequest(comment.id), ctx());
 
       expect(response.status).toBe(403);
-      expect(mocks.transaction).not.toHaveBeenCalled();
+      expect((await response.json()).error).toBe('Solo puedes eliminar tus propios comentarios');
+      expect(mocks.txFor).toHaveBeenCalledWith('update');
+      expect(mocks.txDelete).not.toHaveBeenCalled();
       expect(mocks.logAudit).not.toHaveBeenCalled();
+      expect(loggerError).not.toHaveBeenCalled();
     });
 
     it('responde 404 si el comentario no existe, sin auditar', async () => {
-      mocks.limit.mockResolvedValue([]);
+      mocks.txFor.mockResolvedValue([]);
 
       const response = await DELETE(deleteRequest(crypto.randomUUID()), ctx());
 
       expect(response.status).toBe(404);
-      expect(mocks.transaction).not.toHaveBeenCalled();
+      expect((await response.json()).error).toBe('Comentario no encontrado');
+      expect(mocks.txDelete).not.toHaveBeenCalled();
       expect(mocks.logAudit).not.toHaveBeenCalled();
       expect(loggerError).not.toHaveBeenCalled();
     });
@@ -338,7 +428,7 @@ describe('/api/tasks/[id]/comments', () => {
 
     it('no responde 200 si falla la auditoría dentro de la transacción', async () => {
       const comment = existingComment();
-      mocks.limit.mockResolvedValue([comment]);
+      mocks.txFor.mockResolvedValue([comment]);
       mocks.logAudit.mockRejectedValue(new Error('audit failed'));
 
       const response = await DELETE(deleteRequest(comment.id), ctx());
