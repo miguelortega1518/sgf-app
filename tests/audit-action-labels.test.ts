@@ -28,6 +28,10 @@ const KNOWN_ACTIONS = [
   'milestone_deleted',
   'milestone_renamed',
   'milestone_completion_changed',
+  'subtask_added',
+  'subtask_removed',
+  'subtask_renamed',
+  'subtask_completion_changed',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -135,6 +139,18 @@ describe('acciones de auditoría', () => {
     ['milestone_deleted', 'Hito eliminado', 'bg-red-100 text-red-700'],
     ['milestone_renamed', 'Hito renombrado', 'bg-amber-100 text-amber-700'],
     ['milestone_completion_changed', 'Cambio de estado de hito', 'bg-green-100 text-green-700'],
+  ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
+    expect(AUDIT_ACTION_LABEL[action]).toBe(label);
+    expect(auditActionLabel(action)).toBe(label);
+    expect(auditActionLabel(action)).not.toBe(auditActionLabel('accion_inexistente'));
+    expect(auditActionChip(action)).toBe(chip);
+  });
+
+  it.each([
+    ['subtask_added', 'Subtarea añadida', 'bg-sky-100 text-sky-700'],
+    ['subtask_removed', 'Subtarea eliminada', 'bg-red-100 text-red-700'],
+    ['subtask_renamed', 'Subtarea renombrada', 'bg-amber-100 text-amber-700'],
+    ['subtask_completion_changed', 'Cambio de estado de subtarea', 'bg-green-100 text-green-700'],
   ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
     expect(AUDIT_ACTION_LABEL[action]).toBe(label);
     expect(auditActionLabel(action)).toBe(label);
