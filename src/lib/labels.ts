@@ -108,6 +108,11 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   subtask_completion_changed: 'Cambio de estado de subtarea',
   space_created: 'Proyecto creado',
   space_updated: 'Proyecto actualizado',
+  template_updated: 'Plantilla actualizada',
+  template_task_created: 'Tarea de plantilla creada',
+  template_task_updated: 'Tarea de plantilla actualizada',
+  template_task_deleted: 'Tarea de plantilla eliminada',
+  template_duplicated: 'Plantilla duplicada',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
@@ -135,6 +140,11 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   subtask_completion_changed: 'bg-green-100 text-green-700',
   space_created: 'bg-sky-100 text-sky-700',
   space_updated: 'bg-amber-100 text-amber-700',
+  template_updated: 'bg-amber-100 text-amber-700',
+  template_task_created: 'bg-sky-100 text-sky-700',
+  template_task_updated: 'bg-amber-100 text-amber-700',
+  template_task_deleted: 'bg-red-100 text-red-700',
+  template_duplicated: 'bg-sky-100 text-sky-700',
 };
 
 const AUDIT_ACTION_FALLBACK = 'Acción registrada';
