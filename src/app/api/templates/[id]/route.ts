@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { spaceTemplates, taskTemplates, templateDependencies, companies, persons } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth';
+import { assertValidUuid } from '@/lib/project-access';
 import { updateSpaceTemplateSchema } from '@/lib/schemas/template';
 import { success, error, handleError } from '@/lib/api-utils';
 import { eq, asc, inArray } from 'drizzle-orm';
@@ -13,6 +14,7 @@ export async function GET(
   try {
     await requireRole('admin');
     const { id } = await params;
+    assertValidUuid(id, 'ID de plantilla');
 
     const [template] = await db
       .select()
@@ -70,6 +72,7 @@ export async function PATCH(
   try {
     await requireRole('admin');
     const { id } = await params;
+    assertValidUuid(id, 'ID de plantilla');
     const body = await req.json();
     const input = updateSpaceTemplateSchema.parse(body);
 
