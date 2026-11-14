@@ -6,6 +6,8 @@ import { canCreateAndAssignTask } from '@/lib/permissions';
 import { createTaskSchema } from '@/lib/schemas/task';
 import { success, error, handleError } from '@/lib/api-utils';
 import { logAudit } from '@/lib/audit';
+import { notify } from '@/lib/notify';
+import { buildAssignmentNotifications } from '@/lib/assignment-notifications';
 import { accessibleSpaceIds, requireProjectAccess, assertValidUuid, validateTaskReferences } from '@/lib/project-access';
 import { eq, and, asc, ilike, inArray } from 'drizzle-orm';
 
@@ -92,6 +94,17 @@ export async function POST(req: NextRequest) {
     }, tx);
     return task;
     });
+
+    // Fuera de la transacción: el revisor por defecto (líder) no se avisa al crear.
+    const intents = buildAssignmentNotifications({
+      actorId: session.id,
+      task,
+      previous: null,
+      notifyReviewer: !!input.reviewerId,
+    });
+    for (const intent of intents) {
+      notify(intent).catch(() => {});
+    }
 
     return success(task, 201);
   } catch (err) {
