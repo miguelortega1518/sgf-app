@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { tasks, spaces, evidence, subtasks, comments, persons, auditLog, taskDependencies } from '@/lib/db/schema';
+import { tasks, spaces, evidence, subtasks, comments, persons, auditLog, taskDependencies, githubPullRequests } from '@/lib/db/schema';
+import { pullRequestView } from '@/lib/github-pull-request';
 import { requireSession } from '@/lib/auth';
 import { canChangeDueDate } from '@/lib/permissions';
 import { updateTaskSchema, updateTaskStatusSchema } from '@/lib/schemas/task';
@@ -86,6 +87,14 @@ export async function GET(
       .innerJoin(tasks, eq(taskDependencies.taskId, tasks.id))
       .where(eq(taskDependencies.predecessorId, id));
 
+    // Panel «Pull request»: el PR más reciente de la tarea.
+    const [pullRequest] = await db
+      .select()
+      .from(githubPullRequests)
+      .where(eq(githubPullRequests.taskId, id))
+      .orderBy(desc(githubPullRequests.openedAt))
+      .limit(1);
+
     return success({
       task: {
         ...task,
@@ -98,6 +107,7 @@ export async function GET(
       comments: taskComments,
       audit: redactTaskAuditForRole(taskAudit, session.role),
       dependencies: { predecessors, successors },
+      pullRequest: pullRequest ? pullRequestView(pullRequest) : null,
     });
   } catch (err) {
     return handleError(err);

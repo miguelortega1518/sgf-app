@@ -74,6 +74,10 @@ export const taskKindEnum = pgEnum('task_kind', [
   'feature', 'bug', 'mejora', 'deuda', 'chore',
 ]);
 
+export const githubPrStateEnum = pgEnum('github_pr_state', [
+  'abierto', 'borrador', 'fusionado', 'cerrado',
+]);
+
 // ─── Tables ───────────────────────────────────────────
 
 export const companies = pgTable('companies', {
@@ -332,6 +336,52 @@ export const githubDeliveries = pgTable('github_deliveries', {
   outcome: text('outcome'),
 });
 
+/** Revisor del panel del PR. submittedAt es interno: la API sólo expone login y state. */
+export type PrReviewer = {
+  login: string;
+  state: 'pendiente' | 'aprobado' | 'cambios' | 'comentado';
+  submittedAt?: string;
+};
+
+export type PrCheckState = 'success' | 'failure' | 'pending';
+
+/**
+ * Checks de CI del sha actual del PR. `runs` (por nombre) y `suites` (por id) son
+ * internos y permiten agregar sin la API de GitHub; la API no los expone.
+ */
+export type PrChecks = {
+  sha: string;
+  total: number;
+  success: number;
+  failure: number;
+  pending: number;
+  updatedAt: string;
+  runs: Record<string, { id: number; suiteId: number | null; state: PrCheckState }>;
+  suites: Record<string, PrCheckState>;
+};
+
+// Panel «Pull request» del detalle de la tarea, alimentado sólo por el webhook de GitHub.
+export const githubPullRequests = pgTable('github_pull_requests', {
+  url: text('url').primaryKey(),
+  taskId: uuid('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  title: text('title').notNull(),
+  state: githubPrStateEnum('state').notNull(),
+  headSha: text('head_sha').notNull(),
+  authorLogin: text('author_login').notNull(),
+  openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
+  readyAt: timestamp('ready_at', { withTimezone: true }),
+  mergedAt: timestamp('merged_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  firstReviewAt: timestamp('first_review_at', { withTimezone: true }),
+  reviewers: jsonb('reviewers').$type<PrReviewer[]>().notNull().default(sql`'[]'::jsonb`),
+  checks: jsonb('checks').$type<PrChecks>(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_github_pr_task').on(t.taskId),
+  index('idx_github_pr_head_sha').on(t.headSha),
+]);
+
 // ─── Type exports ─────────────────────────────────────
 
 export type Company = typeof companies.$inferSelect;
@@ -372,3 +422,6 @@ export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 
 export type GithubDelivery = typeof githubDeliveries.$inferSelect;
+
+export type GithubPullRequest = typeof githubPullRequests.$inferSelect;
+export type NewGithubPullRequest = typeof githubPullRequests.$inferInsert;

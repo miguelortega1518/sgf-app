@@ -154,8 +154,25 @@ quedan en la auditoría con la persona de sistema «GitHub» (`github@forja.syst
    - **Payload URL:** `https://<forja>/api/integrations/github/webhook`
    - **Content type:** `application/json`
    - **Secret:** el mismo valor de `GITHUB_WEBHOOK_SECRET`
-   - **Eventos:** *Let me select individual events* → `Pull requests` y `Pushes`.
+   - **Eventos:** *Let me select individual events* → `Pull requests`, `Pushes`, `Pull request reviews`, `Check suites` y
+     `Check runs`.
 3. GitHub manda un `ping` al guardar: debe responder 200 `{"ignored":true}`. Si responde 401, el secreto no coincide.
 
 La tarea se reconoce por la clave `FOR-<n>` en la rama, el título o la descripción del PR (en ese orden). Cada entrega se
 procesa una sola vez (tabla `github_deliveries`); si falla con 500, GitHub permite reenviarla desde *Recent Deliveries*.
+
+**Panel «Pull request» del detalle de la tarea** (migración 0003, tabla `github_pull_requests`). Muestra el estado del PR,
+sus revisores, los checks de CI y el tiempo hasta la primera revisión. Todo sale de los payloads del webhook: Forja no tiene
+token de GitHub ni llama a su API.
+
+- Sólo abrir, reabrir, marcar como listo y cerrar o fusionar un PR enlazan y mueven la tarea. El resto de acciones del PR
+  (nuevos commits, edición, cambio a borrador, revisores pedidos), las revisiones y los checks sólo actualizan el panel y no
+  quedan en la Actividad de la tarea; su rastro está en `github_deliveries.outcome`.
+- En un proyecto cerrado el panel se sigue actualizando, pero la tarea no se enlaza ni cambia de estado.
+- Las revisiones y los checks de PRs que no están en el panel de ninguna tarea se descartan sin guardar la entrega.
+- **Compatibilidad:** un webhook ya creado sólo con `Pull requests` y `Pushes` sigue funcionando igual que antes, y el panel
+  muestra el estado del PR y los revisores pedidos, pero no sus veredictos, ni los checks, ni el tiempo hasta la primera
+  revisión. Para tenerlos, editar el webhook (*Settings → Webhooks → Edit*) y marcar también `Pull request reviews`,
+  `Check suites` y `Check runs`.
+- Los checks se reinician con cada commit nuevo del PR. GitHub no garantiza el orden de las entregas: un check que llegue
+  antes que el aviso del commit nuevo no se ve hasta su siguiente evento.

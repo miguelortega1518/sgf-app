@@ -26,6 +26,7 @@ vi.mock('@/lib/db/schema', () => ({
   persons: { id: 'persons.id', name: 'persons.name', email: 'persons.email' },
   auditLog: { id: 'auditLog.id', action: 'auditLog.action', previousValue: 'auditLog.previousValue', newValue: 'auditLog.newValue', reason: 'auditLog.reason', timestamp: 'auditLog.timestamp', actorId: 'auditLog.actorId', taskId: 'auditLog.taskId' },
   taskDependencies: { taskId: 'taskDependencies.taskId', predecessorId: 'taskDependencies.predecessorId' },
+  githubPullRequests: { taskId: 'githubPullRequests.taskId', openedAt: 'githubPullRequests.openedAt' },
 }));
 vi.mock('drizzle-orm', () => ({
   eq: (left: unknown, right: unknown) => ({ operator: 'eq', left, right }),
@@ -54,17 +55,27 @@ const auditRows = [
 ];
 
 // Builder encadenable y thenable: cada db.select() toma el siguiente resultado de la cola.
-// IMPORTANTE: la cola sigue el orden de las 8 consultas del GET de src/app/api/tasks/[id]/route.ts:
-// responsable, proyecto, subtareas, evidencia, comentarios, auditoría, predecesoras, sucesoras.
+// IMPORTANTE: la cola sigue el orden de las 9 consultas del GET de src/app/api/tasks/[id]/route.ts:
+// responsable, proyecto, subtareas, evidencia, comentarios, auditoría, predecesoras, sucesoras, PR.
 // Si ese orden cambia, hay que actualizar la cola.
+let fromCalls: unknown[];
+let orderByCalls: unknown[];
+let limitCalls: unknown[];
+
 function queueResults(results: unknown[][]) {
   const queue = [...results];
+  fromCalls = [];
+  orderByCalls = [];
+  limitCalls = [];
   mocks.select.mockImplementation(() => {
     const result = queue.shift() ?? [];
     const builder: Record<string, unknown> = {};
-    for (const method of ['from', 'where', 'limit', 'innerJoin', 'orderBy']) {
+    for (const method of ['where', 'innerJoin']) {
       builder[method] = () => builder;
     }
+    builder.from = (table: unknown) => { fromCalls.push(table); return builder; };
+    builder.orderBy = (order: unknown) => { orderByCalls.push(order); return builder; };
+    builder.limit = (n: unknown) => { limitCalls.push(n); return builder; };
     builder.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
       Promise.resolve(result).then(resolve, reject);
     return builder;
@@ -81,6 +92,7 @@ function setupDb() {
     structuredClone(auditRows),
     [],
     [],
+    [],
   ]);
 }
 
@@ -89,7 +101,7 @@ async function getAudit(role: string) {
   const response = await GET(getRequest(), ctx());
   expect(response.status).toBe(200);
   const body = await response.json();
-  expect(mocks.select).toHaveBeenCalledTimes(8);
+  expect(mocks.select).toHaveBeenCalledTimes(9);
   return body.audit as Array<Record<string, unknown>>;
 }
 
@@ -149,7 +161,7 @@ describe('GET /api/tasks/[id]: redacción de ediciones del autor de comentarios 
       status: 'en_proceso',
       dueDateOriginal: null,
     });
-    // Mismo orden de las 8 consultas del GET que setupDb().
+    // Mismo orden de las 9 consultas del GET que setupDb().
     queueResults([
       [{ name: 'Ana', email: 'ana@example.com' }],
       [{ name: 'Proyecto' }],
@@ -157,6 +169,7 @@ describe('GET /api/tasks/[id]: redacción de ediciones del autor de comentarios 
       [],
       [],
       structuredClone(chainedAuditRows),
+      [],
       [],
       [],
     ]);
@@ -181,5 +194,94 @@ describe('GET /api/tasks/[id]: redacción de ediciones del autor de comentarios 
   it('admin recibe toda la cadena intacta', async () => {
     const audit = await getAudit('admin');
     expect(audit).toEqual(chainedAuditRows.map((e) => ({ ...e, redacted: false })));
+  });
+});
+
+describe('GET /api/tasks/[id]: panel del pull request', () => {
+  const prRow = {
+    url: 'https://github.com/forja/app/pull/7',
+    taskId,
+    number: 7,
+    title: 'Filtros guardados',
+    state: 'abierto',
+    headSha: 'abc',
+    authorLogin: 'ana',
+    openedAt: new Date('2026-11-15T12:00:00.000Z'),
+    readyAt: null,
+    mergedAt: null,
+    closedAt: null,
+    firstReviewAt: new Date('2026-11-15T14:15:00.000Z'),
+    reviewers: [{ login: 'luis', state: 'aprobado', submittedAt: '2026-11-15T14:15:00.000Z' }],
+    checks: {
+      sha: 'abc', total: 2, success: 1, failure: 1, pending: 0, updatedAt: '2026-11-15T15:00:00.000Z',
+      runs: { lint: { id: 1, suiteId: 9, state: 'success' }, test: { id: 2, suiteId: 9, state: 'failure' } },
+      suites: { 9: 'failure' },
+    },
+    updatedAt: new Date('2026-11-15T15:00:00.000Z'),
+  };
+
+  function queueWithPr(rows: unknown[]) {
+    queueResults([
+      [{ name: 'Ana', email: 'ana@example.com' }],
+      [{ name: 'Proyecto' }],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      rows,
+    ]);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requireSession.mockResolvedValue({ id: userId, role: 'miembro' });
+    mocks.requireTaskAccess.mockResolvedValue({
+      id: taskId,
+      spaceId: crypto.randomUUID(),
+      responsibleId: userId,
+      status: 'en_proceso',
+      dueDateOriginal: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('devuelve el PR más reciente con revisores { login, state } y checks sin mapas internos', async () => {
+    queueWithPr([structuredClone(prRow)]);
+    const response = await GET(getRequest(), ctx());
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(mocks.requireTaskAccess).toHaveBeenCalledWith(expect.objectContaining({ id: userId }), taskId, 'read');
+    expect(mocks.select).toHaveBeenCalledTimes(9);
+    expect(fromCalls[8]).toEqual({ taskId: 'githubPullRequests.taskId', openedAt: 'githubPullRequests.openedAt' });
+    expect(orderByCalls).toContainEqual({ operator: 'desc', column: 'githubPullRequests.openedAt' });
+    expect(limitCalls).toContain(1);
+    expect(body.pullRequest).toEqual({
+      url: 'https://github.com/forja/app/pull/7',
+      number: 7,
+      title: 'Filtros guardados',
+      state: 'abierto',
+      authorLogin: 'ana',
+      openedAt: '2026-11-15T12:00:00.000Z',
+      readyAt: null,
+      mergedAt: null,
+      closedAt: null,
+      firstReviewAt: '2026-11-15T14:15:00.000Z',
+      reviewers: [{ login: 'luis', state: 'aprobado' }],
+      checks: { sha: 'abc', total: 2, success: 1, failure: 1, pending: 0, updatedAt: '2026-11-15T15:00:00.000Z' },
+    });
+    expect(JSON.stringify(body.pullRequest)).not.toContain('runs');
+    expect(JSON.stringify(body.pullRequest)).not.toContain('suites');
+  });
+
+  it('sin PR → pullRequest: null', async () => {
+    queueWithPr([]);
+    const response = await GET(getRequest(), ctx());
+    expect(response.status).toBe(200);
+    expect((await response.json()).pullRequest).toBeNull();
   });
 });
