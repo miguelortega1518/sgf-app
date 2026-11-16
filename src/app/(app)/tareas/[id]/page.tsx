@@ -13,6 +13,8 @@ import {
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { TaskAuditDetail } from '@/components/audit/audit-entry-detail';
+import { PullRequestPanel } from '@/components/tasks/pull-request-panel';
+import type { PullRequestView } from '@/lib/github-pull-request';
 import Link from 'next/link';
 import { GitPullRequest } from 'lucide-react';
 import {
@@ -58,6 +60,7 @@ type TaskDetail = {
   comments: { id: string; content: string; authorName: string; authorId: string; createdAt: string; editedAt: string | null }[];
   audit: { id: string; action: string; actorName: string; previousValue: string | null; newValue: string | null; reason: string | null; timestamp: string; redacted?: boolean }[];
   dependencies: { predecessors: DepTask[]; successors: DepTask[] };
+  pullRequest: PullRequestView | null;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -297,6 +300,8 @@ export default function TaskDetailPage() {
                 {task.labels?.map(l => <span key={l} className="text-xs text-gray-600 border border-[var(--border)] rounded-full px-2 py-0.5">{l}</span>)}
               </div>
             )}
+
+            <PullRequestPanel pr={data.pullRequest ?? null} now={new Date()} />
 
             <div className="flex items-center gap-3 mt-3 flex-wrap">
               <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[task.status]}`}>

@@ -7,8 +7,15 @@ import {
   classifyPullRequest,
   targetStatusFor,
   summarizeOutcome,
+  summarizePanelOutcome,
   type GithubTrigger,
 } from '../src/lib/github-webhook';
+import {
+  checkRunEventSchema,
+  checkSuiteEventSchema,
+  pullRequestEventSchema,
+  pullRequestReviewEventSchema,
+} from '../src/lib/schemas/github-webhook';
 
 const SECRET = 'secreto-de-prueba';
 
@@ -193,5 +200,178 @@ describe('summarizeOutcome', () => {
 
   it('sin resultados devuelve cadena vacía', () => {
     expect(summarizeOutcome([])).toBe('');
+  });
+});
+
+describe('summarizePanelOutcome', () => {
+  it('resume cada PR', () => {
+    expect(summarizePanelOutcome([
+      { prUrl: 'https://github.com/forja/app/pull/7', outcome: 'aplicado' },
+      { prUrl: 'https://github.com/forja/app/pull/8', outcome: 'sin_cambios' },
+    ])).toBe('https://github.com/forja/app/pull/7: aplicado, https://github.com/forja/app/pull/8: sin_cambios');
+  });
+
+  it('trunca a 500 caracteres', () => {
+    const results = Array.from({ length: 20 }, (_, i) => ({ prUrl: `https://github.com/forja/app/pull/${i}`, outcome: 'aplicado' as const }));
+    expect(summarizePanelOutcome(results).length).toBe(500);
+  });
+});
+
+function realPullRequestEvent() {
+  return {
+    action: 'review_requested',
+    number: 7,
+    requested_reviewer: { login: 'luis', id: 3 },
+    pull_request: {
+      html_url: 'https://github.com/forja/app/pull/7',
+      number: 7,
+      state: 'open',
+      title: 'FOR-12 Filtros guardados',
+      body: null,
+      draft: false,
+      merged: false,
+      created_at: '2026-11-15T12:00:00Z',
+      updated_at: '2026-11-15T13:00:00Z',
+      closed_at: null,
+      merged_at: null,
+      user: { login: 'ana', id: 1, type: 'User' },
+      requested_reviewers: [{ login: 'luis', id: 3 }],
+      requested_teams: [],
+      head: { ref: 'feat/FOR-12-filtros', sha: 'a'.repeat(40), label: 'forja:feat' },
+      base: { ref: 'main', sha: 'b'.repeat(40) },
+    },
+    repository: { full_name: 'forja/app', html_url: 'https://github.com/forja/app', default_branch: 'main' },
+    sender: { login: 'ana' },
+  };
+}
+
+describe('pullRequestEventSchema (campos del panel)', () => {
+  it('acepta un payload real', () => {
+    const parsed = pullRequestEventSchema.parse(realPullRequestEvent());
+    expect(parsed.pull_request.state).toBe('open');
+    expect(parsed.pull_request.head.sha).toBe('a'.repeat(40));
+    expect(parsed.pull_request.user.login).toBe('ana');
+    expect(parsed.pull_request.requested_reviewers).toEqual([{ login: 'luis' }]);
+    expect(parsed.requested_reviewer).toEqual({ login: 'luis' });
+    expect(parsed.pull_request.created_at).toBe('2026-11-15T12:00:00Z');
+  });
+
+  it('requested_reviewers es [] por defecto', () => {
+    const payload = realPullRequestEvent() as { pull_request: Record<string, unknown> };
+    delete payload.pull_request.requested_reviewers;
+    expect(pullRequestEventSchema.parse(payload).pull_request.requested_reviewers).toEqual([]);
+  });
+
+  it('rechaza un login de más de 100 caracteres', () => {
+    const payload = realPullRequestEvent();
+    payload.pull_request.user.login = 'x'.repeat(101);
+    const result = pullRequestEventSchema.safeParse(payload);
+    expect(result.success).toBe(false);
+    expect(result.error!.issues[0].message).toMatch(/100 caracteres/);
+  });
+
+  it('rechaza más de 100 requested_reviewers', () => {
+    const payload = realPullRequestEvent();
+    payload.pull_request.requested_reviewers = Array.from({ length: 101 }, (_, i) => ({ login: `u${i}`, id: i }));
+    expect(pullRequestEventSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it('rechaza un head.sha vacío', () => {
+    const payload = realPullRequestEvent();
+    payload.pull_request.head.sha = '';
+    expect(pullRequestEventSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it('rechaza un state desconocido y una fecha que no es ISO', () => {
+    const bad = realPullRequestEvent();
+    bad.pull_request.state = 'merged';
+    expect(pullRequestEventSchema.safeParse(bad).success).toBe(false);
+    const badDate = realPullRequestEvent();
+    badDate.pull_request.created_at = 'ayer';
+    expect(pullRequestEventSchema.safeParse(badDate).success).toBe(false);
+  });
+});
+
+function reviewEvent() {
+  return {
+    action: 'submitted',
+    review: { id: 1, user: { login: 'luis' }, state: 'approved', submitted_at: '2026-11-15T14:15:00Z', body: null },
+    pull_request: {
+      html_url: 'https://github.com/forja/app/pull/7',
+      user: { login: 'ana' },
+      requested_reviewers: [],
+    },
+    repository: { html_url: 'https://github.com/forja/app' },
+  };
+}
+
+function checkRunEvent() {
+  return {
+    action: 'completed',
+    check_run: {
+      id: 101, name: 'lint', head_sha: 'a'.repeat(40), status: 'completed', conclusion: 'success',
+      check_suite: { id: 55 }, pull_requests: [],
+    },
+    repository: { html_url: 'https://github.com/forja/app' },
+  };
+}
+
+function checkSuiteEvent() {
+  return {
+    action: 'completed',
+    check_suite: { id: 55, head_sha: 'a'.repeat(40), status: 'completed', conclusion: 'failure' },
+    repository: { html_url: 'https://github.com/forja/app' },
+  };
+}
+
+describe('esquemas de pull_request_review, check_run y check_suite', () => {
+  it('aceptan payloads reales', () => {
+    expect(pullRequestReviewEventSchema.parse(reviewEvent()).review.state).toBe('approved');
+    expect(checkRunEventSchema.parse(checkRunEvent()).check_run.check_suite.id).toBe(55);
+    expect(checkSuiteEventSchema.parse(checkSuiteEvent()).check_suite.conclusion).toBe('failure');
+  });
+
+  it('aceptan status y conclusion desconocidos o nulos', () => {
+    const run = checkRunEvent();
+    run.check_run.status = 'algo_nuevo';
+    (run.check_run as { conclusion: string | null }).conclusion = null;
+    expect(checkRunEventSchema.safeParse(run).success).toBe(true);
+    const suite = checkSuiteEvent() as { check_suite: Record<string, unknown> };
+    suite.check_suite.status = null;
+    suite.check_suite.conclusion = null;
+    expect(checkSuiteEventSchema.safeParse(suite).success).toBe(true);
+  });
+
+  it('rechazan una html_url sin https', () => {
+    const review = reviewEvent();
+    review.pull_request.html_url = 'http://github.com/forja/app/pull/7';
+    expect(pullRequestReviewEventSchema.safeParse(review).success).toBe(false);
+    const run = checkRunEvent();
+    run.repository.html_url = 'javascript:alert(1)';
+    expect(checkRunEventSchema.safeParse(run).success).toBe(false);
+    const suite = checkSuiteEvent();
+    suite.repository.html_url = 'ftp://github.com/forja/app';
+    expect(checkSuiteEventSchema.safeParse(suite).success).toBe(false);
+  });
+
+  it('rechazan ids no enteros', () => {
+    const run = checkRunEvent();
+    run.check_run.id = 1.5;
+    expect(checkRunEventSchema.safeParse(run).success).toBe(false);
+    const runSuite = checkRunEvent();
+    (runSuite.check_run.check_suite as { id: unknown }).id = '55';
+    expect(checkRunEventSchema.safeParse(runSuite).success).toBe(false);
+    const suite = checkSuiteEvent();
+    suite.check_suite.id = -3;
+    expect(checkSuiteEventSchema.safeParse(suite).success).toBe(false);
+  });
+
+  it('rechazan un nombre de check de más de 255 caracteres y un state de revisión de más de 50', () => {
+    const run = checkRunEvent();
+    run.check_run.name = 'x'.repeat(256);
+    expect(checkRunEventSchema.safeParse(run).success).toBe(false);
+    const review = reviewEvent();
+    review.review.state = 'x'.repeat(51);
+    expect(pullRequestReviewEventSchema.safeParse(review).success).toBe(false);
   });
 });

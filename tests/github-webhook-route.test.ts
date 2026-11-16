@@ -24,7 +24,8 @@ vi.mock('@/lib/task-transitions', async importOriginal => {
 import { POST } from '../src/app/api/integrations/github/webhook/route';
 import { logger } from '../src/lib/logger';
 import { applyStatusTransition } from '../src/lib/task-transitions';
-import { tasks, spaces, evidence, githubDeliveries } from '../src/lib/db/schema';
+import { tasks, spaces, evidence, githubDeliveries, githubPullRequests } from '../src/lib/db/schema';
+import type { GithubPullRequest } from '../src/lib/db/schema';
 
 const applyMock = vi.mocked(applyStatusTransition);
 
@@ -34,7 +35,12 @@ const taskId = crypto.randomUUID();
 const spaceId = crypto.randomUUID();
 const ana = crypto.randomUUID();
 const carla = crypto.randomUUID();
-const PR_URL = 'https://github.com/forja/app/pull/7';
+const REPO_URL = 'https://github.com/forja/app';
+const PR_URL = `${REPO_URL}/pull/7`;
+const CREATED_AT = '2026-11-15T12:00:00.000Z';
+const UPDATED_AT = '2026-11-15T13:00:00.000Z';
+const CLOSED_AT = '2026-11-16T10:00:00.000Z';
+const SHA = 'abc';
 
 type TaskRow = {
   id: string; number: number; title: string; spaceId: string; status: string;
@@ -49,8 +55,19 @@ let actorRows: { id: string }[];
 let seenDeliveries: Set<string>;
 let fromTables: unknown[];
 let forCalls: string[];
+let prForCalls: string[];
+let prRows: GithubPullRequest[];
 let inserts: { table: unknown; values: Record<string, unknown> }[];
 let updates: { table: unknown; input: Record<string, unknown> }[];
+
+function makePrRow(overrides: Partial<GithubPullRequest> = {}): GithubPullRequest {
+  return {
+    url: PR_URL, taskId, number: 7, title: 'Filtros guardados', state: 'abierto', headSha: SHA,
+    authorLogin: 'ana', openedAt: new Date(CREATED_AT), readyAt: null, mergedAt: null, closedAt: null,
+    firstReviewAt: null, reviewers: [], checks: null, updatedAt: new Date(UPDATED_AT),
+    ...overrides,
+  };
+}
 
 function makeTask(overrides: Partial<TaskRow> = {}): TaskRow {
   return {
@@ -81,22 +98,88 @@ function webhook(
 
 function prPayload(
   action: string,
-  pr: { draft?: boolean; merged?: boolean | null; ref?: string; title?: string; body?: string | null } = {},
+  pr: {
+    draft?: boolean; merged?: boolean | null; ref?: string; title?: string; body?: string | null;
+    sha?: string; requested?: string[]; requestedReviewer?: string;
+  } = {},
 ) {
+  // Un PR cerrado lleva state=closed y closed_at; si está fusionado, también merged_at.
+  const closed = action === 'closed';
+  const merged = pr.merged ?? false;
   return {
     action,
     number: 7,
+    ...(pr.requestedReviewer ? { requested_reviewer: { login: pr.requestedReviewer } } : {}),
     pull_request: {
       html_url: PR_URL,
       number: 7,
+      state: closed ? 'closed' : 'open',
       title: pr.title ?? 'Filtros guardados',
       body: pr.body ?? null,
       draft: pr.draft ?? false,
-      merged: pr.merged ?? false,
-      head: { ref: pr.ref ?? 'feat/FOR-12-filtros', sha: 'abc' },
+      merged,
+      created_at: CREATED_AT,
+      updated_at: UPDATED_AT,
+      closed_at: closed ? CLOSED_AT : null,
+      merged_at: closed && merged ? CLOSED_AT : null,
+      head: { ref: pr.ref ?? 'feat/FOR-12-filtros', sha: pr.sha ?? SHA },
       user: { login: 'ana' },
+      requested_reviewers: (pr.requested ?? []).map(login => ({ login })),
     },
-    repository: { full_name: 'forja/app', default_branch: 'main' },
+    repository: { full_name: 'forja/app', html_url: REPO_URL, default_branch: 'main' },
+  };
+}
+
+function reviewPayload(
+  action: string,
+  review: { login?: string; state?: string; submittedAt?: string | null; requested?: string[] } = {},
+) {
+  return {
+    action,
+    review: {
+      id: 1,
+      user: { login: review.login ?? 'luis' },
+      state: review.state ?? 'approved',
+      submitted_at: review.submittedAt === undefined ? '2026-11-15T14:15:00Z' : review.submittedAt,
+    },
+    pull_request: {
+      html_url: PR_URL,
+      user: { login: 'ana' },
+      requested_reviewers: (review.requested ?? []).map(login => ({ login })),
+    },
+    repository: { html_url: REPO_URL },
+  };
+}
+
+function checkRunPayload(
+  action: string,
+  run: { id?: number; name?: string; sha?: string; status?: string; conclusion?: string | null; repo?: string } = {},
+) {
+  return {
+    action,
+    check_run: {
+      id: run.id ?? 101,
+      name: run.name ?? 'lint',
+      head_sha: run.sha ?? SHA,
+      status: run.status ?? 'completed',
+      conclusion: run.conclusion === undefined ? 'success' : run.conclusion,
+      check_suite: { id: 55 },
+      pull_requests: [],
+    },
+    repository: { html_url: run.repo ?? REPO_URL },
+  };
+}
+
+function checkSuitePayload(action: string, suite: { sha?: string; status?: string | null; conclusion?: string | null } = {}) {
+  return {
+    action,
+    check_suite: {
+      id: 55,
+      head_sha: suite.sha ?? SHA,
+      status: suite.status === undefined ? 'completed' : suite.status,
+      conclusion: suite.conclusion === undefined ? 'failure' : suite.conclusion,
+    },
+    repository: { html_url: REPO_URL },
   };
 }
 
@@ -114,7 +197,12 @@ function txChain() {
   builder.from = (t: unknown) => { table = t; fromTables.push(t); return builder; };
   builder.where = () => builder;
   builder.limit = () => builder;
-  builder.for = (mode: string) => { forCalls.push(mode); return builder; };
+  builder.orderBy = () => builder;
+  builder.for = (mode: string) => {
+    forCalls.push(mode);
+    if (table === githubPullRequests) prForCalls.push(mode);
+    return builder;
+  };
   builder.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) => {
     let rows: unknown[] = [];
     if (table === tasks) {
@@ -124,18 +212,35 @@ function txChain() {
       rows = [{ id: spaceId, status: spaceStatus }];
     } else if (table === evidence) {
       rows = [];
+    } else if (table === githubPullRequests) {
+      rows = prRows.map(r => structuredClone(r));
     }
     return Promise.resolve(rows).then(resolve, reject);
   };
   return builder;
 }
 
-function dbChain(result: unknown) {
+// db.select() fuera de la transacción: la persona GitHub o las filas candidatas del panel.
+function dbChain() {
+  let table: unknown;
   const builder: Record<string, unknown> = {};
-  for (const method of ['from', 'where', 'limit']) builder[method] = () => builder;
+  builder.from = (t: unknown) => { table = t; return builder; };
+  for (const method of ['where', 'limit', 'orderBy']) builder[method] = () => builder;
   builder.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
-    Promise.resolve(result).then(resolve, reject);
+    Promise.resolve(table === githubPullRequests ? prRows.map(r => structuredClone(r)) : actorRows).then(resolve, reject);
   return builder;
+}
+
+function prInserts() {
+  return inserts.filter(i => i.table === githubPullRequests).map(i => i.values);
+}
+
+function prUpdates() {
+  return updates.filter(u => u.table === githubPullRequests).map(u => u.input);
+}
+
+function deliveryInserts() {
+  return inserts.filter(i => i.table === githubDeliveries);
 }
 
 const tx = { select: mocks.txSelect, insert: mocks.txInsert, update: mocks.txUpdate };
@@ -166,6 +271,8 @@ beforeEach(() => {
   seenDeliveries = new Set();
   fromTables = [];
   forCalls = [];
+  prForCalls = [];
+  prRows = [];
   inserts = [];
   updates = [];
 
@@ -174,11 +281,12 @@ beforeEach(() => {
 
   mocks.logAudit.mockResolvedValue(undefined);
   mocks.notify.mockResolvedValue(null);
-  mocks.select.mockImplementation(() => dbChain(actorRows));
+  mocks.select.mockImplementation(() => dbChain());
   mocks.txSelect.mockImplementation(() => txChain());
   mocks.txInsert.mockImplementation((table: unknown) => ({
     values: (values: Record<string, unknown>) => {
       inserts.push({ table, values });
+      if (table === githubPullRequests) prRows.push({ ...(values as GithubPullRequest) });
       return {
         onConflictDoNothing: () => ({
           returning: async () => {
@@ -188,12 +296,16 @@ beforeEach(() => {
             return [{ ...values }];
           },
         }),
+        then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+          Promise.resolve([]).then(resolve, reject),
       };
     },
   }));
   mocks.txUpdate.mockImplementation((table: unknown) => ({
     set: (input: Record<string, unknown>) => {
       updates.push({ table, input });
+      // El mock no evalúa el where: con una sola fila del PR, la actualiza.
+      if (table === githubPullRequests && prRows.length === 1) prRows[0] = { ...prRows[0], ...input };
       const result = table === tasks ? [{ ...baseTask, ...input }] : [];
       const builder: Record<string, unknown> = {
         where: () => builder,
@@ -270,7 +382,7 @@ describe('POST /api/integrations/github/webhook: autenticación', () => {
 });
 
 describe('POST /api/integrations/github/webhook: eventos ignorados y entrada inválida', () => {
-  it.each(['ping', 'issues', 'pull_request_review'])('X-GitHub-Event %s → 200 { ignored: true } sin tocar la base', async (event) => {
+  it.each(['ping', 'issues', 'pull_request_review_comment', 'status'])('X-GitHub-Event %s → 200 { ignored: true } sin tocar la base', async (event) => {
     const res = await POST(webhook(event, { zen: 'hola' }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ignored: true });
@@ -317,7 +429,7 @@ describe('POST /api/integrations/github/webhook: eventos ignorados y entrada inv
     expectNoDbAccess();
   });
 
-  it.each(['synchronize', 'edited', 'labeled'])('pull_request %s → 200 { ignored: true }', async (action) => {
+  it.each(['labeled', 'assigned', 'auto_merge_enabled'])('pull_request %s → 200 { ignored: true }', async (action) => {
     const res = await POST(webhook('pull_request', prPayload(action)));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ignored: true });
@@ -404,12 +516,15 @@ describe('POST /api/integrations/github/webhook: enlace y PR abierto', () => {
     expect(taskUpdates()[0]).toEqual({ branch: 'feat/filtros', prUrl: PR_URL });
   });
 
-  it('si el enlace ya coincide y la tarea está en en_revision no escribe ni audita', async () => {
+  it('si el enlace y el panel ya coinciden y la tarea está en en_revision no escribe ni audita', async () => {
     baseTask = makeTask({ status: 'en_revision', branch: 'feat/FOR-12-filtros', prUrl: PR_URL });
+    prRows = [makePrRow()];
     const res = await POST(webhook('pull_request', prPayload('reopened')));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ taskNumber: 12, outcome: 'sin_cambios' }] });
     expect(taskUpdates()).toEqual([]);
+    expect(prInserts()).toEqual([]);
+    expect(prUpdates()).toEqual([]);
     expect(mocks.logAudit).not.toHaveBeenCalled();
     expect(updates.find(u => u.table === githubDeliveries)?.input).toEqual({ outcome: 'FOR-12: sin_cambios' });
   });
@@ -496,6 +611,7 @@ describe('POST /api/integrations/github/webhook: reglas de estado', () => {
 
   it('closed sin merge desde no_iniciada no cambia el estado', async () => {
     baseTask = makeTask({ status: 'no_iniciada', branch: 'feat/FOR-12-filtros', prUrl: PR_URL });
+    prRows = [makePrRow({ state: 'cerrado', closedAt: new Date(CLOSED_AT) })];
     const res = await POST(webhook('pull_request', prPayload('closed', { merged: false })));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ taskNumber: 12, outcome: 'sin_cambios' }] });
@@ -541,6 +657,7 @@ describe('POST /api/integrations/github/webhook: reglas de estado', () => {
 describe('POST /api/integrations/github/webhook: excepciones', () => {
   it('merge de una tarea con requiresApproval en en_revision no la completa', async () => {
     baseTask = makeTask({ status: 'en_revision', requiresApproval: true, branch: 'feat/FOR-12-filtros', prUrl: PR_URL });
+    prRows = [makePrRow({ state: 'fusionado', mergedAt: new Date(CLOSED_AT), closedAt: new Date(CLOSED_AT) })];
     const res = await POST(webhook('pull_request', prPayload('closed', { merged: true })));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ taskNumber: 12, outcome: 'sin_cambios' }] });
@@ -566,7 +683,7 @@ describe('POST /api/integrations/github/webhook: excepciones', () => {
     expect(mocks.logAudit).not.toHaveBeenCalled();
   });
 
-  it('un proyecto cerrado → rechazado, sin tocar la tarea ni auditar', async () => {
+  it('un proyecto cerrado → rechazado: actualiza el panel, pero no toca la tarea ni audita', async () => {
     spaceStatus = 'cerrado';
     const res = await POST(webhook('pull_request', prPayload('opened')));
     expect(res.status).toBe(200);
@@ -574,13 +691,17 @@ describe('POST /api/integrations/github/webhook: excepciones', () => {
     expect(taskUpdates()).toEqual([]);
     expect(mocks.logAudit).not.toHaveBeenCalled();
     expect(applyMock).not.toHaveBeenCalled();
+    expect(prInserts()).toHaveLength(1);
+    expect(prInserts()[0]).toEqual(expect.objectContaining({ url: PR_URL, taskId, state: 'abierto' }));
   });
 
-  it('una tarea inexistente → sin_tarea con 200', async () => {
+  it('una tarea inexistente → sin_tarea con 200 y sin fila del PR', async () => {
     taskQueue = [null];
     const res = await POST(webhook('pull_request', prPayload('opened')));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ taskNumber: 12, outcome: 'sin_tarea' }] });
+    expect(prInserts()).toEqual([]);
+    expect(prUpdates()).toEqual([]);
     expect(updates.filter(u => u.table === tasks)).toEqual([]);
     expect(mocks.logAudit).not.toHaveBeenCalled();
     expect(updates.find(u => u.table === githubDeliveries)?.input).toEqual({ outcome: 'FOR-12: sin_tarea' });
@@ -615,5 +736,282 @@ describe('POST /api/integrations/github/webhook: excepciones', () => {
     expect((await res.json()).error).toContain('(ref.');
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.logAudit).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/integrations/github/webhook: panel del PR en eventos pull_request', () => {
+  it.each([
+    ['opened', {}, 'abierto'],
+    ['reopened', {}, 'abierto'],
+    ['ready_for_review', {}, 'abierto'],
+    ['converted_to_draft', { draft: true }, 'borrador'],
+    ['synchronize', {}, 'abierto'],
+    ['closed', { merged: true }, 'fusionado'],
+    ['review_requested', { requestedReviewer: 'luis', requested: ['luis'] }, 'abierto'],
+    ['review_request_removed', {}, 'abierto'],
+    ['edited', {}, 'abierto'],
+  ] as const)('%s crea la fila del PR con estado %s', async (action, opts, state) => {
+    const res = await POST(webhook('pull_request', prPayload(action, opts)));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ taskNumber: 12, outcome: 'aplicado' }] });
+    expect(prForCalls).toContain('update');
+    expect(prInserts()).toHaveLength(1);
+    expect(prInserts()[0]).toEqual(expect.objectContaining({
+      url: PR_URL, taskId, number: 7, title: 'Filtros guardados', state, headSha: SHA, authorLogin: 'ana',
+      openedAt: new Date(CREATED_AT),
+    }));
+  });
+
+  it('closed sin merge deja el PR cerrado con closed_at del payload', async () => {
+    await POST(webhook('pull_request', prPayload('closed', { merged: false })));
+    expect(prInserts()[0]).toEqual(expect.objectContaining({ state: 'cerrado', closedAt: new Date(CLOSED_AT), mergedAt: null }));
+  });
+
+  it.each([
+    ['synchronize', {}],
+    ['edited', {}],
+    ['review_requested', { requestedReviewer: 'luis', requested: ['luis'] }],
+    ['review_request_removed', {}],
+    ['converted_to_draft', { draft: true }],
+  ] as const)('%s no toca la tarea, ni transiciona, ni audita', async (action, opts) => {
+    const res = await POST(webhook('pull_request', prPayload(action, opts)));
+    expect(res.status).toBe(200);
+    expect(taskUpdates()).toEqual([]);
+    expect(applyMock).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(prInserts()).toHaveLength(1);
+  });
+
+  it('synchronize con otro sha actualiza head_sha y reinicia los checks', async () => {
+    prRows = [makePrRow({
+      checks: {
+        sha: SHA, total: 2, success: 1, failure: 1, pending: 0, updatedAt: UPDATED_AT,
+        runs: { lint: { id: 1, suiteId: 55, state: 'success' }, test: { id: 2, suiteId: 55, state: 'failure' } },
+        suites: {},
+      },
+    })];
+    const res = await POST(webhook('pull_request', prPayload('synchronize', { sha: 'nuevo' })));
+    expect(res.status).toBe(200);
+    expect(prUpdates()).toHaveLength(1);
+    const update = prUpdates()[0];
+    expect(update.headSha).toBe('nuevo');
+    expect(update.checks).toEqual(expect.objectContaining({ sha: 'nuevo', total: 0, success: 0, failure: 0, pending: 0, runs: {}, suites: {} }));
+    expect(update.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('ready_for_review fija ready_at con el updated_at del payload y no lo sobreescribe', async () => {
+    prRows = [makePrRow({ state: 'borrador' })];
+    await POST(webhook('pull_request', prPayload('ready_for_review')));
+    expect(prUpdates()[0]).toEqual(expect.objectContaining({ state: 'abierto', readyAt: new Date(UPDATED_AT) }));
+
+    const earlier = new Date('2026-11-15T12:30:00.000Z');
+    prRows = [makePrRow({ readyAt: earlier, state: 'borrador' })];
+    updates = [];
+    await POST(webhook('pull_request', prPayload('ready_for_review'), { delivery: 'delivery-2' }));
+    expect(prUpdates()[0].readyAt).toEqual(earlier);
+  });
+
+  it('reopened deja merged_at y closed_at en null', async () => {
+    prRows = [makePrRow({ state: 'cerrado', closedAt: new Date(CLOSED_AT) })];
+    await POST(webhook('pull_request', prPayload('reopened')));
+    expect(prUpdates()[0]).toEqual(expect.objectContaining({ state: 'abierto', closedAt: null, mergedAt: null }));
+  });
+
+  it('review_requested deja pendiente a quien ya aprobó y añade a los pedidos', async () => {
+    prRows = [makePrRow({ reviewers: [{ login: 'luis', state: 'aprobado', submittedAt: '2026-11-15T14:00:00.000Z' }] })];
+    await POST(webhook('pull_request', prPayload('review_requested', { requestedReviewer: 'luis', requested: ['luis', 'carla'] })));
+    const reviewers = prUpdates()[0].reviewers as { login: string; state: string }[];
+    expect(reviewers.map(r => [r.login, r.state])).toEqual([['carla', 'pendiente'], ['luis', 'pendiente']]);
+  });
+
+  it('un edited que cambia la clave mueve la fila a la otra tarea', async () => {
+    const otherTaskId = crypto.randomUUID();
+    baseTask = makeTask({ id: otherTaskId, number: 13 });
+    prRows = [makePrRow()];
+    const res = await POST(webhook('pull_request', prPayload('edited', { ref: 'feat/filtros', title: 'FOR-13 Filtros' })));
+    expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ taskNumber: 13, outcome: 'aplicado' }] });
+    expect(prUpdates()[0]).toEqual(expect.objectContaining({ taskId: otherTaskId, title: 'FOR-13 Filtros' }));
+  });
+
+  it('bloquea la tarea antes que la fila del PR', async () => {
+    await POST(webhook('pull_request', prPayload('synchronize')));
+    const taskIdx = fromTables.indexOf(tasks);
+    const prIdx = fromTables.indexOf(githubPullRequests);
+    expect(taskIdx).toBeGreaterThanOrEqual(0);
+    expect(prIdx).toBeGreaterThan(taskIdx);
+  });
+});
+
+describe('POST /api/integrations/github/webhook: pull_request_review', () => {
+  it('sin fila del PR → 200 { ignored: true } sin insertar la entrega', async () => {
+    const res = await POST(webhook('pull_request_review', reviewPayload('submitted')));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ignored: true });
+    expect(mocks.select).toHaveBeenCalledTimes(1);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(deliveryInserts()).toEqual([]);
+  });
+
+  it('submitted actualiza los revisores y first_review_at, sin auditar', async () => {
+    prRows = [makePrRow({ reviewers: [{ login: 'luis', state: 'pendiente' }] })];
+    const res = await POST(webhook('pull_request_review', reviewPayload('submitted')));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ prUrl: PR_URL, outcome: 'aplicado' }] });
+    expect(deliveryInserts()[0].values).toEqual({ deliveryId: 'delivery-1', event: 'pull_request_review' });
+    expect(prForCalls).toEqual(['update']);
+    expect(prUpdates()).toHaveLength(1);
+    expect(prUpdates()[0]).toEqual(expect.objectContaining({
+      reviewers: [{ login: 'luis', state: 'aprobado', submittedAt: '2026-11-15T14:15:00Z' }],
+      firstReviewAt: new Date('2026-11-15T14:15:00Z'),
+    }));
+    expect(fromTables).not.toContain(tasks);
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+    expect(updates.find(u => u.table === githubDeliveries)?.input).toEqual({ outcome: `${PR_URL}: aplicado` });
+  });
+
+  it('no sobreescribe first_review_at', async () => {
+    const first = new Date('2026-11-15T13:30:00.000Z');
+    prRows = [makePrRow({ firstReviewAt: first })];
+    await POST(webhook('pull_request_review', reviewPayload('submitted', { login: 'carla', state: 'commented' })));
+    expect(prUpdates()[0].firstReviewAt).toEqual(first);
+  });
+
+  it('dismissed vuelve a pendiente a quien sigue pedido', async () => {
+    prRows = [makePrRow({ reviewers: [{ login: 'luis', state: 'aprobado', submittedAt: '2026-11-15T14:15:00Z' }] })];
+    await POST(webhook('pull_request_review', reviewPayload('dismissed', { state: 'dismissed', requested: ['luis'] })));
+    const reviewers = prUpdates()[0].reviewers as { login: string; state: string }[];
+    expect(reviewers.map(r => [r.login, r.state])).toEqual([['luis', 'pendiente']]);
+  });
+
+  it('una revisión que no cambia nada → sin_cambios sin update del PR', async () => {
+    prRows = [makePrRow({
+      reviewers: [{ login: 'luis', state: 'aprobado', submittedAt: '2026-11-15T15:00:00Z' }],
+      firstReviewAt: new Date('2026-11-15T14:00:00Z'),
+    })];
+    const res = await POST(webhook('pull_request_review', reviewPayload('submitted', { state: 'commented' })));
+    expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ prUrl: PR_URL, outcome: 'sin_cambios' }] });
+    expect(prUpdates()).toEqual([]);
+  });
+
+  it('la revisión del autor se ignora sin tocar la base', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('pull_request_review', reviewPayload('submitted', { login: 'ana' })));
+    expect(await res.json()).toEqual({ ignored: true });
+    expectNoDbAccess();
+  });
+
+  it('otras acciones de review → { ignored: true } sin tocar la base', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('pull_request_review', reviewPayload('edited')));
+    expect(await res.json()).toEqual({ ignored: true });
+    expectNoDbAccess();
+  });
+
+  it('una entrega duplicada → { duplicate: true } sin update del PR', async () => {
+    prRows = [makePrRow()];
+    seenDeliveries.add('delivery-1');
+    const res = await POST(webhook('pull_request_review', reviewPayload('submitted')));
+    expect(await res.json()).toEqual({ duplicate: true });
+    expect(prUpdates()).toEqual([]);
+    expect(prForCalls).toEqual([]);
+  });
+
+  it('un payload inválido → 400 sin logger.error', async () => {
+    const payload = reviewPayload('submitted');
+    payload.pull_request.html_url = 'http://github.com/forja/app/pull/7';
+    const res = await POST(webhook('pull_request_review', payload));
+    expect(res.status).toBe(400);
+    expect(logger.error).not.toHaveBeenCalled();
+    expectNoDbAccess();
+  });
+});
+
+describe('POST /api/integrations/github/webhook: check_run y check_suite', () => {
+  it('check_run sin fila → { ignored: true } sin insertar la entrega', async () => {
+    const res = await POST(webhook('check_run', checkRunPayload('completed')));
+    expect(await res.json()).toEqual({ ignored: true });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(deliveryInserts()).toEqual([]);
+  });
+
+  it('check_run de otro sha no escribe', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('check_run', checkRunPayload('completed', { sha: 'otro' })));
+    expect(await res.json()).toEqual({ ignored: true });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(prUpdates()).toEqual([]);
+  });
+
+  it('check_run de otro repositorio no escribe', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('check_run', checkRunPayload('completed', { repo: 'https://github.com/forja/otro' })));
+    expect(await res.json()).toEqual({ ignored: true });
+    expect(prUpdates()).toEqual([]);
+  });
+
+  it('check_run del sha actual actualiza los checks con FOR UPDATE', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('check_run', checkRunPayload('completed', { conclusion: 'failure' })));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ prUrl: PR_URL, outcome: 'aplicado' }] });
+    expect(deliveryInserts()[0].values).toEqual({ deliveryId: 'delivery-1', event: 'check_run' });
+    expect(prForCalls).toEqual(['update']);
+    expect(prUpdates()[0].checks).toEqual(expect.objectContaining({ sha: SHA, total: 1, success: 0, failure: 1, pending: 0 }));
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+  });
+
+  it('agrega varios check_run en entregas distintas', async () => {
+    prRows = [makePrRow()];
+    await POST(webhook('check_run', checkRunPayload('completed', { id: 1, name: 'lint' }), { delivery: 'd1' }));
+    await POST(webhook('check_run', checkRunPayload('created', { id: 2, name: 'test', status: 'queued', conclusion: null }), { delivery: 'd2' }));
+    expect(prRows[0].checks).toEqual(expect.objectContaining({ total: 2, success: 1, pending: 1 }));
+  });
+
+  it('check_suite completed cuenta la suite si no hay runs', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('check_suite', checkSuitePayload('completed')));
+    expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ prUrl: PR_URL, outcome: 'aplicado' }] });
+    expect(prUpdates()[0].checks).toEqual(expect.objectContaining({ total: 1, failure: 1 }));
+  });
+
+  it.each(['requested', 'rerequested'])('check_suite %s cuenta como pendiente', async (action) => {
+    prRows = [makePrRow()];
+    await POST(webhook('check_suite', checkSuitePayload(action, { status: 'queued', conclusion: null })));
+    expect(prUpdates()[0].checks).toEqual(expect.objectContaining({ total: 1, pending: 1 }));
+  });
+
+  it('otras acciones de check_suite → { ignored: true }', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('check_suite', checkSuitePayload('otra_accion')));
+    expect(await res.json()).toEqual({ ignored: true });
+    expectNoDbAccess();
+  });
+
+  it('check_suite de otro sha no escribe', async () => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook('check_suite', checkSuitePayload('completed', { sha: 'otro' })));
+    expect(await res.json()).toEqual({ ignored: true });
+    expect(prUpdates()).toEqual([]);
+  });
+
+  it('una entrega duplicada de check_run → { duplicate: true } sin update', async () => {
+    prRows = [makePrRow()];
+    seenDeliveries.add('delivery-1');
+    const res = await POST(webhook('check_run', checkRunPayload('completed')));
+    expect(await res.json()).toEqual({ duplicate: true });
+    expect(prUpdates()).toEqual([]);
+  });
+
+  it.each([
+    ['check_run', () => { const p = checkRunPayload('completed'); p.check_run.id = 1.5; return p; }],
+    ['check_run', () => { const p = checkRunPayload('completed'); p.repository.html_url = 'http://github.com/forja/app'; return p; }],
+    ['check_suite', () => { const p = checkSuitePayload('completed'); p.check_suite.id = -1; return p; }],
+  ] as const)('%s inválido → 400 sin logger.error', async (event, build) => {
+    prRows = [makePrRow()];
+    const res = await POST(webhook(event, build()));
+    expect(res.status).toBe(400);
+    expect(logger.error).not.toHaveBeenCalled();
+    expectNoDbAccess();
   });
 });

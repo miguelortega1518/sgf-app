@@ -215,6 +215,43 @@ export function delayReasonLabel(reason: string): string {
   return Object.hasOwn(DELAY_REASON_LABEL, reason) ? DELAY_REASON_LABEL[reason as DelayReason] : reason;
 }
 
+// --- Panel «Pull request» ---
+// Estados de github_pull_requests.state y de cada revisor (src/lib/github-pull-request.ts).
+
+export const PR_STATE_ORDER = ['abierto', 'borrador', 'fusionado', 'cerrado'] as const;
+export type PrStateCode = (typeof PR_STATE_ORDER)[number];
+
+export const PR_STATE_LABEL: Record<PrStateCode, string> = {
+  abierto: 'Abierto',
+  borrador: 'Borrador',
+  fusionado: 'Fusionado',
+  cerrado: 'Cerrado',
+};
+
+export const PR_STATE_CHIP: Record<PrStateCode, string> = {
+  abierto: 'bg-green-100 text-green-700',
+  borrador: 'bg-gray-100 text-gray-700',
+  fusionado: 'bg-purple-100 text-purple-700',
+  cerrado: 'bg-red-100 text-red-700',
+};
+
+export const REVIEWER_STATE_ORDER = ['pendiente', 'aprobado', 'cambios', 'comentado'] as const;
+export type ReviewerStateCode = (typeof REVIEWER_STATE_ORDER)[number];
+
+export const REVIEWER_STATE_LABEL: Record<ReviewerStateCode, string> = {
+  pendiente: 'Pendiente',
+  aprobado: 'Aprobado',
+  cambios: 'Pidió cambios',
+  comentado: 'Comentó',
+};
+
+export const REVIEWER_STATE_CHIP: Record<ReviewerStateCode, string> = {
+  pendiente: 'bg-gray-100 text-gray-700',
+  aprobado: 'bg-green-100 text-green-700',
+  cambios: 'bg-red-100 text-red-700',
+  comentado: 'bg-sky-100 text-sky-700',
+};
+
 /** Clave legible de una tarea: FOR-142. */
 export function taskKey(n: number | null | undefined): string {
   return n ? `FOR-${n}` : '';

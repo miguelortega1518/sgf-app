@@ -121,10 +121,23 @@ export type GithubTaskOutcome = 'aplicado' | 'sin_cambios' | 'sin_tarea' | 'rech
 
 export type GithubTaskResult = { taskNumber: number; outcome: GithubTaskOutcome };
 
+const MAX_OUTCOME_LENGTH = 500;
+
 /** Resumen que se guarda en github_deliveries.outcome (máximo 500 caracteres). */
 export function summarizeOutcome(results: GithubTaskResult[]): string {
   return results
     .map(r => `FOR-${r.taskNumber}: ${r.outcome}`)
     .join(', ')
-    .slice(0, 500);
+    .slice(0, MAX_OUTCOME_LENGTH);
+}
+
+/** Resultado de un evento que sólo actualiza el panel del PR (review y checks). */
+export type GithubPanelResult = { prUrl: string; outcome: Extract<GithubTaskOutcome, 'aplicado' | 'sin_cambios'> };
+
+/** Resumen de github_deliveries.outcome para los eventos del panel (máximo 500 caracteres). */
+export function summarizePanelOutcome(results: GithubPanelResult[]): string {
+  return results
+    .map(r => `${r.prUrl}: ${r.outcome}`)
+    .join(', ')
+    .slice(0, MAX_OUTCOME_LENGTH);
 }
