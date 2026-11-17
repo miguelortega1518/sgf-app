@@ -395,6 +395,16 @@ describe('POST /api/spaces/[id]/import-csv: importación', () => {
     expect(mocks.recordFailure.mock.invocationCallOrder[0]).toBeGreaterThan(mocks.transaction.mock.invocationCallOrder[0]);
   });
 
+  it('si falla el registro del rate limit tras importar, responde 201 igualmente', async () => {
+    mocks.recordFailure.mockRejectedValueOnce(new Error('db caída'));
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    const res = await POST(...request({ csv: csvWith(1), dryRun: false }));
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ imported: 1 });
+    expect(warn).toHaveBeenCalledWith('import_csv_rate_limit_record_failed', { message: 'db caída' });
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it('las búsquedas y escrituras son de coste constante (1 fila = 200 filas)', async () => {
     await POST(...request({ csv: csvWith(1), dryRun: false }));
     const withOne = dbCallCount();

@@ -7,6 +7,7 @@ import { canCreateAndAssignTask } from '@/lib/permissions';
 import { success, error, handleError } from '@/lib/api-utils';
 import { assertValidUuid, computeProjectAccess, requireProjectAccess } from '@/lib/project-access';
 import { checkRateLimit, recordFailure, formatWait } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 import {
   importCsvBodySchema,
   IMPORT_CSV_MAX_BYTES,
@@ -224,7 +225,15 @@ export async function POST(
     }
 
     // Sin avisos de asignación: un alta masiva no debe inundar la bandeja del equipo.
-    await recordFailure(rateKey);
+    // Las tareas ya están creadas: si falla el registro del rate limit no se responde 500,
+    // porque la persona reintentaría y duplicaría la importación.
+    try {
+      await recordFailure(rateKey);
+    } catch (err) {
+      logger.warn('import_csv_rate_limit_record_failed', {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
     return success({ imported: outcome.imported }, 201);
   } catch (err) {
     return handleError(err);
