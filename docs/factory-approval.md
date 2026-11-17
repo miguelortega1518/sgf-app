@@ -64,8 +64,19 @@ el PR ya fusionado y se concilia la tarea sin otro merge. Los checks no se repit
 para un PR que GitHub ya confirma como fusionado; la auditoría indica `alreadyMerged`.
 La confirmación del merge no equivale a confirmar que el despliegue terminó.
 
-Las tareas normales y las finalizaciones directas de la fábrica mediante enlace a
-commit conservan su comportamiento. No se aprueba ninguna tarea existente durante
+**Qué tareas pasan por GitHub.** Sólo las tareas `ai-factory` cuyo enlace es un PR
+(`https://github.com/<repo>/pull/<n>`). Los demás casos:
+
+- **Enlace a commit:** la fábrica fusionó sola un cambio de riesgo bajo, así que ya está en la
+  rama base. La cuenta de la fábrica la cierra como cualquier tarea, aunque esté en revisión:
+  así pasa en su flujo real, porque mueve la tarea a revisión mientras trabajan sus revisores.
+- **Sin enlace y en revisión:** la fábrica todavía está trabajando. No se puede aprobar (409)
+  hasta que enlace su PR o su commit.
+- **Fusionado en GitHub:** si el webhook informa de que el PR se fusionó (o de un push con
+  `Closes FOR-<n>`), la tarea se completa sin volver a integrar desde Forja. El merge en GitHub
+  ya fue la aprobación humana.
+
+Las tareas normales conservan su comportamiento. No se aprueba ninguna tarea existente durante
 la instalación de esta funcionalidad.
 
 ## Validación

@@ -43,6 +43,31 @@ describe('factory transition ordering', () => {
     expect(set).not.toHaveBeenCalled();
     expect(logAudit).not.toHaveBeenCalled();
   });
+  it('lets the factory account close its own task merged without a PR (commit link)', async () => {
+    const { tx, set } = setup([]);
+    const direct = { ...task, requiresEvidence: false, prUrl: 'https://github.com/o/r/commit/' + 'a'.repeat(40) };
+    await applyStatusTransition(tx as never, { id: 'robot', role: 'miembro' }, direct as never,
+      { status: 'activo' }, { status: 'completada' });
+    expect(approve).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ status: 'completada' }));
+    expect(logAudit).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'task_approved' }), tx);
+  });
+  it('completes a factory PR already merged on GitHub (webhook) without integrating again', async () => {
+    const { tx, set } = setup([]);
+    const merged = { ...task, requiresEvidence: false };
+    await applyStatusTransition(tx as never, { id: 'github', role: 'miembro' }, merged as never,
+      { status: 'activo' }, { status: 'completada' }, { mergedOnGitHub: true });
+    expect(approve).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ status: 'completada' }));
+  });
+  it('refuses to approve while the factory is still working (review without any link)', async () => {
+    const { tx, set } = setup();
+    const working = { ...task, prUrl: null };
+    await expect(applyStatusTransition(tx as never, { id: 'reviewer', role: 'admin' }, working as never,
+      { status: 'activo' }, { status: 'completada' })).rejects.toThrow('todavía trabaja');
+    expect(approve).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
+  });
   it.each(['permission', 'evidence', 'closed project'])('checks %s before any GitHub mutation', async reason => {
     const { tx, set } = setup(reason === 'evidence' ? [] : [{ id: 'evidence' }]);
     await expect(applyStatusTransition(tx as never,

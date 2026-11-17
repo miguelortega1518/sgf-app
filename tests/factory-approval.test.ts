@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { approveFactoryPullRequest, needsFactoryApproval } from '../src/lib/factory-approval';
+import { approveFactoryPullRequest, factoryStillWorking, needsFactoryApproval } from '../src/lib/factory-approval';
 
 const sha = 'a'.repeat(40);
 const baseSha = 'b'.repeat(40);
@@ -99,10 +99,16 @@ describe('Forja approval and GitHub merge', () => {
     expect(fetchMock.mock.calls.some(c => String((c as unknown[])[0]).includes('page=2'))).toBe(true);
     expect(mergeCalls()).toHaveLength(0);
   });
-  it('targets factory review tasks, preserving ordinary tasks and direct-commit completion', () => {
-    expect(needsFactoryApproval({ status: 'en_revision', labels: ['ai-factory'] })).toBe(true);
+  it('targets factory tasks with a PR, preserving ordinary tasks and direct-commit completion', () => {
+    const commit = 'https://github.com/o/r/commit/' + 'a'.repeat(40);
+    expect(needsFactoryApproval({ status: 'en_revision', labels: ['ai-factory'], prUrl: url })).toBe(true);
     expect(needsFactoryApproval({ status: 'en_proceso', labels: ['ai-factory'], prUrl: url })).toBe(true);
-    expect(needsFactoryApproval({ status: 'en_revision' })).toBe(false);
-    expect(needsFactoryApproval({ status: 'en_proceso', labels: ['ai-factory'], prUrl: 'https://github.com/o/r/commit/aaa' })).toBe(false);
+    expect(needsFactoryApproval({ status: 'en_revision', prUrl: url })).toBe(false);
+    // La fábrica fusionó sola (riesgo bajo): la tarea está en revisión con enlace al commit.
+    expect(needsFactoryApproval({ status: 'en_revision', labels: ['ai-factory'], prUrl: commit })).toBe(false);
+    expect(needsFactoryApproval({ status: 'en_revision', labels: ['ai-factory'] })).toBe(false);
+    expect(factoryStillWorking({ status: 'en_revision', labels: ['ai-factory'] })).toBe(true);
+    expect(factoryStillWorking({ status: 'en_revision', labels: ['ai-factory'], prUrl: commit })).toBe(false);
+    expect(factoryStillWorking({ status: 'en_revision' })).toBe(false);
   });
 });

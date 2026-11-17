@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import { canApproveTask } from './permissions';
 import { logAudit } from './audit';
 import { todayRD } from './date-utils';
-import { approveFactoryPullRequest, needsFactoryApproval } from './factory-approval';
+import { approveFactoryPullRequest, factoryStillWorking, needsFactoryApproval } from './factory-approval';
 
 type Task = typeof tasks.$inferSelect;
 type Space = typeof spaces.$inferSelect;
@@ -46,8 +46,11 @@ export function validateStatusTransition(params: {
   newStatus: string;
   input: StatusInput;
   evidenceCount: number;
+  /** El PR ya se fusionó en GitHub (lo informa el webhook): no hay nada que integrar desde Forja. */
+  mergedOnGitHub?: boolean;
 }): TransitionDenied | null {
   const { session, task, spaceStatus, newStatus, input, evidenceCount } = params;
+  const factoryMerge = newStatus === 'completada' && !params.mergedOnGitHub && needsFactoryApproval(task);
 
   if (session.role === 'observador') {
     return { httpStatus: 403, message: 'Sin permisos para cambiar el estado' };
@@ -69,7 +72,11 @@ export function validateStatusTransition(params: {
     }
   }
 
-  if (newStatus === 'completada' && (task.requiresApproval || needsFactoryApproval(task))) {
+  if (newStatus === 'completada' && !params.mergedOnGitHub && factoryStillWorking(task)) {
+    return { httpStatus: 409, message: 'AI Factory todavía trabaja en esta tarea: espera a que enlace su PR o commit' };
+  }
+
+  if (newStatus === 'completada' && (task.requiresApproval || factoryMerge)) {
     const canApprove = canApproveTask(
       session.role as 'admin' | 'miembro' | 'observador',
       session.id,
@@ -103,7 +110,10 @@ export async function applyStatusTransition(
   task: Task,
   space: Pick<Space, 'status'>,
   input: StatusInput,
+  options: { mergedOnGitHub?: boolean } = {},
 ): Promise<{ task: Task; notifications: NotificationIntent[]; isNoop: boolean }> {
+  const mergedOnGitHub = options.mergedOnGitHub === true;
+  const factoryMerge = input.status === 'completada' && !mergedOnGitHub && needsFactoryApproval(task);
   // Contar evidencias (necesario para validación)
   const evidenceRows = await tx
     .select({ id: evidence.id })
@@ -117,6 +127,7 @@ export async function applyStatusTransition(
     newStatus: input.status,
     input,
     evidenceCount: evidenceRows.length,
+    mergedOnGitHub,
   });
 
   if (denied) {
@@ -132,7 +143,7 @@ export async function applyStatusTransition(
 
   // The caller holds the task row lock. Never mark it done before GitHub confirms the merge.
   // GitHub cannot roll back with PostgreSQL: retries reconcile an already merged PR.
-  if (input.status === 'completada' && needsFactoryApproval(task)) {
+  if (factoryMerge) {
     const integration = await approveFactoryPullRequest(task.prUrl, session.id);
     await logAudit({
       actorId: session.id, action: 'factory_pr_merged', taskId: task.id,
@@ -175,7 +186,7 @@ export async function applyStatusTransition(
     .returning();
 
   // Auditoría de aprobación (antes del log general para semántica)
-  if (input.status === 'completada' && (task.requiresApproval || needsFactoryApproval(task))) {
+  if (input.status === 'completada' && (task.requiresApproval || factoryMerge)) {
     const isAdminOverride = session.id !== task.reviewerId && session.role === 'admin';
     await logAudit({
       actorId: session.id,
