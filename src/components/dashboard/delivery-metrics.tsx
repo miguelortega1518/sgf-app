@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { AREA_LABEL, KIND_LABEL, type TaskKind } from '@/lib/labels';
+import type { CycleStats, LeadStats, WipAgingRow } from '@/lib/metrics';
+import { CycleTimeSummary, WipAgingList } from './wip-aging-list';
 
 type Metrics = {
   velocity: { start: string; tasks: number; points: number }[];
   averagePointsPerWeek: number;
-  cycleTime: { count: number; median: number | null; p85: number | null };
+  cycleTime: CycleStats;
+  leadTime: LeadStats;
+  wipAging: WipAgingRow[];
+  wipAgingTotal: number;
   wip: { personId: string; name: string; inProgress: number; inReview: number; blocked: number }[];
   blockers: { area: string; count: number }[];
   doneByKind: { kind: string; count: number }[];
@@ -64,23 +69,7 @@ export function DeliveryMetrics() {
 
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
           <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">Tiempo de ciclo · últimos 60 días</h3>
-          {m.cycleTime.count === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">Aún no hay tareas terminadas en este periodo.</p>
-          ) : (
-            <dl className="grid grid-cols-2 gap-4">
-              <div>
-                <dt className="text-xs text-[var(--text-muted)]">Mediana</dt>
-                <dd className="tabular text-2xl font-semibold text-[var(--text-primary)]">{m.cycleTime.median}<span className="text-sm font-normal text-[var(--text-muted)]"> días</span></dd>
-              </div>
-              <div>
-                <dt className="text-xs text-[var(--text-muted)]">9 de cada 10 tareas</dt>
-                <dd className="tabular text-2xl font-semibold text-[var(--text-primary)]">≤ {m.cycleTime.p85}<span className="text-sm font-normal text-[var(--text-muted)]"> días</span></dd>
-              </div>
-            </dl>
-          )}
-          <p className="mt-3 text-xs text-[var(--text-muted)]">
-            {m.cycleTime.count} tareas terminadas · {m.openTasks} abiertas
-          </p>
+          <CycleTimeSummary cycle={m.cycleTime} lead={m.leadTime} openTasks={m.openTasks} />
           {m.doneByKind.length > 0 && (
             <ul className="mt-4 flex flex-wrap gap-2">
               {m.doneByKind.map(k => (
@@ -118,6 +107,11 @@ export function DeliveryMetrics() {
               </tbody>
             </table>
           )}
+        </div>
+
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
+          <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">Antigüedad del trabajo en curso</h3>
+          <WipAgingList items={m.wipAging} total={m.wipAgingTotal} />
         </div>
 
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
