@@ -91,6 +91,32 @@ describe('parseCsv: comillas (RFC 4180)', () => {
     expect(r.rows[0].cells).toEqual(['Uno', '']);
   });
 
+  it('tolera espacios antes de la comilla de apertura', () => {
+    const r = parseCsv('titulo,descripcion\n  "Uno, dos",  "a"\n');
+    expect(r.rows[0].cells).toEqual(['Uno, dos', 'a']);
+  });
+
+  it('una comilla en medio de un campo sin comillas es un carácter literal', () => {
+    const r = parseCsv('titulo,descripcion\nDe 5" de ancho,a"b\n');
+    expect(r.rows[0].cells).toEqual(['De 5" de ancho', 'a"b']);
+  });
+
+  it('tras un campo entre comillas con contenido, otra comilla es literal', () => {
+    const r = parseCsv('titulo,descripcion\n"abc" ",x\n');
+    expect(r.rows[0].cells).toEqual(['abc "', 'x']);
+  });
+
+  it('un campo sin comillas seguido de muchísimas comillas se lee en tiempo lineal', () => {
+    const quotes = '"'.repeat(1_000_000);
+    const csv = 'titulo\na' + quotes;
+    const start = performance.now();
+    const r = parseCsv(csv);
+    const elapsed = performance.now() - start;
+    expect(elapsed).toBeLessThan(1000);
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].cells[0]).toBe('a' + quotes);
+  });
+
   it('lanza CsvParseError con la línea si una comilla no se cierra', () => {
     let caught: unknown;
     try {

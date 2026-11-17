@@ -64,6 +64,9 @@ export function parseCsv(input: string): CsvParseResult {
   let quoteLine = 1;
   let inQuotes = false;
   let field = '';
+  // true mientras `field` sólo contiene espacios: equivale a `field.trim() === ''` en O(1),
+  // para no recorrer el campo entero en cada comilla (sería O(n²) con un campo lleno de `"`).
+  let fieldBlank = true;
   let cells: string[] = [];
   let recordHasData = false;
 
@@ -72,6 +75,7 @@ export function parseCsv(input: string): CsvParseResult {
     if (!isBlank(cells)) records.push({ line: recordLine, cells });
     cells = [];
     field = '';
+    fieldBlank = true;
     recordHasData = false;
   };
 
@@ -80,7 +84,7 @@ export function parseCsv(input: string): CsvParseResult {
 
     if (inQuotes) {
       if (ch === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
+        if (text[i + 1] === '"') { field += '"'; fieldBlank = false; i++; }
         else inQuotes = false;
       } else if (ch === '\r' || ch === '\n') {
         // Dentro de un campo, cualquier fin de línea se guarda como '\n'.
@@ -89,19 +93,22 @@ export function parseCsv(input: string): CsvParseResult {
         line++;
       } else {
         field += ch;
+        if (fieldBlank && ch.trim() !== '') fieldBlank = false;
       }
       continue;
     }
 
-    if (ch === '"' && field.trim() === '') {
+    if (ch === '"' && fieldBlank) {
       // Comilla de apertura (se toleran espacios antes de ella).
       field = '';
+      fieldBlank = true;
       inQuotes = true;
       quoteLine = line;
       recordHasData = true;
     } else if (ch === delimiter) {
       cells.push(field);
       field = '';
+      fieldBlank = true;
       recordHasData = true;
     } else if (ch === '\r' || ch === '\n') {
       if (ch === '\r' && text[i + 1] === '\n') i++;
@@ -110,6 +117,7 @@ export function parseCsv(input: string): CsvParseResult {
       recordLine = line;
     } else {
       field += ch;
+      if (fieldBlank && ch.trim() !== '') fieldBlank = false;
       recordHasData = true;
     }
   }
