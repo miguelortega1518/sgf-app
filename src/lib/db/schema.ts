@@ -78,6 +78,10 @@ export const githubPrStateEnum = pgEnum('github_pr_state', [
   'abierto', 'borrador', 'fusionado', 'cerrado',
 ]);
 
+export const sprintStatusEnum = pgEnum('sprint_status', [
+  'planificado', 'activo', 'cerrado',
+]);
+
 // ─── Tables ───────────────────────────────────────────
 
 export const companies = pgTable('companies', {
@@ -194,6 +198,23 @@ export const milestones = pgTable('milestones', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Sprints de los proyectos de tipo `proyecto` y `continuo`. Como mucho uno activo por proyecto.
+export const sprints = pgTable('sprints', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  spaceId: uuid('space_id').notNull().references(() => spaces.id),
+  name: text('name').notNull(),
+  goal: text('goal'),
+  startDate: date('start_date', { mode: 'string' }).notNull(),
+  endDate: date('end_date', { mode: 'string' }).notNull(),
+  status: sprintStatusEnum('status').notNull().default('planificado'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('idx_sprint_space').on(t.spaceId),
+  uniqueIndex('uq_sprint_active_per_space').on(t.spaceId).where(sql`status = 'activo'`),
+  check('chk_sprint_dates', sql`${t.endDate} >= ${t.startDate}`),
+]);
+
 export const tasks = pgTable('tasks', {
   id: uuid('id').defaultRandom().primaryKey(),
   // Número correlativo legible (FOR-142). Se asigna solo.
@@ -202,6 +223,7 @@ export const tasks = pgTable('tasks', {
   templateId: uuid('template_id').references(() => taskTemplates.id),
   companyId: uuid('company_id').references(() => companies.id),
   milestoneId: uuid('milestone_id').references(() => milestones.id),
+  sprintId: uuid('sprint_id').references(() => sprints.id, { onDelete: 'set null' }),
   title: text('title').notNull(),
   description: text('description'),
   responsibleId: uuid('responsible_id').notNull()
@@ -237,6 +259,7 @@ export const tasks = pgTable('tasks', {
   index('idx_task_space_status').on(t.spaceId, t.status),
   index('idx_task_company_space').on(t.companyId, t.spaceId),
   uniqueIndex('uq_task_number').on(t.number),
+  index('idx_task_sprint').on(t.sprintId),
 ]);
 
 export const subtasks = pgTable('subtasks', {
@@ -416,6 +439,9 @@ export type SpaceMember = typeof spaceMembers.$inferSelect;
 
 export type Milestone = typeof milestones.$inferSelect;
 export type NewMilestone = typeof milestones.$inferInsert;
+
+export type Sprint = typeof sprints.$inferSelect;
+export type NewSprint = typeof sprints.$inferInsert;
 
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;

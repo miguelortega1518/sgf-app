@@ -42,7 +42,7 @@ const ana = crypto.randomUUID();
 const beto = crypto.randomUUID();
 const carla = crypto.randomUUID();
 
-type TaskRow = { id: string; number: number; title: string; spaceId: string; responsibleId: string; reviewerId: string | null; dueDate: string | null };
+type TaskRow = { id: string; number: number; title: string; spaceId: string; responsibleId: string; reviewerId: string | null; dueDate: string | null; sprintId: string | null };
 
 let current: TaskRow;
 
@@ -74,7 +74,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   current = {
     id: taskId, number: 12, title: 'Filtros guardados', spaceId,
-    responsibleId: ana, reviewerId: null, dueDate: null,
+    responsibleId: ana, reviewerId: null, dueDate: null, sprintId: null,
   };
   mocks.requireSession.mockResolvedValue({ id: userId, role: 'miembro' });
   mocks.requireTaskAccess.mockImplementation(async () => ({ ...current }));
@@ -247,5 +247,117 @@ describe('PATCH /api/tasks/[id] (campos): avisos de asignación', () => {
 
     expect(res.status).toBe(400);
     expect(mocks.notify).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/tasks/[id] (campos): sprint de la tarea', () => {
+  const sprintA = { id: crypto.randomUUID(), name: 'Sprint 7', status: 'activo' };
+  const sprintB = { id: crypto.randomUUID(), name: 'Sprint 8', status: 'planificado' };
+
+  /** Resultados de tx.select tras la relectura FOR UPDATE de la tarea. */
+  function queueSprintLookups(...results: unknown[][]) {
+    const queue: unknown[][] = [[{ ...current }], ...results];
+    mocks.txSelect.mockImplementation(() => chain(queue.shift() ?? []));
+  }
+
+  function sprintAudits() {
+    return mocks.logAudit.mock.calls.filter(c => c[0].action === 'task_sprint_changed');
+  }
+
+  it('sprint de otro proyecto o inexistente → 400 sin update ni auditoría', async () => {
+    queueSprintLookups([]);
+
+    const res = await PATCH(patchRequest({ sprintId: crypto.randomUUID() }), ctx());
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('El sprint no pertenece al proyecto');
+    expect(mocks.txUpdate).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+  });
+
+  it('sprint cerrado → 409 sin update ni auditoría', async () => {
+    queueSprintLookups([{ ...sprintA, status: 'cerrado' }]);
+
+    const res = await PATCH(patchRequest({ sprintId: sprintA.id }), ctx());
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('El sprint está cerrado');
+    expect(mocks.txUpdate).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+  });
+
+  it('del backlog a un sprint: update y task_sprint_changed con nombres, en el tx', async () => {
+    queueSprintLookups([sprintA]);
+
+    const res = await PATCH(patchRequest({ sprintId: sprintA.id }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({ sprintId: sprintA.id }));
+    expect(sprintAudits()).toEqual([[
+      {
+        actorId: userId,
+        action: 'task_sprint_changed',
+        taskId,
+        spaceId,
+        previousValue: 'Backlog',
+        newValue: 'Sprint 7',
+      },
+      mocks.tx,
+    ]]);
+  });
+
+  it('de un sprint a otro: valores con los dos nombres, nunca UUID', async () => {
+    current.sprintId = sprintA.id;
+    queueSprintLookups([sprintB], [{ name: sprintA.name }]);
+
+    const res = await PATCH(patchRequest({ sprintId: sprintB.id }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(sprintAudits()).toHaveLength(1);
+    expect(sprintAudits()[0][0]).toMatchObject({ previousValue: 'Sprint 7', newValue: 'Sprint 8' });
+    expect(JSON.stringify(sprintAudits())).not.toContain(sprintA.id);
+    expect(JSON.stringify(sprintAudits())).not.toContain(sprintB.id);
+  });
+
+  it('sprintId null desde un sprint → newValue Backlog', async () => {
+    current.sprintId = sprintA.id;
+    queueSprintLookups([{ name: sprintA.name }]);
+
+    const res = await PATCH(patchRequest({ sprintId: null }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({ sprintId: null }));
+    expect(sprintAudits()).toHaveLength(1);
+    expect(sprintAudits()[0][0]).toMatchObject({ previousValue: 'Sprint 7', newValue: 'Backlog' });
+  });
+
+  it('el mismo sprintId que ya tiene → sin auditoría', async () => {
+    current.sprintId = sprintA.id;
+    queueSprintLookups([sprintA]);
+
+    const res = await PATCH(patchRequest({ sprintId: sprintA.id }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(sprintAudits()).toEqual([]);
+  });
+
+  it('sprintId null sin sprint previo → sin auditoría', async () => {
+    queueSprintLookups();
+
+    const res = await PATCH(patchRequest({ sprintId: null }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(sprintAudits()).toEqual([]);
+  });
+
+  it('sprintId no uuid → 400 sin registrar errores', async () => {
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
+
+    const res = await PATCH(patchRequest({ sprintId: 'sprint-7' }), ctx());
+
+    expect(res.status).toBe(400);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 });
