@@ -18,6 +18,10 @@ allowed_commands = ["npm", "node", "ls", "cat", "git"]
 
 max_iterations = 3
 
+# Piloto: recuperación activa; selección observa qué revisores omitiría sin omitirlos aún.
+recovery_enabled = true
+review_mode = "observe"
+
 # Núcleo de Forja: si un cambio toca algo de esto, SIEMPRE requiere aprobación humana.
 core_paths = [
   # Autenticación, sesión, CSRF y permisos
