@@ -366,7 +366,11 @@ async function processItem(
   const status = item.trigger ? targetStatusFor(item.trigger, current) : null;
   if (status) {
     try {
-      const result = await applyStatusTransition(tx, { id: actorId, role: 'miembro' }, current, space, { status });
+      // Un merge o un push con Closes FOR-<n> ya está integrado en GitHub: no se vuelve a integrar desde Forja.
+      const mergedOnGitHub = item.trigger === 'pr_merged' || item.trigger === 'push_closes';
+      const result = await applyStatusTransition(
+        tx, { id: actorId, role: 'miembro' }, current, space, { status }, { mergedOnGitHub },
+      );
       if (!result.isNoop) changed = true;
       intents.push(...result.notifications);
     } catch (err) {

@@ -1,7 +1,24 @@
-/** Server-side integration. Never trust the webhook's cached checks for a merge. */
-export function needsFactoryApproval(task: { labels?: string[]; prUrl?: string | null; status: string }): boolean {
-  return !!task.labels?.includes('ai-factory') &&
-    (task.status === 'en_revision' || !!task.prUrl?.includes('/pull/'));
+type FactoryTask = { labels?: string[] | null; prUrl?: string | null; status: string };
+
+const PULL_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/[1-9]\d*\/?$/;
+
+function isFactoryTask(task: FactoryTask): boolean {
+  return !!task.labels?.includes('ai-factory');
+}
+
+/**
+ * Tarea de AI Factory con un PR pendiente: completarla exige integrar ese PR en GitHub.
+ * Con un enlace a commit el cambio ya está en la rama base (la fábrica lo fusionó sola tras sus
+ * revisiones) y la tarea se cierra como cualquier otra. Server-side integration: never trust the
+ * webhook's cached checks for a merge.
+ */
+export function needsFactoryApproval(task: FactoryTask): boolean {
+  return isFactoryTask(task) && PULL_URL.test(task.prUrl ?? '');
+}
+
+/** Tarea de AI Factory en revisión sin enlace a PR ni a commit: la fábrica aún trabaja en ella. */
+export function factoryStillWorking(task: FactoryTask): boolean {
+  return isFactoryTask(task) && task.status === 'en_revision' && !task.prUrl;
 }
 
 function deny(message: string, httpStatus = 409): never {

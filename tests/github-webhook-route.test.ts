@@ -480,7 +480,7 @@ describe('POST /api/integrations/github/webhook: enlace y PR abierto', () => {
     );
     expect(applyMock).toHaveBeenCalledWith(
       tx, { id: GITHUB_ID, role: 'miembro' }, expect.objectContaining({ id: taskId }),
-      expect.objectContaining({ status: 'activo' }), { status: 'en_revision' },
+      expect.objectContaining({ status: 'activo' }), { status: 'en_revision' }, { mergedOnGitHub: false },
     );
 
     const outcomeUpdate = updates.find(u => u.table === githubDeliveries);
@@ -597,6 +597,19 @@ describe('POST /api/integrations/github/webhook: reglas de estado', () => {
       tx,
     );
     expect(mocks.notify).toHaveBeenCalledWith(expect.objectContaining({ recipientId: carla, type: 'task_completed' }));
+  });
+
+  it('closed con merged de una tarea de AI Factory → completada, sin volver a integrar desde Forja', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    baseTask = makeTask({ status: 'en_revision', labels: ['ai-factory'], branch: 'feat/FOR-12-filtros', prUrl: PR_URL });
+    const res = await POST(webhook('pull_request', prPayload('closed', { merged: true })));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ delivery: 'delivery-1', results: [{ taskNumber: 12, outcome: 'aplicado' }] });
+    expect(applyMock.mock.calls[0][5]).toEqual({ mergedOnGitHub: true });
+    expect(mocks.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: GITHUB_ID, action: 'status_changed', newValue: 'completada' }), tx);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 
   it('closed sin merge desde en_revision → en_proceso', async () => {
