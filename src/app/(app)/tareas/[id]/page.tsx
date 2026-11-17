@@ -98,6 +98,7 @@ export default function TaskDetailPage() {
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showDelayDialog, setShowDelayDialog] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -112,17 +113,23 @@ export default function TaskDetailPage() {
   const [editError, setEditError] = useState('');
 
   async function handleStatusChange(status: string, extra?: Record<string, unknown>) {
+    if (statusSaving) return;
     setStatusError(null);
-    const res = await fetch(`/api/tasks/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, ...extra }),
-    });
-    if (res.ok) { fetchData(); toast('Estado actualizado'); }
-    else {
-      const body = await res.json();
-      setStatusError(body.error || 'Error al cambiar el estado');
-    }
+    setStatusSaving(true);
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, ...extra }),
+      });
+      if (res.ok) { fetchData(); toast('Estado actualizado'); }
+      else {
+        const body = await res.json();
+        setStatusError(body.error || 'Error al cambiar el estado');
+      }
+    } catch {
+      setStatusError('No se pudo confirmar el resultado. Actualiza la tarea antes de volver a intentarlo.');
+    } finally { setStatusSaving(false); }
   }
 
   function startEditing() {
@@ -380,10 +387,15 @@ export default function TaskDetailPage() {
             </button>
           )}
           {task.status === 'en_revision' && (
-            <button onClick={handleCompleteClick}
-              className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700">
-              Aprobar
+            <button onClick={handleCompleteClick} disabled={statusSaving}
+              className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50">
+              {statusSaving ? 'Verificando…' : task.labels?.includes('ai-factory') ? 'Aprobar e integrar' : 'Aprobar'}
             </button>
+          )}
+          {task.status === 'en_revision' && task.labels?.includes('ai-factory') && (
+            <p className="w-full text-sm text-gray-600">
+              Verificaremos las pruebas en GitHub. La tarea quedará hecha solo cuando el PR esté integrado.
+            </p>
           )}
           {task.status !== 'bloqueada' && task.status !== 'no_iniciada' && (
             <button onClick={() => setShowBlockDialog(true)}

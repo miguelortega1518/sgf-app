@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { canApproveTask } from './permissions';
 import { logAudit } from './audit';
 import { todayRD } from './date-utils';
+import { approveFactoryPullRequest, needsFactoryApproval } from './factory-approval';
 
 type Task = typeof tasks.$inferSelect;
 type Space = typeof spaces.$inferSelect;
@@ -39,7 +40,8 @@ export type TransitionDenied = { httpStatus: number; message: string };
  */
 export function validateStatusTransition(params: {
   session: { id: string; role: string };
-  task: Pick<Task, 'status' | 'requiresApproval' | 'requiresEvidence' | 'reviewerId' | 'responsibleId'>;
+  task: Pick<Task, 'status' | 'requiresApproval' | 'requiresEvidence' | 'reviewerId' | 'responsibleId'> &
+    Partial<Pick<Task, 'labels' | 'prUrl'>>;
   spaceStatus: string;
   newStatus: string;
   input: StatusInput;
@@ -67,7 +69,7 @@ export function validateStatusTransition(params: {
     }
   }
 
-  if (newStatus === 'completada' && task.requiresApproval) {
+  if (newStatus === 'completada' && (task.requiresApproval || needsFactoryApproval(task))) {
     const canApprove = canApproveTask(
       session.role as 'admin' | 'miembro' | 'observador',
       session.id,
@@ -128,6 +130,16 @@ export async function applyStatusTransition(
     return { task, notifications: [], isNoop: true };
   }
 
+  // The caller holds the task row lock. Never mark it done before GitHub confirms the merge.
+  // GitHub cannot roll back with PostgreSQL: retries reconcile an already merged PR.
+  if (input.status === 'completada' && needsFactoryApproval(task)) {
+    const integration = await approveFactoryPullRequest(task.prUrl, session.id);
+    await logAudit({
+      actorId: session.id, action: 'factory_pr_merged', taskId: task.id,
+      newValue: JSON.stringify(integration),
+    }, tx);
+  }
+
   const updateData: Record<string, unknown> = { status: input.status };
 
   if (input.status === 'completada') {
@@ -163,7 +175,7 @@ export async function applyStatusTransition(
     .returning();
 
   // Auditoría de aprobación (antes del log general para semántica)
-  if (input.status === 'completada' && task.requiresApproval) {
+  if (input.status === 'completada' && (task.requiresApproval || needsFactoryApproval(task))) {
     const isAdminOverride = session.id !== task.reviewerId && session.role === 'admin';
     await logAudit({
       actorId: session.id,

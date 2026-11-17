@@ -8,6 +8,7 @@ import { applyStatusTransition, type NotificationIntent } from '@/lib/task-trans
 import { notify } from '@/lib/notify';
 import { inArray, asc } from 'drizzle-orm';
 import { z } from 'zod';
+import { needsFactoryApproval } from '@/lib/factory-approval';
 
 const batchSchema = z.object({
   taskIds: z.array(z.string().uuid()).min(1).max(50),
@@ -38,6 +39,10 @@ export async function PATCH(req: NextRequest) {
         }
         try {
           const space = await requireProjectAccess(session, task.spaceId, 'write', tx);
+          if (status === 'completada' && needsFactoryApproval(task)) {
+            skippedTasks.push({ taskId: task.id, reason: 'Aprueba esta tarea individualmente para verificar e integrar su PR.' });
+            continue;
+          }
           const transition = await applyStatusTransition(tx, session, task, space, { status });
           if (!transition.isNoop) updated++;
           else skippedTasks.push({ taskId: task.id, reason: 'Ya estaba en ese estado' });
