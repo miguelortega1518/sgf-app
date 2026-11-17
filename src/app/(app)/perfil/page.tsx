@@ -9,7 +9,7 @@ import { User, Lock, Mail, Shield } from 'lucide-react';
 const EMAIL_PREF_ERROR = 'No se pudo guardar la preferencia de correo';
 
 export default function PerfilPage() {
-  const { user } = useSession();
+  const { user, loading, refresh } = useSession();
   const { toast } = useToast();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -37,18 +37,23 @@ export default function PerfilPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [key]: value }),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        // Sincroniza la sesión con lo guardado para que, al volver a Mi perfil, se vea el valor de la BD.
+        // El override se conserva: coincide con el valor nuevo y cubre una respuesta degradada sin preferencias.
+        await refresh();
+      } else {
         const body = await res.json().catch(() => null);
         failure = body?.error || EMAIL_PREF_ERROR;
       }
     } catch {
       failure = EMAIL_PREF_ERROR;
+    } finally {
+      if (failure) {
+        setPrefOverrides(prev => ({ ...prev, [key]: previous }));
+        toast(failure, 'error');
+      }
+      setSavingPrefs(false);
     }
-    if (failure) {
-      setPrefOverrides(prev => ({ ...prev, [key]: previous }));
-      toast(failure, 'error');
-    }
-    setSavingPrefs(false);
   }
 
   async function handleChangePassword(e: React.FormEvent) {
@@ -117,7 +122,7 @@ export default function PerfilPage() {
       <EmailPreferencesSection
         emailImmediate={emailPrefs.emailImmediate}
         emailDigest={emailPrefs.emailDigest}
-        disabled={savingPrefs}
+        disabled={savingPrefs || loading || !user}
         onChange={handleEmailPreferenceChange}
       />
 
