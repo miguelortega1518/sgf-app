@@ -29,6 +29,13 @@
       "when": 1794797300859,
       "tag": "0003_github_pull_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794910734044,
+      "tag": "0004_preferencias_de_correo",
+      "breakpoints": true
     }
   ]
 }

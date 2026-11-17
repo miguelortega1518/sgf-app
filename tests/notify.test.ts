@@ -11,7 +11,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/db', () => ({ db: { select: mocks.select, insert: mocks.insert } }));
 vi.mock('@/lib/db/schema', () => ({
   notifications: { id: 'notifications.id' },
-  persons: { id: 'persons.id', email: 'persons.email', active: 'persons.active' },
+  persons: {
+    id: 'persons.id',
+    email: 'persons.email',
+    active: 'persons.active',
+    emailImmediate: 'persons.emailImmediate',
+  },
 }));
 vi.mock('drizzle-orm', () => ({
   eq: (l: unknown, r: unknown) => ({ op: 'eq', l, r }),
@@ -51,20 +56,35 @@ afterEach(() => {
 describe('notify', () => {
   it('persona activa: inserta y envía correo si hay RESEND_API_KEY', async () => {
     process.env.RESEND_API_KEY = 'test-key';
-    personRows([{ active: true, email: 'ana@example.com' }]);
+    personRows([{ active: true, email: 'ana@example.com', emailImmediate: true }]);
 
     const result = await notify(params);
 
     expect(mocks.insert).toHaveBeenCalledTimes(1);
     expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ recipientId, type: 'task_assigned', taskId }));
+    expect(mocks.values.mock.calls[0][0]).not.toHaveProperty('emailSent');
     expect(mocks.sendNotificationEmail).toHaveBeenCalledWith(notifId, 'ana@example.com', params.title, 'Cuerpo');
     expect(mocks.select).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ id: notifId });
   });
 
+  it('lee active, email y emailImmediate en la misma consulta', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    personRows([{ active: true, email: 'ana@example.com', emailImmediate: true }]);
+
+    await notify(params);
+
+    expect(mocks.select).toHaveBeenCalledTimes(1);
+    expect(mocks.select).toHaveBeenCalledWith({
+      active: 'persons.active',
+      email: 'persons.email',
+      emailImmediate: 'persons.emailImmediate',
+    });
+  });
+
   it('persona inactiva: ni inserta ni envía correo y devuelve null', async () => {
     process.env.RESEND_API_KEY = 'test-key';
-    personRows([{ active: false, email: 'ana@example.com' }]);
+    personRows([{ active: false, email: 'ana@example.com', emailImmediate: true }]);
 
     const result = await notify(params);
 
@@ -86,12 +106,83 @@ describe('notify', () => {
 
   it('persona activa sin RESEND_API_KEY: inserta sin correo', async () => {
     delete process.env.RESEND_API_KEY;
-    personRows([{ active: true, email: 'ana@example.com' }]);
+    personRows([{ active: true, email: 'ana@example.com', emailImmediate: true }]);
 
     const result = await notify(params);
 
     expect(mocks.insert).toHaveBeenCalledTimes(1);
     expect(mocks.sendNotificationEmail).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ id: notifId });
+  });
+
+  it('task_completed con emailImmediate=true: inserta la campana sin enviar correo', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    personRows([{ active: true, email: 'ana@example.com', emailImmediate: true }]);
+
+    const result = await notify({ ...params, type: 'task_completed', title: 'Completada: FOR-1 X' });
+
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ recipientId, type: 'task_completed' }));
+    expect(mocks.values.mock.calls[0][0]).not.toHaveProperty('emailSent');
+    expect(mocks.sendNotificationEmail).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ id: notifId });
+  });
+
+  it('task_blocked con emailImmediate=false: inserta la campana sin enviar correo', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    personRows([{ active: true, email: 'ana@example.com', emailImmediate: false }]);
+
+    const result = await notify({ ...params, type: 'task_blocked', title: 'Bloqueada: FOR-1 X' });
+
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ recipientId, type: 'task_blocked' }));
+    expect(mocks.values.mock.calls[0][0]).not.toHaveProperty('emailSent');
+    expect(mocks.sendNotificationEmail).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ id: notifId });
+  });
+
+  it('tipo desconocido: inserta la campana sin enviar correo', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    personRows([{ active: true, email: 'ana@example.com', emailImmediate: true }]);
+
+    await notify({ ...params, type: 'tipo_futuro' });
+
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(mocks.sendNotificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('persona activa sin email: inserta sin correo', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    personRows([{ active: true, email: '', emailImmediate: true }]);
+
+    await notify(params);
+
+    expect(mocks.insert).toHaveBeenCalledTimes(1);
+    expect(mocks.sendNotificationEmail).not.toHaveBeenCalled();
+  });
+
+  it.each(['task_assigned', 'review_assigned', 'task_review', 'task_blocked'])(
+    '%s con emailImmediate=true: inserta y envía el correo inmediato',
+    async (type) => {
+      process.env.RESEND_API_KEY = 'test-key';
+      personRows([{ active: true, email: 'ana@example.com', emailImmediate: true }]);
+
+      await notify({ ...params, type });
+
+      expect(mocks.insert).toHaveBeenCalledTimes(1);
+      expect(mocks.values.mock.calls[0][0]).not.toHaveProperty('emailSent');
+      expect(mocks.sendNotificationEmail).toHaveBeenCalledTimes(1);
+      expect(mocks.sendNotificationEmail).toHaveBeenCalledWith(notifId, 'ana@example.com', params.title, 'Cuerpo');
+    },
+  );
+
+  it('un fallo del envío no rompe notify()', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    personRows([{ active: true, email: 'ana@example.com', emailImmediate: true }]);
+    mocks.sendNotificationEmail.mockRejectedValue(new Error('resend caído'));
+
+    const result = await notify(params);
+
     expect(result).toMatchObject({ id: notifId });
   });
 });

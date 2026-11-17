@@ -7,6 +7,7 @@ tarea toque una de estas áreas. Resumen de lo que más condiciona el trabajo di
 - §2 Auth propia (JWT + bcrypt), sin Auth.js. Sin OAuth ni auto-registro.
 - §3 UUID v4 generados por la base como claves primarias.
 - §5 Las tareas copian los campos de la plantilla: cambiar una plantilla NO cambia tareas ya generadas.
+- §8 Campana inmediata para todo; correo inmediato sólo para asignación, revisión y bloqueo; el resto va al resumen diario. Preferencias por persona `email_immediate` y `email_digest`.
 - §9 `blocked_by_area` es un enum cerrado; `otro` + texto libre para excepciones.
 - §13 Los nombres internos de la base NO cambian; sólo cambian las etiquetas (`labels.ts`).
 - §14 Campos de tarea para desarrollo: `number` (FOR-142), `kind`, `estimate`, `branch`, `pr_url`, `labels`.

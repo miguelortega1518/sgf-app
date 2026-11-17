@@ -115,6 +115,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   template_duplicated: 'Plantilla duplicada',
   pr_linked: 'PR enlazado',
   tasks_imported: 'Tareas importadas',
+  email_preferences_changed: 'Preferencias de correo cambiadas',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
@@ -149,6 +150,7 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   template_duplicated: 'bg-sky-100 text-sky-700',
   pr_linked: 'bg-sky-100 text-sky-700',
   tasks_imported: 'bg-sky-100 text-sky-700',
+  email_preferences_changed: 'bg-amber-100 text-amber-700',
 };
 
 const AUDIT_ACTION_FALLBACK = 'Acción registrada';
