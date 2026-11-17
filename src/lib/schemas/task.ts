@@ -2,23 +2,33 @@ import { z } from 'zod';
 import { isValidIsoDate } from '../validation';
 
 export const TASK_KINDS = ['feature', 'bug', 'mejora', 'deuda', 'chore'] as const;
+export const TASK_PRIORITIES = ['critica', 'alta', 'normal', 'baja'] as const;
+
+// Límites por campo, compartidos con el importador CSV (src/lib/schemas/task-import.ts).
+export const TASK_TITLE_MAX = 500;
+export const TASK_DESCRIPTION_MAX = 5000;
+export const TASK_ESTIMATE_MIN = 0;
+export const TASK_ESTIMATE_MAX = 100;
+export const TASK_LABELS_MAX = 8;
+export const TASK_LABEL_MAX = 30;
+
 const taskKind = z.enum(TASK_KINDS);
 // Puntos de historia: serie de Fibonacci acotada, como en la mayoría de equipos.
-const estimate = z.number().int().min(0).max(100).nullable();
+const estimate = z.number().int().min(TASK_ESTIMATE_MIN).max(TASK_ESTIMATE_MAX).nullable();
 const branch = z.string().trim().max(200).regex(/^[\w./#@-]*$/, 'Rama inválida').nullable().transform(v => v || null);
 const prUrl = z.string().trim().max(500).url('Enlace inválido').refine(u => /^https?:\/\//.test(u), 'Debe empezar por http(s)').or(z.literal('')).nullable().transform(v => v || null);
-const labels = z.array(z.string().trim().min(1).max(30)).max(8);
+const labels = z.array(z.string().trim().min(1).max(TASK_LABEL_MAX)).max(TASK_LABELS_MAX);
 
 export const createTaskSchema = z.object({
   spaceId: z.string().uuid(),
-  title: z.string().trim().min(1, 'El título es requerido').max(500),
-  description: z.string().max(5000).optional(),
+  title: z.string().trim().min(1, 'El título es requerido').max(TASK_TITLE_MAX),
+  description: z.string().max(TASK_DESCRIPTION_MAX).optional(),
   responsibleId: z.string().uuid('Responsable requerido'),
   reviewerId: z.string().uuid().optional(),
   companyId: z.string().uuid().optional(),
   milestoneId: z.string().uuid().optional(),
   dueDate: z.string().refine(isValidIsoDate, 'Fecha inválida').optional(),
-  priority: z.enum(['critica', 'alta', 'normal', 'baja']).default('normal'),
+  priority: z.enum(TASK_PRIORITIES).default('normal'),
   requiresApproval: z.boolean().default(false),
   requiresEvidence: z.boolean().default(false),
   doneDefinition: z.string().max(2000).optional(),
@@ -51,12 +61,12 @@ export const updateTaskStatusSchema = z.object({
 });
 
 export const updateTaskSchema = z.object({
-  title: z.string().trim().min(1).max(500).optional(),
-  description: z.string().max(5000).optional(),
+  title: z.string().trim().min(1).max(TASK_TITLE_MAX).optional(),
+  description: z.string().max(TASK_DESCRIPTION_MAX).optional(),
   responsibleId: z.string().uuid().optional(),
   reviewerId: z.string().uuid().nullable().optional(),
   dueDate: z.string().refine(isValidIsoDate, 'Fecha inválida').nullable().optional(),
-  priority: z.enum(['critica', 'alta', 'normal', 'baja']).optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
   milestoneId: z.string().uuid().nullable().optional(),
   kind: taskKind.optional(),
   estimate: estimate.optional(),
