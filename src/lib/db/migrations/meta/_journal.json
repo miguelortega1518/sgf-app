@@ -36,6 +36,13 @@
       "when": 1794910734044,
       "tag": "0004_preferencias_de_correo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794947179547,
+      "tag": "0005_resumen_diario",
+      "breakpoints": true
     }
   ]
 }

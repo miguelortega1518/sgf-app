@@ -338,6 +338,15 @@ export const githubDeliveries = pgTable('github_deliveries', {
   outcome: text('outcome'),
 });
 
+// Resúmenes diarios por correo ya enviados (idempotencia por persona y día RD).
+export const digestRuns = pgTable('digest_runs', {
+  personId: uuid('person_id').notNull().references(() => persons.id),
+  day: date('day', { mode: 'string' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.personId, t.day] }),
+]);
+
 /** Revisor del panel del PR. submittedAt es interno: la API sólo expone login y state. */
 export type PrReviewer = {
   login: string;

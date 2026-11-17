@@ -12,7 +12,7 @@ vi.mock('drizzle-orm', () => ({
   eq: (l: unknown, r: unknown) => ({ op: 'eq', l, r }),
 }));
 
-import { buildNotificationEmail, escapeHtml, sendNotificationEmail } from '../src/lib/email';
+import { buildNotificationEmail, escapeHtml, sendDigestEmail, sendNotificationEmail } from '../src/lib/email';
 
 describe('escapeHtml', () => {
   it('escapa los cinco caracteres especiales', () => {
@@ -145,5 +145,65 @@ describe('sendNotificationEmail', () => {
     await expect(sendNotificationEmail('n-1', 'a@b.do', 'Título', null)).resolves.toBe(false);
     expect(mocks.update).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalled();
+  });
+});
+
+describe('sendDigestEmail', () => {
+  let originalKey: string | undefined;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    originalKey = process.env.RESEND_API_KEY;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    if (originalKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalKey;
+  });
+
+  const content = { subject: 'Forja: tu resumen del 17/11/2026', html: '<p>Hola</p>', text: 'Hola' };
+
+  it('devuelve false sin RESEND_API_KEY y no llama a fetch', async () => {
+    delete process.env.RESEND_API_KEY;
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sendDigestEmail('a@b.do', content)).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('envía asunto, html y text a Resend sin tocar la base', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(sendDigestEmail('a@b.do', content)).resolves.toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.resend.com/emails');
+    const payload = JSON.parse(init.body as string);
+    expect(payload).toMatchObject({ to: 'a@b.do', subject: content.subject, html: content.html, text: 'Hola' });
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('devuelve false si Resend responde con error', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    await expect(sendDigestEmail('a@b.do', content)).resolves.toBe(false);
+  });
+
+  it('los correos de notificación no llevan text', async () => {
+    process.env.RESEND_API_KEY = 'test-key';
+    mocks.update.mockReturnValue({ set: mocks.set });
+    mocks.set.mockReturnValue({ where: mocks.where });
+    mocks.where.mockResolvedValue(undefined);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sendNotificationEmail('n-1', 'a@b.do', 'Título', null);
+    const payload = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(payload).not.toHaveProperty('text');
   });
 });

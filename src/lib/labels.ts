@@ -258,6 +258,36 @@ export const REVIEWER_STATE_CHIP: Record<ReviewerStateCode, string> = {
   comentado: 'bg-sky-100 text-sky-700',
 };
 
+// --- Notificaciones ---
+// Tipos de notifications.type (alineado con TYPE_CONFIG de la página de notificaciones).
+
+export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
+  task_completed: 'Hecho',
+  task_review: 'Revisión',
+  task_blocked: 'Bloqueada',
+  task_assigned: 'Asignada',
+  review_assigned: 'Revisión asignada',
+  task_approved: 'Aprobada',
+};
+
+/** Etiqueta de un tipo de notificación desconocido. */
+export const NOTIFICATION_TYPE_FALLBACK = 'Otros avisos';
+
+/** Etiqueta visible de un tipo de notificación; nunca devuelve el identificador crudo. */
+export function notificationTypeLabel(type: string): string {
+  return Object.hasOwn(NOTIFICATION_TYPE_LABEL, type) ? NOTIFICATION_TYPE_LABEL[type] : NOTIFICATION_TYPE_FALLBACK;
+}
+
+// --- Resumen diario por correo (src/lib/daily-digest.ts) ---
+
+export const DIGEST_SECTION_LABEL = {
+  dueToday: 'Vence hoy',
+  overdue: 'Vencidas',
+  review: 'Esperando tu revisión',
+  blocked: 'Bloqueadas',
+  news: 'Novedades',
+} as const;
+
 /** Clave legible de una tarea: FOR-142. */
 export function taskKey(n: number | null | undefined): string {
   return n ? `FOR-${n}` : '';

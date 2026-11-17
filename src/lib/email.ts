@@ -7,6 +7,8 @@ type EmailPayload = {
   to: string;
   subject: string;
   html: string;
+  /** Versión en texto plano; sólo se envía si está definida. */
+  text?: string;
 };
 
 async function sendEmail(payload: EmailPayload): Promise<boolean> {
@@ -25,6 +27,7 @@ async function sendEmail(payload: EmailPayload): Promise<boolean> {
         to: payload.to,
         subject: payload.subject,
         html: payload.html,
+        ...(payload.text !== undefined ? { text: payload.text } : {}),
       }),
     });
     return res.ok;
@@ -68,6 +71,17 @@ export function buildNotificationEmail(
       </div>
     `,
   };
+}
+
+/**
+ * Envía el resumen diario (src/lib/daily-digest.ts). No toca la base: la
+ * idempotencia la lleva la ruta del cron con digest_runs.
+ */
+export async function sendDigestEmail(
+  to: string,
+  content: { subject: string; html: string; text: string },
+): Promise<boolean> {
+  return sendEmail({ to, subject: content.subject, html: content.html, text: content.text });
 }
 
 export async function sendNotificationEmail(
