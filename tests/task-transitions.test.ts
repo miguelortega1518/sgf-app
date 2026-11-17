@@ -225,3 +225,30 @@ describe('applyStatusTransition — blockedSince en hora RD', () => {
     expect(set).toHaveBeenCalledWith(expect.objectContaining({ blockedSince: '2026-03-09' }));
   });
 });
+
+describe('AI Factory approval permissions', () => {
+  it('requires a reviewer or admin even for legacy factory tasks without requiresApproval', () => {
+    const task = { ...makeTask({ status: 'en_revision' }), labels: ['ai-factory'], prUrl: 'https://github.com/o/r/pull/1' };
+    expect(validateStatusTransition({ session: memberSession, task, spaceStatus: 'activo',
+      newStatus: 'completada', input: { status: 'completada' }, evidenceCount: 0 })?.httpStatus).toBe(403);
+    expect(validateStatusTransition({ session: adminSession, task, spaceStatus: 'activo',
+      newStatus: 'completada', input: { status: 'completada' }, evidenceCount: 0 })).toBeNull();
+  });
+  it('does not let a factory PR skip review', () => {
+    const task = { ...makeTask({ status: 'en_proceso' }), labels: ['ai-factory'], prUrl: 'https://github.com/o/r/pull/1' };
+    expect(validateStatusTransition({ session: adminSession, task, spaceStatus: 'activo',
+      newStatus: 'completada', input: { status: 'completada' }, evidenceCount: 0 })?.httpStatus).toBe(400);
+  });
+  it('keeps the task in review when GitHub approval is not configured', async () => {
+    const task = { ...makeTask({ status: 'en_revision' }), id: 'factory-task', labels: ['ai-factory'],
+      prUrl: 'https://github.com/o/r/pull/1' };
+    const update = vi.fn();
+    const tx = { select: () => ({ from: () => ({ where: () => Promise.resolve([]) }) }), update, insert: vi.fn() };
+    vi.stubEnv('FORJA_GITHUB_APPROVAL_REPOS', '{}');
+    try {
+      await expect(applyStatusTransition(tx as never, adminSession, task as never, { status: 'activo' },
+        { status: 'completada' })).rejects.toThrow('configuradas');
+      expect(update).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
+  });
+});
