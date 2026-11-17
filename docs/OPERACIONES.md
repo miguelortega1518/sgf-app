@@ -229,3 +229,84 @@ errores, todas las tareas se crean en una sola transacción, en «Por hacer», c
 registra un `task_created` por tarea (con su título) y un `tasks_imported` («N tareas importadas desde CSV») en el proyecto.
 
 **Sin avisos.** La importación no envía notificaciones ni correos de asignación a los responsables ni a los revisores.
+
+## 12. Resumen diario por correo
+
+Cada día laborable, a las 7:30 RD, cada persona activa con «Resumen diario» activado en Mi perfil (`persons.email_digest`)
+recibe un correo con lo que le toca: **Vence hoy**, **Vencidas**, **Esperando tu revisión**, **Bloqueadas** y
+**Novedades** (los avisos de la campana que no salieron por correo inmediato desde su último resumen, como mucho 20; o los
+de los últimos 7 días si nunca recibió uno). Si las cinco secciones están vacías, no se envía nada.
+
+Lo dispara un workflow de GitHub Actions que llama a `POST /api/cron/daily-digest`. No se usa un cron job de Render porque
+cuesta (DECISIONES §8). Los fines de semana y los feriados de la tabla `holidays` el endpoint responde
+`{"skipped":"no_laborable"}` sin enviar nada.
+
+**1. Configurar `CRON_SECRET`** (el mismo valor en los dos sitios):
+
+1. Generarlo: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+2. Render: *Environment* del servicio → añadir `CRON_SECRET`. Si falta o está vacío, el endpoint responde 401 a todo.
+3. GitHub: *Settings → Secrets and variables → Actions → New repository secret* → `CRON_SECRET`.
+
+`RESEND_API_KEY` también debe estar configurado en Render. Sin ella, el endpoint calcula el resumen, no envía ni marca
+nada y responde `"emailDisabled": true`.
+
+**2. Añadir el workflow** (a mano, tras fusionar: la fábrica no puede escribir en `.github/workflows/`). Crear
+`.github/workflows/daily-digest.yml`:
+
+```yaml
+name: Resumen diario
+
+on:
+  schedule:
+    # 11:30 UTC = 7:30 RD (UTC-4 todo el año, sin horario de verano)
+    - cron: '30 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Llamar al endpoint del resumen diario
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X POST \
+            --max-time 120 --retry 3 --retry-delay 30 --retry-all-errors \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://sgf-app.onrender.com/api/cron/daily-digest
+```
+
+El workflow corre todos los días; el endpoint decide si es laborable.
+
+**Render free duerme el servicio.** La primera llamada puede tardar casi un minuto en despertarlo o fallar por timeout:
+por eso el curl lleva un `--max-time` amplio y reintentos. Reintentar es seguro: cada persona tiene como mucho una fila por
+día en `digest_runs` (clave primaria `person_id, day`), y quien ya recibió el resumen de hoy no lo vuelve a recibir.
+Además, GitHub puede retrasar los `schedule` varios minutos en horas de carga.
+
+**3. Lanzarlo a mano.** *Actions → Resumen diario → Run workflow* (`workflow_dispatch`). O desde una terminal:
+
+```bash
+curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" https://sgf-app.onrender.com/api/cron/daily-digest
+```
+
+(Si el servicio está dormido, añadir `--max-time 120 --retry 3` como en el workflow.)
+
+**4. Probar sin enviar.** Con `?dryRun=1` se calcula todo, pero no se envía ningún correo ni se escribe en `digest_runs`:
+
+```bash
+curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "https://sgf-app.onrender.com/api/cron/daily-digest?dryRun=1"
+# {"sent":0,"skipped":3,"day":"2026-11-17","dryRun":true,"wouldSend":2}
+```
+
+**Respuestas**
+
+| Respuesta | Significado |
+|---|---|
+| `{"sent":2,"skipped":3,"failed":0,"day":"…"}` | `sent`: correos enviados. `skipped`: personas con el resumen vacío o que ya lo recibieron hoy. `failed`: envíos que Resend rechazó |
+| `{"skipped":"no_laborable","day":"…"}` | Fin de semana o feriado: no se envía nada |
+| `401 {"error":"No autorizado"}` | Falta `CRON_SECRET` en Render o no coincide con el del workflow |
+| `400` | `dryRun` distinto de `0` o `1` |
+
+Si un envío falla, se borra la fila de esa persona en `digest_runs` y basta con volver a lanzar el workflow ese mismo día
+para reintentarlo. El endpoint no marca `notifications.email_sent`: las novedades de cada resumen son las creadas después
+del anterior (`digest_runs.created_at`).
