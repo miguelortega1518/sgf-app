@@ -29,8 +29,8 @@
 **Razón:** La especificación dice que las fechas de hito "funcionan como las del cierre" — conservar original y registrar cambios. Si se protege una y no la otra, se crea una inconsistencia que produce datos poco fiables en las métricas de corrimientos.
 
 ## 8. Notificaciones in-app + correo
-**Decisión:** Tabla `notifications` para campana in-app, además de correo.
-**Razón:** El correo agrupa máximo uno por hora. La campana da retroalimentación inmediata dentro del sistema. Los dos canales son complementarios, no redundantes.
+**Decisión:** Tabla `notifications` para campana in-app, además de correo. La campana es inmediata y recibe todos los avisos. El correo inmediato sale sólo para asignación, revisión y bloqueo (`task_assigned`, `review_assigned`, `task_review`, `task_blocked`; ver `src/lib/notification-email-policy.ts`). Lo demás (p. ej. `task_completed`) queda con `email_sent=false` y va en un resumen diario por correo (parte 2). Cada persona tiene sus preferencias en `persons`: `email_immediate` (avisos inmediatos) y `email_digest` (resumen diario), ambas activadas por defecto y editables en Mi perfil.
+**Razón:** Lo importante no debe esperar: una asignación, una revisión pendiente o un bloqueo frenan el trabajo de otra persona si el aviso llega tarde. El resto no debe llenar la bandeja: un correo por cada tarea completada hace que se ignoren también los importantes. La campana da retroalimentación inmediata dentro del sistema; los dos canales son complementarios, no redundantes. Las preferencias por persona permiten apagar el correo sin perder la campana.
 
 ## 9. `blocked_by_area` como enum
 **Decisión:** Lista cerrada (Compras, Operaciones, Tesorería, Contabilidad, Administración, Presupuesto, Otro).

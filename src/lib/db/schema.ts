@@ -96,6 +96,8 @@ export const persons = pgTable('persons', {
   active: boolean('active').notNull().default(true),
   passwordHash: text('password_hash').notNull(),
   mustChangePassword: boolean('must_change_password').notNull().default(false),
+  emailImmediate: boolean('email_immediate').notNull().default(true),
+  emailDigest: boolean('email_digest').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

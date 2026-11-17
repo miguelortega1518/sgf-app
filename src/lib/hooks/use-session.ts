@@ -9,6 +9,9 @@ type User = {
   role: 'admin' | 'miembro' | 'observador';
   /** La cuenta tiene una contraseña temporal y debe cambiarla antes de usar la app. */
   mustChangePassword?: boolean;
+  /** Preferencias de correo. Faltan en modo degradado; entonces se tratan como true. */
+  emailImmediate?: boolean;
+  emailDigest?: boolean;
 };
 
 type SessionContextType = {

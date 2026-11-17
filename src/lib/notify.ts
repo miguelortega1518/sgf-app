@@ -2,6 +2,7 @@ import { db } from './db';
 import { notifications, persons } from './db/schema';
 import { eq } from 'drizzle-orm';
 import { sendNotificationEmail } from './email';
+import { shouldSendImmediateEmail } from './notification-email-policy';
 
 type NotifyParams = {
   recipientId: string;
@@ -12,10 +13,15 @@ type NotifyParams = {
   spaceId?: string;
 };
 
-/** Crea la notificación (y el correo si hay RESEND_API_KEY). Devuelve null si la persona no existe o está inactiva. */
+/**
+ * Crea siempre la notificación de la campana para una persona activa. El correo sale al momento sólo
+ * si hay RESEND_API_KEY, la persona tiene correo, lo quiere (email_immediate) y el tipo es inmediato
+ * (asignación, revisión o bloqueo; ver notification-email-policy.ts). Lo demás queda con
+ * email_sent=false para el resumen diario. Devuelve null si la persona no existe o está inactiva.
+ */
 export async function notify(params: NotifyParams) {
   const [recipient] = await db
-    .select({ active: persons.active, email: persons.email })
+    .select({ active: persons.active, email: persons.email, emailImmediate: persons.emailImmediate })
     .from(persons)
     .where(eq(persons.id, params.recipientId))
     .limit(1);
@@ -34,7 +40,11 @@ export async function notify(params: NotifyParams) {
     })
     .returning();
 
-  if (process.env.RESEND_API_KEY && recipient.email) {
+  if (
+    process.env.RESEND_API_KEY &&
+    recipient.email &&
+    shouldSendImmediateEmail({ type: params.type, emailImmediate: recipient.emailImmediate })
+  ) {
     sendNotificationEmail(
       notif.id,
       recipient.email,
