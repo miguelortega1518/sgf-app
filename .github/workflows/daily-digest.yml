@@ -1,0 +1,42 @@
+# Resumen diario por correo (docs/OPERACIONES.md §12). Llama al endpoint protegido de Forja;
+# el endpoint decide si el día es laborable y no repite el envío si se llama dos veces.
+# Requiere el secreto CRON_SECRET, con el mismo valor que en Render.
+name: Resumen diario
+
+on:
+  schedule:
+    # 11:30 UTC = 7:30 RD (UTC-4 todo el año, sin horario de verano)
+    - cron: '30 11 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Sólo calcular (no envía correos ni marca nada)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: daily-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Llamar al endpoint del resumen diario
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secreto CRON_SECRET (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          # Render free duerme el servicio: tiempo amplio y reintentos (reintentar es seguro).
+          curl -fsS -X POST \
+            --max-time 120 --retry 3 --retry-delay 30 --retry-all-errors \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://sgf-app.onrender.com/api/cron/daily-digest?dryRun=$DRY_RUN"
+          echo
