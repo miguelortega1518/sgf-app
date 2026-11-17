@@ -176,3 +176,56 @@ token de GitHub ni llama a su API.
   `Check suites` y `Check runs`.
 - Los checks se reinician con cada commit nuevo del PR. GitHub no garantiza el orden de las entregas: un check que llegue
   antes que el aviso del commit nuevo no se ve hasta su siguiente evento.
+
+## 11. Importar tareas desde CSV
+
+En el detalle de un proyecto **activo**, el botón **Importar CSV** (junto a «Nueva tarea») abre el importador. Lo pueden usar
+las personas con permiso de escritura en el proyecto (no los observadores). El flujo es: elegir el archivo → **Vista previa**
+→ **Importar**. La vista previa muestra las primeras 50 filas ya resueltas, la lista de errores («Línea X · columna:
+mensaje») y los avisos. **Importar** sólo se activa si no hay errores. La ruta es `POST /api/spaces/<id>/import-csv`
+(`dryRun: true` para la vista previa).
+
+**Formato del archivo**
+
+- Codificación **UTF-8** (con o sin BOM). Desde Excel: *Guardar como → CSV UTF-8*. Si el archivo trae caracteres que no son
+  UTF-8 (un CSV «normal» de Excel en Windows), la vista previa avisa: las tildes y eñes llegarían rotas.
+- Separador `,` o `;`: se detecta en la cabecera (en empate gana `,`). Fin de línea CRLF o LF.
+- Comillas según RFC 4180: un campo entre comillas puede llevar el separador y saltos de línea; `""` es una comilla.
+- La primera fila no vacía es la cabecera. Las filas en blanco se ignoran. Las líneas que dan los errores son las físicas
+  del archivo (la cabecera es la 1).
+- El diálogo ofrece una plantilla, `plantilla-tareas.csv`, con la cabecera y dos filas de ejemplo.
+
+**Columnas.** Los nombres no distinguen mayúsculas ni tildes; los espacios y guiones valen como `_` («Fecha límite» =
+`fecha_limite`). Sólo `titulo` es obligatoria.
+
+| Columna | Alias | Valores |
+|---|---|---|
+| `titulo` | `title`, `summary`, `name`, `nombre` | 1–500 caracteres, obligatorio |
+| `descripcion` | `description`, `desc`, `body` | hasta 5000 caracteres; vacía = sin descripción |
+| `responsable` | `assignee`, `owner`, `asignado`, `responsible`, `assigned_to` | correo de la persona; vacío = responsable por defecto |
+| `revisor` | `reviewer` | correo; vacío = líder del proyecto |
+| `fecha_limite` | `fecha`, `vencimiento`, `due`, `due_date`, `duedate`, `deadline` | `AAAA-MM-DD` o `DD/MM/AAAA` (día y mes de 1 o 2 dígitos); vacía = sin fecha |
+| `prioridad` | `priority` | `critica`, `alta`, `normal`, `baja` o `critical`, `high`, `medium`, `low`; vacía = `normal` |
+| `tipo` | `type`, `kind`, `issue_type` | `feature`, `bug`, `mejora`, `deuda`, `chore`; también `story`/`task`/`historia`/`tarea` (= feature), `improvement`/`enhancement` (= mejora), `debt`/`tech_debt` (= deuda); vacío = `feature` |
+| `estimacion` | `estimate`, `estimation`, `points`, `story_points`, `puntos` | entero de 0 a 100; vacía = sin estimar |
+| `etiquetas` | `labels`, `tags` | separadas por `;`, `\|` o `,`; hasta 8, de hasta 30 caracteres cada una |
+| `hito` | `milestone` | nombre exacto de un hito del proyecto (distingue mayúsculas) |
+
+- Una columna desconocida se ignora con un aviso. `estado`/`status` también se ignora: todas las tareas empiezan en «Por
+  hacer».
+- El responsable y el revisor deben ser personas **activas con permiso de escritura en el proyecto** (miembros no
+  observadores, el dueño o un admin). El correo no distingue mayúsculas.
+- Si el CSV no trae la columna `responsable`, hay que elegir un **responsable por defecto** en el diálogo.
+
+**Límites**
+
+- 1 MB de CSV (medido en UTF-8) y 1000 filas de datos por archivo. Un archivo mayor se rechaza entero, sin analizarlo fila a
+  fila.
+- 3 importaciones por persona cada 15 minutos (la ventana del rate limit, unas 12 por hora). La vista previa no cuenta. Al
+  superarlo, la respuesta es 429 con el tiempo de espera.
+
+**Todo o nada.** Si hay un solo error, no se importa ninguna tarea y la respuesta es 400 con la lista completa. Si no hay
+errores, todas las tareas se crean en una sola transacción, en «Por hacer», con el importador como creador. La auditoría
+registra un `task_created` por tarea (con su título) y un `tasks_imported` («N tareas importadas desde CSV») en el proyecto.
+
+**Sin avisos.** La importación no envía notificaciones ni correos de asignación a los responsables ni a los revisores.

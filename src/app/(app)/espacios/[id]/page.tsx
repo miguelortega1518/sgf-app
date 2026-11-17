@@ -8,12 +8,13 @@ import {
   Plus, Users, Calendar, Target, Building2, ChevronDown,
   ChevronRight, Play, XCircle, CheckCircle2, Pencil, Heart,
   Filter, ClipboardList, Flag, MessageSquare, Archive, ArchiveRestore,
-  Trash2, CircleCheck, AlertTriangle, CircleX, LayoutGrid, List,
+  Trash2, CircleCheck, AlertTriangle, CircleX, LayoutGrid, List, Upload,
 } from 'lucide-react';
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
+import { CsvImportDialog } from '@/components/tasks/csv-import-dialog';
 import { SPACE_TYPE_LABEL, type TaskStatus } from '@/lib/labels';
 
 type TaskItem = {
@@ -89,6 +90,7 @@ export default function SpaceDetailPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const [showNewTask, setShowNewTask] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [people, setPeople] = useState<{ id: string; name: string }[]>([]);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
@@ -302,6 +304,15 @@ export default function SpaceDetailPage() {
             <Filter size={14} />
             Filtros{activeFilters > 0 && ` (${activeFilters})`}
           </button>
+          {canAddTask && space.status === 'activo' && (
+            <button
+              onClick={() => setShowImport(true)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 border border-[var(--border)] text-[var(--text-primary)] text-sm rounded-md hover:bg-[var(--bg-hover)] transition-colors"
+            >
+              <Upload size={14} aria-hidden="true" />
+              Importar CSV
+            </button>
+          )}
           {canAddTask && space.status !== 'cerrado' && (
             <button
               onClick={() => setShowNewTask(!showNewTask)}
@@ -349,6 +360,15 @@ export default function SpaceDetailPage() {
           companies={companies}
           onCreated={() => { setShowNewTask(false); fetchData(); }}
           onCancel={() => setShowNewTask(false)}
+        />
+      )}
+
+      {showImport && (
+        <CsvImportDialog
+          spaceId={space.id}
+          members={members.filter(m => m.spaceRole !== 'observador')}
+          onImported={() => { setShowImport(false); fetchData(); }}
+          onClose={() => setShowImport(false)}
         />
       )}
 

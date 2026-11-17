@@ -8,6 +8,9 @@ const ROOT = resolve(__dirname, '..');
 // La definición de logAudit no es una llamada.
 const EXCLUDED = ['src/lib/audit.ts'];
 
+// Emisiones de auditoría: llamadas a logAudit e inserciones por lotes en auditLog.
+const MARKERS = ['logAudit(', 'insert(auditLog)'];
+
 const KNOWN_ACTIONS = [
   'task_created',
   'status_changed',
@@ -38,6 +41,7 @@ const KNOWN_ACTIONS = [
   'template_task_deleted',
   'template_duplicated',
   'pr_linked',
+  'tasks_imported',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -81,27 +85,32 @@ function extractEmissions(): { files: string[]; emissions: Emission[] } {
   const files = listSourceFiles(resolve(ROOT, 'src'))
     .map(toRepoPath)
     .filter((file) => !EXCLUDED.includes(file))
-    .filter((file) => readFileSync(resolve(ROOT, file), 'utf8').includes('logAudit('));
+    .filter((file) => {
+      const src = readFileSync(resolve(ROOT, file), 'utf8');
+      return MARKERS.some((marker) => src.includes(marker));
+    });
 
   const emissions: Emission[] = [];
   for (const file of files) {
     const src = readFileSync(resolve(ROOT, file), 'utf8');
-    let idx = src.indexOf('logAudit(');
-    while (idx !== -1) {
-      const actionIdx = src.indexOf('action:', idx);
-      if (actionIdx === -1) {
-        emissions.push({ file, expr: '<sin action:>', actions: [], literalOnly: false });
-        break;
+    for (const marker of MARKERS) {
+      let idx = src.indexOf(marker);
+      while (idx !== -1) {
+        const actionIdx = src.indexOf('action:', idx);
+        if (actionIdx === -1) {
+          emissions.push({ file, expr: '<sin action:>', actions: [], literalOnly: false });
+          break;
+        }
+        const expr = readExpression(src, actionIdx + 'action:'.length).trim();
+        const actions = [...expr.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+        // Sin los literales, sólo pueden quedar `?`, `:`, paréntesis, espacios
+        // y, como mucho, un identificador de condición del ternario.
+        const rest = expr.replace(/'[a-z_]+'/g, '').replace(/[?:()\s]/g, ' ').trim();
+        const literalOnly = actions.length > 0
+          && (rest === '' || (actions.length >= 2 && /^!?[A-Za-z_$][\w$]*$/.test(rest)));
+        emissions.push({ file, expr, actions, literalOnly });
+        idx = src.indexOf(marker, actionIdx);
       }
-      const expr = readExpression(src, actionIdx + 'action:'.length).trim();
-      const actions = [...expr.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
-      // Sin los literales, sólo pueden quedar `?`, `:`, paréntesis, espacios
-      // y, como mucho, un identificador de condición del ternario.
-      const rest = expr.replace(/'[a-z_]+'/g, '').replace(/[?:()\s]/g, ' ').trim();
-      const literalOnly = actions.length > 0
-        && (rest === '' || (actions.length >= 2 && /^!?[A-Za-z_$][\w$]*$/.test(rest)));
-      emissions.push({ file, expr, actions, literalOnly });
-      idx = src.indexOf('logAudit(', actionIdx);
     }
   }
   return { files, emissions };
@@ -116,6 +125,13 @@ describe('acciones de auditoría', () => {
     for (const a of KNOWN_ACTIONS) expect(extracted, `falta ${a}`).toContain(a);
     expect(extracted).not.toContain('auditLog.action');
     for (const a of extracted) expect(a).toMatch(/^[a-z_]+$/);
+  });
+
+  it('reconoce también las inserciones por lotes en auditLog', () => {
+    const route = 'src/app/api/spaces/[id]/import-csv/route.ts';
+    expect(files).toContain(route);
+    const actions = emissions.filter((e) => e.file === route).flatMap((e) => e.actions);
+    expect(actions).toEqual(['task_created', 'tasks_imported']);
   });
 
   it('el valor de action: en logAudit sólo contiene literales de string', () => {
@@ -179,6 +195,7 @@ describe('acciones de auditoría', () => {
 
   it.each([
     ['pr_linked', 'PR enlazado', 'bg-sky-100 text-sky-700'],
+    ['tasks_imported', 'Tareas importadas', 'bg-sky-100 text-sky-700'],
   ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
     expect(AUDIT_ACTION_LABEL[action]).toBe(label);
     expect(auditActionLabel(action)).toBe(label);
