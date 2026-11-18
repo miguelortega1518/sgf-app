@@ -9,7 +9,26 @@ import {
   toDateRD,
   addDaysRD,
   relativeDueRD,
+  formatShortDateRD,
 } from '../src/lib/date-utils';
+
+describe('formatShortDateRD', () => {
+  it('omite el año si coincide con el de hoy', () => {
+    expect(formatShortDateRD('2026-11-12', '2026-11-18')).toBe('12 nov');
+    expect(formatShortDateRD('2026-01-05', '2026-11-18')).toBe('5 ene');
+  });
+
+  it('añade el año si es distinto', () => {
+    expect(formatShortDateRD('2027-01-03', '2026-11-18')).toBe('3 ene 2027');
+    expect(formatShortDateRD('2025-12-31', '2026-11-18')).toBe('31 dic 2025');
+  });
+
+  it('usa los meses en español en minúscula', () => {
+    const months = Array.from({ length: 12 }, (_, i) =>
+      formatShortDateRD(`2026-${String(i + 1).padStart(2, '0')}-01`, '2026-11-18').split(' ')[1]);
+    expect(months).toEqual(['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']);
+  });
+});
 
 describe('relativeDueRD', () => {
   const today = '2026-11-12';
