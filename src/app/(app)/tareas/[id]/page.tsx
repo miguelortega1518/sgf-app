@@ -19,8 +19,9 @@ import Link from 'next/link';
 import { GitPullRequest } from 'lucide-react';
 import {
   KIND_ORDER, KIND_LABEL, KIND_CHIP, ESTIMATE_STEPS, BLOCK_AREAS, AREA_LABEL, taskKey, prLabel, auditActionLabel, redactedCommentLabel, type TaskKind,
-  DELAY_REASON_ORDER, DELAY_REASON_LABEL,
+  DELAY_REASON_ORDER, DELAY_REASON_LABEL, SPRINT_STATUS_LABEL, SPRINT_STATUS_CHIP,
 } from '@/lib/labels';
+import type { SprintStatus } from '@/lib/sprints';
 
 type DepTask = { id: string; title: string; status: string };
 
@@ -44,6 +45,7 @@ type TaskDetail = {
     reviewerId: string | null;
     spaceId: string;
     spaceName?: string;
+    sprint?: { id: string; name: string; status: SprintStatus } | null;
     companyId: string | null;
     blockedByArea: string | null;
     blockedSince: string | null;
@@ -282,6 +284,11 @@ export default function TaskDetailPage() {
                 {KIND_LABEL[(task.kind ?? 'feature') as TaskKind] ?? task.kind}
               </span>
               {task.estimate != null && <span className="tabular px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[11px] font-medium">{task.estimate} pts</span>}
+              {task.sprint && (
+                <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${SPRINT_STATUS_CHIP[task.sprint.status] ?? SPRINT_STATUS_CHIP.planificado}`}>
+                  {`Sprint: ${task.sprint.name} (${SPRINT_STATUS_LABEL[task.sprint.status] ?? task.sprint.status})`}
+                </span>
+              )}
             </div>
             <div className="flex items-start justify-between">
               <h1 className="text-xl font-semibold text-gray-900 text-balance">{task.title}</h1>
