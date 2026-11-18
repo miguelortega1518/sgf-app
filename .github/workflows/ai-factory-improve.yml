@@ -39,7 +39,7 @@ jobs:
 
       - name: Instalar AI Factory y Claude Code
         run: |
-          pip install "ai-factory @ git+https://github.com/miguelortega1518/ai-factory@7cab51fd93cb82d98b146c8ae0a8b39fa7d6fc9a"
+          pip install "ai-factory @ git+https://github.com/miguelortega1518/ai-factory@804167d0a7be6e7502f0ccd995ecc8d9c7561fb9"
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/claude" --version
