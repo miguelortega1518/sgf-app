@@ -64,6 +64,16 @@ describe('VelocityChart', () => {
     expect(html).toContain('2,3 puntos');
   });
 
+  it('el máximo del eje Y con decimales usa coma', () => {
+    // La media (2,7) supera a las barras: el eje llega a 2,7.
+    const html = render({
+      enough: true, closedCount: 3,
+      rows: [row(1, 2, 1, 2, 1), row(2, 2, 1, 2, 1), row(3, 1, 1, 2.7, 1)],
+    });
+    expect(html).toContain('<span>2,7</span>');
+    expect(html).not.toContain('<span>2.7</span>');
+  });
+
   it('si todos los sprints tienen 0 puntos, las barras y la media usan tareas', () => {
     const html = render({
       enough: true, closedCount: 2,

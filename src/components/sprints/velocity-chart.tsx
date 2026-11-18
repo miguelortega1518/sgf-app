@@ -6,7 +6,7 @@
 import { SPRINT_CHART_VAR } from '@/lib/labels';
 import { formatDateRD } from '@/lib/date-utils';
 import { MOVING_AVERAGE_WINDOW, type BurndownUnit, type VelocityReport } from '@/lib/sprint-metrics';
-import { formatUnit } from './burndown-chart';
+import { formatMetric, formatUnit } from './burndown-chart';
 
 const WIDTH = 600;
 const HEIGHT = 160;
@@ -41,7 +41,7 @@ export function VelocityChart({ velocity }: { velocity: VelocityReport }) {
     <div>
       <div className="flex gap-2">
         <div className="flex flex-col justify-between text-[10px] text-[var(--text-muted)] tabular" aria-hidden="true">
-          <span>{max}</span>
+          <span>{formatMetric(max)}</span>
           <span>0</span>
         </div>
         <svg

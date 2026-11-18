@@ -12,6 +12,7 @@ const HEIGHT = 160;
 
 const coord = (n: number) => String(Math.round(n * 10) / 10);
 
+// 'es' y no 'es-DO': en CLDR es-DO usa punto decimal y aquí se quiere coma (2,5).
 const DECIMAL = new Intl.NumberFormat('es', { maximumFractionDigits: 1 });
 
 /** Cifra con coma decimal y como mucho 1 decimal (2,5). */
