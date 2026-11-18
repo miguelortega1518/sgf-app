@@ -2,6 +2,7 @@ import { formatDateRD } from '@/lib/date-utils';
 import { SPRINT_STATUS_CHIP, SPRINT_STATUS_LABEL, STATUS_CHIP, STATUS_LABEL, taskKey, type TaskStatus } from '@/lib/labels';
 import { groupTasksBySprint, type SprintStatus } from '@/lib/sprints';
 import { NewSprintForm, type NewSprintPayload } from './new-sprint-form';
+import { ForecastSummary, type ForecastSummaryProps } from '@/components/forecast/forecast-summary';
 
 export type SprintSectionSprint = {
   id: string;
@@ -31,6 +32,8 @@ export type SprintsSectionProps = {
   onCloseSprint: (sprintId: string) => void;
   /** Devolver false (p. ej. si la API rechaza el alta) conserva los datos del formulario. */
   onCreateSprint: (payload: NewSprintPayload) => boolean | void | Promise<boolean | void>;
+  /** Pronóstico del sprint activo; si no llega, no se pinta nada. */
+  activeForecast?: ForecastSummaryProps;
 };
 
 const BACKLOG_VALUE = 'backlog';
@@ -116,7 +119,7 @@ function TaskList({
  * Los sprints cerrados no se pintan.
  */
 export function SprintsSection({
-  tasks, sprints, canEdit, defaultDates, onMoveTask, onStartSprint, onCloseSprint, onCreateSprint,
+  tasks, sprints, canEdit, defaultDates, onMoveTask, onStartSprint, onCloseSprint, onCreateSprint, activeForecast,
 }: SprintsSectionProps) {
   const { backlog, active, planned } = groupTasksBySprint(tasks, sprints);
   const targets = sprints.filter(s => s.status !== 'cerrado');
@@ -140,6 +143,7 @@ export function SprintsSection({
             <span className="ml-auto"><Totals tasks={sprintTasks} estimateTotal={estimateTotal} /></span>
           </header>
           {sprint.goal && <p className="mt-1 text-xs text-[var(--text-secondary)]">{sprint.goal}</p>}
+          {sprint.status === 'activo' && activeForecast && <ForecastSummary {...activeForecast} />}
           <div className="mt-2">
             <TaskList
               tasks={sprintTasks}

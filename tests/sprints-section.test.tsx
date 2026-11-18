@@ -120,6 +120,35 @@ describe('SprintsSection', () => {
     expect(html).toContain('<form');
   });
 
+  it('con activeForecast, el sprint activo muestra el pronóstico y los planificados no', () => {
+    const html = render({
+      sprints: [active, planned],
+      activeForecast: {
+        forecast: {
+          kind: 'forecast', remaining: 4, p50: '2026-11-10', p70: '2026-11-12', p85: '2026-11-15',
+          probability: 0.7, targetDate: '2026-11-16',
+        },
+        backtest: { hits: 8, total: 10, enough: true },
+        today: '2026-11-05',
+      },
+    });
+    const activeCard = html.slice(html.indexOf('Sprint 7'), html.indexOf('Sprint 8'));
+    const plannedCard = html.slice(html.indexOf('Sprint 8'));
+    expect(activeCard).toContain('Probabilidad de llegar al 16 nov: 70 %. Fecha al 85 %: 15 nov');
+    expect(activeCard).toContain('Rango: 50 % 10 nov · 70 % 12 nov · 85 % 15 nov');
+    expect(activeCard).toContain('Acierto hacia atrás: 8 de 10 dentro del rango del 85 %');
+    expect(plannedCard).not.toContain('Probabilidad');
+    expect(plannedCard).not.toContain('Rango:');
+  });
+
+  it('sin activeForecast no hay texto de pronóstico', () => {
+    const html = render({ sprints: [active, planned] });
+    expect(html).not.toContain('Probabilidad');
+    expect(html).not.toContain('Rango:');
+    expect(html).not.toContain('Pronóstico');
+    expect(html).not.toContain('Acierto');
+  });
+
   it('una tarea completada sin sprint no sale en el backlog', () => {
     const html = render({
       tasks: [

@@ -73,6 +73,16 @@ export function formatDateRD(dateStr: string): string {
   return `${day}/${month}/${year}`;
 }
 
+const SHORT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+// Fecha corta '12 nov' de una fecha YYYY-MM-DD; añade el año si no es el de
+// `today` ('3 ene 2027'). Se monta con las partes de la cadena, sin Date ni TZ.
+export function formatShortDateRD(dateStr: string, today: string = todayRD()): string {
+  const [year, month, day] = dateStr.split('-');
+  const short = `${Number(day)} ${SHORT_MONTHS[Number(month) - 1]}`;
+  return year === today.slice(0, 4) ? short : `${short} ${year}`;
+}
+
 export function toTimestampRD(date: Date): string {
   return date.toLocaleString('es-DO', {
     timeZone: RD_TIMEZONE,
