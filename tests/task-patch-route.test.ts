@@ -301,12 +301,13 @@ describe('PATCH /api/tasks/[id] (campos): sprint de la tarea', () => {
         spaceId,
         previousValue: 'Backlog',
         newValue: 'Sprint 7',
+        reason: JSON.stringify({ from: null, to: sprintA.id }),
       },
       mocks.tx,
     ]]);
   });
 
-  it('de un sprint a otro: valores con los dos nombres, nunca UUID', async () => {
+  it('de un sprint a otro: valores con los dos nombres (nunca UUID) y los ids sólo en reason', async () => {
     current.sprintId = sprintA.id;
     queueSprintLookups([sprintB], [{ name: sprintA.name }]);
 
@@ -314,12 +315,14 @@ describe('PATCH /api/tasks/[id] (campos): sprint de la tarea', () => {
 
     expect(res.status).toBe(200);
     expect(sprintAudits()).toHaveLength(1);
-    expect(sprintAudits()[0][0]).toMatchObject({ previousValue: 'Sprint 7', newValue: 'Sprint 8' });
-    expect(JSON.stringify(sprintAudits())).not.toContain(sprintA.id);
-    expect(JSON.stringify(sprintAudits())).not.toContain(sprintB.id);
+    const entry = sprintAudits()[0][0];
+    expect(entry).toMatchObject({ previousValue: 'Sprint 7', newValue: 'Sprint 8' });
+    expect(JSON.parse(entry.reason)).toEqual({ from: sprintA.id, to: sprintB.id });
+    expect(`${entry.previousValue} ${entry.newValue}`).not.toContain(sprintA.id);
+    expect(`${entry.previousValue} ${entry.newValue}`).not.toContain(sprintB.id);
   });
 
-  it('sprintId null desde un sprint → newValue Backlog', async () => {
+  it('sprintId null desde un sprint → newValue Backlog y reason con to null', async () => {
     current.sprintId = sprintA.id;
     queueSprintLookups([{ name: sprintA.name }]);
 
@@ -328,7 +331,11 @@ describe('PATCH /api/tasks/[id] (campos): sprint de la tarea', () => {
     expect(res.status).toBe(200);
     expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({ sprintId: null }));
     expect(sprintAudits()).toHaveLength(1);
-    expect(sprintAudits()[0][0]).toMatchObject({ previousValue: 'Sprint 7', newValue: 'Backlog' });
+    expect(sprintAudits()[0][0]).toMatchObject({
+      previousValue: 'Sprint 7',
+      newValue: 'Backlog',
+      reason: JSON.stringify({ from: sprintA.id, to: null }),
+    });
   });
 
   it('el mismo sprintId que ya tiene → sin auditoría', async () => {

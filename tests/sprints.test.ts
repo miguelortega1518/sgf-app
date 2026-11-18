@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  SPRINT_DEFAULT_BUSINESS_DAYS,
   SPRINT_DEFAULT_DAYS,
   SPRINT_GOAL_MAX,
+  nextPlannedSprint,
   SPRINT_NAME_MAX,
   canTransitionSprint,
   defaultSprintDates,
@@ -46,6 +48,63 @@ describe('defaultSprintDates', () => {
   it('cruza meses y años sin desfases de zona horaria', () => {
     expect(defaultSprintDates('2026-12-25')).toEqual({ startDate: '2026-12-25', endDate: '2027-01-07' });
     expect(defaultSprintDates('2028-02-20')).toEqual({ startDate: '2028-02-20', endDate: '2028-03-04' });
+  });
+
+  it('con businessDaysOnly: false mantiene los 14 días naturales', () => {
+    expect(defaultSprintDates('2026-11-17', { businessDaysOnly: false, holidays: new Set(['2026-11-20']) }))
+      .toEqual({ startDate: '2026-11-17', endDate: '2026-11-30' });
+  });
+
+  it('con días hábiles: inicio lunes 2026-11-02 → fin viernes 2026-11-13 (10 días hábiles)', () => {
+    expect(SPRINT_DEFAULT_BUSINESS_DAYS).toBe(10);
+    expect(defaultSprintDates('2026-11-02', { businessDaysOnly: true, holidays: new Set() }))
+      .toEqual({ startDate: '2026-11-02', endDate: '2026-11-13' });
+  });
+
+  it('con días hábiles: un feriado en medio desplaza el fin un día hábil', () => {
+    expect(defaultSprintDates('2026-11-02', { businessDaysOnly: true, holidays: new Set(['2026-11-06']) }))
+      .toEqual({ startDate: '2026-11-02', endDate: '2026-11-16' });
+  });
+
+  it('con días hábiles: si empieza en sábado, cuenta desde el lunes', () => {
+    expect(defaultSprintDates('2026-11-07', { businessDaysOnly: true, holidays: new Set() }))
+      .toEqual({ startDate: '2026-11-07', endDate: '2026-11-20' });
+  });
+
+  it('con días hábiles: si el inicio es feriado, no cuenta', () => {
+    expect(defaultSprintDates('2026-11-02', { businessDaysOnly: true, holidays: new Set(['2026-11-02']) }))
+      .toEqual({ startDate: '2026-11-02', endDate: '2026-11-16' });
+  });
+
+  it('con días hábiles y sin feriados explícitos usa un conjunto vacío', () => {
+    expect(defaultSprintDates('2026-11-02', { businessDaysOnly: true }))
+      .toEqual({ startDate: '2026-11-02', endDate: '2026-11-13' });
+  });
+});
+
+describe('nextPlannedSprint', () => {
+  it('elige el planificado con menor startDate', () => {
+    const sprints = [
+      { id: 'a', status: 'planificado' as const, startDate: '2026-12-01', createdAt: '2026-11-01T00:00:00Z' },
+      { id: 'b', status: 'planificado' as const, startDate: '2026-11-17', createdAt: '2026-11-02T00:00:00Z' },
+      { id: 'c', status: 'activo' as const, startDate: '2026-11-01', createdAt: '2026-10-01T00:00:00Z' },
+      { id: 'd', status: 'cerrado' as const, startDate: '2026-10-01', createdAt: '2026-09-01T00:00:00Z' },
+    ];
+    expect(nextPlannedSprint(sprints)?.id).toBe('b');
+  });
+
+  it('a igualdad de startDate, el creado antes (acepta Date y string)', () => {
+    const sprints = [
+      { id: 'late', status: 'planificado' as const, startDate: '2026-11-17', createdAt: new Date('2026-11-05T00:00:00Z') },
+      { id: 'early', status: 'planificado' as const, startDate: '2026-11-17', createdAt: '2026-11-03T00:00:00Z' },
+    ];
+    expect(nextPlannedSprint(sprints)?.id).toBe('early');
+  });
+
+  it('sin planificados devuelve null', () => {
+    expect(nextPlannedSprint([{ id: 'x', status: 'activo' as const, startDate: '2026-11-01', createdAt: '2026-10-01T00:00:00Z' }]))
+      .toBeNull();
+    expect(nextPlannedSprint([])).toBeNull();
   });
 });
 

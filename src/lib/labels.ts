@@ -150,6 +150,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   sprint_closed: 'Sprint cerrado',
   task_sprint_changed: 'Cambio de sprint',
   wip_limit_changed: 'Límite WIP cambiado',
+  sprint_capacity_changed: 'Capacidad de sprint cambiada',
+  business_days_changed: 'Días hábiles cambiados',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
@@ -192,6 +194,8 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   sprint_closed: 'bg-green-100 text-green-700',
   task_sprint_changed: 'bg-purple-100 text-purple-700',
   wip_limit_changed: 'bg-amber-100 text-amber-700',
+  sprint_capacity_changed: 'bg-amber-100 text-amber-700',
+  business_days_changed: 'bg-amber-100 text-amber-700',
 };
 
 const AUDIT_ACTION_FALLBACK = 'Acción registrada';

@@ -6,13 +6,19 @@ import { db } from '@/lib/db';
 import { auditLog } from '@/lib/db/schema';
 import type { StatusEvent } from '@/lib/status-history';
 
+/** Quien ejecuta la consulta: el `db` global o el `tx` de una transacción. */
+export type QueryExecutor = Pick<typeof db, 'select'>;
+
 /** Eventos de cambio de estado agrupados por tarea, en una sola consulta. */
-export async function loadStatusEvents(taskIds: string[]): Promise<Map<string, StatusEvent[]>> {
+export async function loadStatusEvents(
+  taskIds: string[],
+  executor: QueryExecutor = db,
+): Promise<Map<string, StatusEvent[]>> {
   const byTask = new Map<string, StatusEvent[]>();
   // inArray con una lista vacía no es válido: no se consulta.
   if (taskIds.length === 0) return byTask;
 
-  const rows = await db
+  const rows = await executor
     .select({
       taskId: auditLog.taskId,
       previousValue: auditLog.previousValue,
