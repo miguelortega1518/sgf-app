@@ -226,6 +226,14 @@
   --border-strong: oklch(0.84 0.008 255);
   --accent: var(--blue-600);
   --accent-fg: oklch(0.99 0 0);
+  /* Gráficos de flujo (CFD e histograma). No usar --blue-*: es el acento ámbar. */
+  --chart-todo: oklch(0.8 0.012 255);
+  --chart-doing: oklch(0.66 0.13 235);
+  --chart-review: var(--purple-500);
+  --chart-done: var(--green-500);
+  --chart-blocked: var(--red-500);
+  --chart-bar: oklch(0.62 0.12 235);
+  --chart-marker: oklch(0.3 0.02 255);
 }
 
 .dark {
@@ -339,6 +347,13 @@
   --text-muted: oklch(0.64 0.014 255);
   --border: oklch(0.29 0.014 255);
   --border-strong: oklch(0.38 0.016 255);
+  --chart-todo: var(--gray-500);
+  --chart-doing: oklch(0.72 0.12 235);
+  --chart-review: var(--purple-500);
+  --chart-done: var(--green-500);
+  --chart-blocked: var(--red-500);
+  --chart-bar: oklch(0.72 0.12 235);
+  --chart-marker: oklch(0.93 0.008 255);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -453,6 +468,13 @@
     --text-muted: oklch(0.64 0.014 255);
     --border: oklch(0.29 0.014 255);
     --border-strong: oklch(0.38 0.016 255);
+    --chart-todo: var(--gray-500);
+    --chart-doing: oklch(0.72 0.12 235);
+    --chart-review: var(--purple-500);
+    --chart-done: var(--green-500);
+    --chart-blocked: var(--red-500);
+    --chart-bar: oklch(0.72 0.12 235);
+    --chart-marker: oklch(0.93 0.008 255);
   }
 }
 

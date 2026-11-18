@@ -48,6 +48,7 @@ const KNOWN_ACTIONS = [
   'sprint_started',
   'sprint_closed',
   'task_sprint_changed',
+  'wip_limit_changed',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.

@@ -35,7 +35,14 @@ export function toDateRD(date: Date | string): string {
 // todayRD() + `days` días, con aritmética de fecha pura en UTC (independiente
 // de la hora y de la TZ del proceso). Acepta valores negativos.
 export function addDaysRD(days: number): string {
-  const [y, m, d] = todayRD().split('-').map(Number);
+  return shiftDateRD(todayRD(), days);
+}
+
+// Fecha de calendario `date` (YYYY-MM-DD) + `days` días, con la misma
+// aritmética Date.UTC que addDaysRD pero sin leer el reloj: sirve para
+// funciones puras que reciben `now`. Acepta valores negativos.
+export function shiftDateRD(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number);
   const target = new Date(Date.UTC(y, m - 1, d + days));
   const year = target.getUTCFullYear();
   const month = String(target.getUTCMonth() + 1).padStart(2, '0');

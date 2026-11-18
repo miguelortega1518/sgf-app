@@ -53,11 +53,34 @@ export function percentile(sorted: number[], p: number): number | null {
 
 const round = (n: number | null) => (n === null ? null : Math.round(n * 10) / 10);
 
+/** Campos mínimos de una tarea para medir el ciclo. */
+export type CycleTask = Pick<MetricTask, 'id' | 'status' | 'createdAt' | 'completedAt'>;
+
 /** Terminadas (status 'completada') cuyo cierre cae en los últimos `windowDays`. */
-function doneInWindow(tasks: MetricTask[], windowDays: number, now: Date): (MetricTask & { completedAt: Date })[] {
+function doneInWindow<T extends Pick<MetricTask, 'status' | 'completedAt'>>(
+  tasks: T[], windowDays: number, now: Date,
+): (T & { completedAt: Date })[] {
   const since = now.getTime() - windowDays * DAY;
-  return tasks.filter((t): t is MetricTask & { completedAt: Date } =>
+  return tasks.filter((t): t is T & { completedAt: Date } =>
     t.status === 'completada' && t.completedAt !== null && t.completedAt.getTime() >= since);
+}
+
+/**
+ * Días de ciclo de cada tarea terminada en los últimos `windowDays`, en el orden de
+ * entrada y sin redondear. El inicio es el de startedAt (o `createdAt` si no hay
+ * inicio registrado, y entonces cuenta en `withoutStart`). Lo comparten cycleTime y
+ * el histograma de src/lib/flow-metrics.ts.
+ */
+export function cycleDays(
+  tasks: CycleTask[], histories: Map<string, StatusSegment[]>, windowDays: number, now = new Date(),
+): { days: number[]; withoutStart: number } {
+  let withoutStart = 0;
+  const days = doneInWindow(tasks, windowDays, now).map(t => {
+    const start = startedAt(histories.get(t.id) ?? []);
+    if (!start) withoutStart += 1;
+    return Math.max(0, (t.completedAt.getTime() - (start ?? t.createdAt).getTime()) / DAY);
+  });
+  return { days, withoutStart };
 }
 
 export type LeadStats = { count: number; median: number | null; p85: number | null };
@@ -78,17 +101,16 @@ export function leadTime(tasks: MetricTask[], windowDays: number, now = new Date
  * inicio y el último cierre, así que incluye el tiempo que estuvo «hecha» entre medias.
  */
 export function cycleTime(
-  tasks: MetricTask[], histories: Map<string, StatusSegment[]>, windowDays: number, now = new Date(),
+  tasks: CycleTask[], histories: Map<string, StatusSegment[]>, windowDays: number, now = new Date(),
 ): CycleStats {
-  let withoutStart = 0;
-  const days = doneInWindow(tasks, windowDays, now)
-    .map(t => {
-      const start = startedAt(histories.get(t.id) ?? []);
-      if (!start) withoutStart += 1;
-      return Math.max(0, (t.completedAt.getTime() - (start ?? t.createdAt).getTime()) / DAY);
-    })
-    .sort((a, b) => a - b);
-  return { count: days.length, median: round(percentile(days, 50)), p85: round(percentile(days, 85)), withoutStart };
+  const { days, withoutStart } = cycleDays(tasks, histories, windowDays, now);
+  return { ...cycleSummary(days), withoutStart };
+}
+
+/** Recuento, mediana y p85 (redondeados a 1 decimal) de una lista de días sin ordenar. */
+export function cycleSummary(days: number[]): LeadStats {
+  const sorted = [...days].sort((a, b) => a - b);
+  return { count: sorted.length, median: round(percentile(sorted, 50)), p85: round(percentile(sorted, 85)) };
 }
 
 const WIP_STATUSES: ReadonlySet<string> = new Set(['en_proceso', 'en_revision', 'bloqueada']);

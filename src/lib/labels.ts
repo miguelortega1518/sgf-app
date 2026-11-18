@@ -31,7 +31,19 @@ export const STATUS_CHIP: Record<TaskStatus, string> = {
   bloqueada: 'bg-red-100 text-red-700',
 };
 
-export const KIND_ORDER = ['feature', 'bug', 'mejora', 'deuda', 'chore'] as const;
+/**
+ * Color de cada estado en los gráficos de flujo (src/components/dashboard). Son
+ * variables CSS definidas en los tres bloques de tema de globals.css.
+ */
+export const STATUS_CHART_VAR: Record<TaskStatus, string> = {
+  no_iniciada: 'var(--chart-todo)',
+  en_proceso: 'var(--chart-doing)',
+  en_revision: 'var(--chart-review)',
+  completada: 'var(--chart-done)',
+  bloqueada: 'var(--chart-blocked)',
+};
+
+export const KIND_ORDER =['feature', 'bug', 'mejora', 'deuda', 'chore'] as const;
 export type TaskKind = (typeof KIND_ORDER)[number];
 
 export const KIND_LABEL: Record<TaskKind, string> = {
@@ -137,6 +149,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   sprint_started: 'Sprint iniciado',
   sprint_closed: 'Sprint cerrado',
   task_sprint_changed: 'Cambio de sprint',
+  wip_limit_changed: 'Límite WIP cambiado',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
@@ -178,6 +191,7 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   sprint_started: 'bg-blue-100 text-blue-700',
   sprint_closed: 'bg-green-100 text-green-700',
   task_sprint_changed: 'bg-purple-100 text-purple-700',
+  wip_limit_changed: 'bg-amber-100 text-amber-700',
 };
 
 const AUDIT_ACTION_FALLBACK = 'Acción registrada';

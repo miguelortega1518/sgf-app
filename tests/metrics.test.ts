@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { weekStart, weeklyVelocity, percentile, cycleTime, leadTime, wipAging, workInProgress, blockersByArea, doneByKind, type MetricTask } from '../src/lib/metrics';
+import { weekStart, weeklyVelocity, percentile, cycleTime, cycleDays, leadTime, wipAging, workInProgress, blockersByArea, doneByKind, type MetricTask } from '../src/lib/metrics';
 import { buildStatusHistory, type StatusEvent, type StatusSegment } from '../src/lib/status-history';
 
 const NOW = new Date('2026-10-28T15:00:00Z'); // miércoles
@@ -92,6 +92,18 @@ test('cycleTime vacío y duraciones negativas', () => {
   // Inicio registrado después del cierre: la duración negativa cuenta 0.
   const h = new Map([[a.id, buildStatusHistory(a, [{ taskId: a.id, previousValue: null, newValue: 'en_proceso', at: d('2026-10-25') }])]]);
   expect(cycleTime([a], h, 60, NOW)).toEqual({ count: 1, median: 0, p85: 0, withoutStart: 0 });
+});
+
+test('cycleDays devuelve los días sin ordenar ni redondear y cuenta withoutStart', () => {
+  const a = t({ createdAt: d('2026-10-01'), completedAt: d('2026-10-24') }); // inicio 10-21 06:00Z: 3,25
+  const b = t({ createdAt: d('2026-10-20'), completedAt: d('2026-10-22') }); // sin inicio: 2
+  const old = t({ createdAt: d('2026-01-01'), completedAt: d('2026-01-03') }); // fuera de la ventana
+  const open = t({ status: 'en_proceso', completedAt: null });
+  const h = new Map([[a.id, hist(a, new Date('2026-10-21T06:00:00Z'))]]);
+  expect(cycleDays([a, b, old, open], h, 60, NOW)).toEqual({ days: [3.25, 2], withoutStart: 1 });
+  // Acepta tareas mínimas (id, status, createdAt, completedAt).
+  const minimal = { id: 'm', status: 'completada', createdAt: d('2026-10-20'), completedAt: d('2026-10-21') };
+  expect(cycleDays([minimal], new Map(), 60, NOW)).toEqual({ days: [1], withoutStart: 1 });
 });
 
 test('wipAging sólo incluye trabajo en curso, ordenado de más a menos días', () => {

@@ -50,6 +50,13 @@
       "when": 1794951781228,
       "tag": "0006_sprints",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794982518055,
+      "tag": "0007_wip_limits",
+      "breakpoints": true
     }
   ]
 }

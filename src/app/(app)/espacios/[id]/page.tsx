@@ -13,6 +13,8 @@ import {
 import { useToast } from '@/components/providers/toast-provider';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
+import { WipLimitsForm } from '@/components/tasks/wip-limits-form';
+import { parseWipLimits, type WipLimits } from '@/lib/wip-limits';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { CsvImportDialog } from '@/components/tasks/csv-import-dialog';
 import { SprintsSection, type SprintSectionSprint } from '@/components/sprints/sprints-section';
@@ -61,6 +63,8 @@ type SpaceData = {
     leaderId: string | null;
     leaderName: string | null;
     spaceTemplateId: string | null;
+    /** jsonb de spaces.wip_limits; se lee con parseWipLimits. */
+    wipLimits?: unknown;
   };
   members: { personId: string; spaceRole: string; name: string }[];
   tasks: TaskItem[];
@@ -108,6 +112,7 @@ export default function SpaceDetailPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [showWipLimits, setShowWipLimits] = useState(false);
   const [view, setView] = useState<'board' | 'list'>(() => {
     if (typeof window === 'undefined') return 'board';
     return localStorage.getItem('forja-view') === 'list' ? 'list' : 'board';
@@ -207,6 +212,23 @@ export default function SpaceDetailPage() {
     if (res.ok) { fetchData(); toast(archived ? 'Tarea archivada' : 'Tarea restaurada'); }
   }
 
+  // Los límites sólo avisan en el tablero; el servidor valida y audita.
+  async function saveWipLimits(limits: WipLimits): Promise<boolean> {
+    const res = await fetch(`/api/spaces/${id}/wip-limits`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(limits),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      toast(body?.error || 'No se pudieron guardar los límites', 'error');
+      return false;
+    }
+    toast('Límites de trabajo en curso guardados');
+    fetchData();
+    return true;
+  }
+
   function startEditingSpace() {
     if (!data) return;
     setEditName(data.space.name);
@@ -260,6 +282,13 @@ export default function SpaceDetailPage() {
   });
 
   const activeFilters = (filterStatus ? 1 : 0) + (filterPriority ? 1 : 0);
+
+  // Límites WIP: los recuentos salen de TODAS las tareas no archivadas del proyecto,
+  // no de las filtradas, para que «3/4» sea cierto aunque haya filtros activos.
+  const wipLimits = parseWipLimits(space.wipLimits);
+  const wipCounts: Partial<Record<TaskStatus, number>> = {};
+  for (const t of spaceTasks) wipCounts[t.status as TaskStatus] = (wipCounts[t.status as TaskStatus] ?? 0) + 1;
+  const canEditWipLimits = user?.role !== 'observador' && space.status !== 'cerrado';
 
   return (
     <div className="p-6 max-w-[88rem]">
@@ -324,6 +353,18 @@ export default function SpaceDetailPage() {
             <Filter size={14} />
             Filtros{activeFilters > 0 && ` (${activeFilters})`}
           </button>
+          {canEditWipLimits && (
+            <button
+              onClick={() => setShowWipLimits(!showWipLimits)}
+              aria-expanded={showWipLimits}
+              aria-controls="wip-limits-panel"
+              className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                showWipLimits ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              Límites WIP
+            </button>
+          )}
           {canAddTask && space.status === 'activo' && (
             <button
               onClick={() => setShowImport(true)}
@@ -373,6 +414,16 @@ export default function SpaceDetailPage() {
         </div>
       )}
 
+      {canEditWipLimits && showWipLimits && (
+        <div id="wip-limits-panel" className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+          <WipLimitsForm
+            key={`${wipLimits.en_proceso}-${wipLimits.en_revision}`}
+            initial={wipLimits}
+            onSave={saveWipLimits}
+          />
+        </div>
+      )}
+
       {showNewTask && (
         <NewTaskForm
           spaceId={space.id}
@@ -397,6 +448,8 @@ export default function SpaceDetailPage() {
           tasks={filteredTasks}
           readOnly={space.status === 'cerrado' || user?.role === 'observador'}
           onMove={moveTask}
+          wipLimits={wipLimits}
+          wipCounts={wipCounts}
         />
       ) : isRecurrente ? (
         <GroupedByCompanyView
