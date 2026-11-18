@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/lib/hooks/use-session';
 import { formatDateRD, todayRD } from '@/lib/date-utils';
@@ -19,7 +19,9 @@ import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { CsvImportDialog } from '@/components/tasks/csv-import-dialog';
 import { SprintsSection, type SprintSectionSprint } from '@/components/sprints/sprints-section';
 import type { NewSprintPayload } from '@/components/sprints/new-sprint-form';
+import { ForecastSummary } from '@/components/forecast/forecast-summary';
 import { defaultSprintDates } from '@/lib/sprints';
+import type { ProjectForecast } from '@/lib/forecast';
 import { SPACE_TYPE_LABEL, type TaskStatus } from '@/lib/labels';
 
 type TaskItem = {
@@ -120,11 +122,25 @@ export default function SpaceDetailPage() {
     onTimeRate: number; avgDays: number;
   } | null>(null);
 
+  const [forecast, setForecast] = useState<ProjectForecast | null>(null);
+  const forecastRequest = useRef(0);
+
+  // Pronóstico del sprint activo y de los hitos. Sólo cuenta la última petición (como el
+  // `cancelled` de SprintsPanel); si falla, no hay toast: se omite el bloque.
+  const fetchForecast = useCallback(async () => {
+    const request = ++forecastRequest.current;
+    const next: ProjectForecast | null = await fetch(`/api/spaces/${id}/forecast`)
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (request === forecastRequest.current) setForecast(next);
+  }, [id]);
+
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/spaces/${id}`);
     if (res.ok) setData(await res.json());
     setLoading(false);
-  }, [id]);
+    fetchForecast();
+  }, [id, fetchForecast]);
 
   function changeView(v: 'board' | 'list') {
     setView(v);
@@ -457,10 +473,16 @@ export default function SpaceDetailPage() {
           tasks={spaceTasks}
           canEdit={user?.role !== 'observador' && space.status !== 'cerrado'}
           onChanged={fetchData}
+          forecast={forecast}
         />
       )}
 
-      <MilestonesSection spaceId={space.id} canEdit={user?.role !== 'observador' && space.status !== 'cerrado'} />
+      <MilestonesSection
+        spaceId={space.id}
+        canEdit={user?.role !== 'observador' && space.status !== 'cerrado'}
+        forecast={forecast}
+        onChanged={fetchForecast}
+      />
 
       <SpaceCommentsSection spaceId={space.id} canComment={user?.role !== 'observador'} userId={user?.id || ''} isAdmin={isAdmin ?? false} />
 
@@ -894,11 +916,12 @@ type MilestoneItem = {
 };
 
 // Contenedor de la sección «Sprints»: carga y mutaciones; la presentación es SprintsSection.
-function SprintsPanel({ spaceId, tasks, canEdit, onChanged }: {
+function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
   spaceId: string;
   tasks: TaskItem[];
   canEdit: boolean;
   onChanged: () => void;
+  forecast: ProjectForecast | null;
 }) {
   const [sprints, setSprints] = useState<SprintSectionSprint[]>([]);
   const { toast } = useToast();
@@ -948,13 +971,21 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged }: {
     sprintId: t.sprintId ?? null,
   }));
 
+  // El pronóstico sólo se pinta si corresponde al sprint activo que se está mostrando.
+  const today = todayRD();
+  const activeId = sprints.find(s => s.status === 'activo')?.id;
+  const activeForecast = forecast?.activeSprint && forecast.activeSprint.id === activeId
+    ? { forecast: forecast.activeSprint.forecast, backtest: forecast.backtest, today }
+    : undefined;
+
   return (
     <div className="mt-8 mb-4">
       <SprintsSection
         tasks={sectionTasks}
         sprints={sprints}
         canEdit={canEdit}
-        defaultDates={defaultSprintDates(todayRD())}
+        defaultDates={defaultSprintDates(today)}
+        activeForecast={activeForecast}
         onMoveTask={(taskId, sprintId) => {
           mutate(`/api/tasks/${taskId}`, 'PATCH', { sprintId }, 'No se pudo mover la tarea');
         }}
@@ -971,7 +1002,13 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged }: {
   );
 }
 
-function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boolean }) {
+function MilestonesSection({ spaceId, canEdit, forecast, onChanged }: {
+  spaceId: string;
+  canEdit: boolean;
+  forecast: ProjectForecast | null;
+  /** Tras crear, completar o borrar un hito: recarga el pronóstico. */
+  onChanged: () => void;
+}) {
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -994,7 +1031,7 @@ function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boo
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, targetDate }),
     });
-    if (res.ok) { setName(''); setTargetDate(''); setShowForm(false); fetchMilestones(); toast('Hito creado'); }
+    if (res.ok) { setName(''); setTargetDate(''); setShowForm(false); fetchMilestones(); onChanged(); toast('Hito creado'); }
     setSubmitting(false);
   }
 
@@ -1005,6 +1042,7 @@ function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boo
       body: JSON.stringify({ milestoneId: id, completed }),
     });
     fetchMilestones();
+    onChanged();
   }
 
   async function handleDelete(id: string) {
@@ -1014,6 +1052,7 @@ function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boo
       body: JSON.stringify({ milestoneId: id }),
     });
     fetchMilestones();
+    onChanged();
     toast('Hito eliminado');
   }
 
@@ -1053,29 +1092,37 @@ function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boo
           {milestones.map(m => {
             const today = todayRD();
             const isPast = !m.completed && m.targetDate < today;
+            const milestoneForecast = !m.completed && forecast
+              ? forecast.milestones.find(f => f.id === m.id)?.forecast
+              : undefined;
             return (
-              <div key={m.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg px-4 py-2.5 flex items-center gap-3">
-                {canEdit ? (
-                  <button onClick={() => toggleComplete(m.id, !m.completed)}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      m.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-blue-500'
-                    }`}>
-                    {m.completed && <CheckCircle2 size={12} />}
-                  </button>
-                ) : (
-                  <Flag size={14} className={m.completed ? 'text-green-500' : 'text-gray-400'} />
-                )}
-                <div className="flex-1 min-w-0">
-                  <span className={`text-sm font-medium ${m.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{m.name}</span>
-                  <span className="text-xs text-gray-400 ml-2">{m.taskCount} tareas</span>
+              <div key={m.id} className="bg-[var(--bg-card)] border border-gray-200 rounded-lg px-4 py-2.5">
+                <div className="flex items-center gap-3">
+                  {canEdit ? (
+                    <button onClick={() => toggleComplete(m.id, !m.completed)}
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        m.completed ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-blue-500'
+                      }`}>
+                      {m.completed && <CheckCircle2 size={12} />}
+                    </button>
+                  ) : (
+                    <Flag size={14} className={m.completed ? 'text-green-500' : 'text-gray-400'} />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-sm font-medium ${m.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{m.name}</span>
+                    <span className="text-xs text-gray-400 ml-2">{m.taskCount} tareas</span>
+                  </div>
+                  <span className={`text-xs ${isPast ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                    {formatDateRD(m.targetDate)}
+                  </span>
+                  {canEdit && (
+                    <button onClick={() => handleDelete(m.id)} className="text-gray-400 hover:text-red-500 p-1" aria-label={`Eliminar hito ${m.name}`}>
+                      <Trash2 size={12} aria-hidden="true" />
+                    </button>
+                  )}
                 </div>
-                <span className={`text-xs ${isPast ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
-                  {formatDateRD(m.targetDate)}
-                </span>
-                {canEdit && (
-                  <button onClick={() => handleDelete(m.id)} className="text-gray-400 hover:text-red-500 p-1" aria-label={`Eliminar hito ${m.name}`}>
-                    <Trash2 size={12} aria-hidden="true" />
-                  </button>
+                {forecast && milestoneForecast && (
+                  <ForecastSummary forecast={milestoneForecast} backtest={forecast.backtest} today={today} />
                 )}
               </div>
             );
