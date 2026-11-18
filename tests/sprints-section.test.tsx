@@ -38,6 +38,9 @@ function render(overrides: Partial<SprintsSectionProps> = {}) {
     onStartSprint: () => {},
     onCloseSprint: () => {},
     onCreateSprint: () => {},
+    onSaveCapacity: () => {},
+    businessDaysOnly: true,
+    onToggleBusinessDays: () => {},
     ...overrides,
   }));
 }
@@ -98,8 +101,71 @@ describe('SprintsSection', () => {
     expect(html).toContain('<option value="backlog">Backlog</option>');
     expect(html).toContain(`<option value="${planned.id}">Sprint 8</option>`);
     expect(html).not.toContain(`<option value="${closed.id}"`);
-    // El sprint de un cerrado no se pinta como tarjeta.
-    expect(html).not.toContain('Sprint 6');
+    // El cerrado no se pinta como tarjeta: sólo en el bloque «Sprints cerrados».
+    const openPart = html.slice(0, html.indexOf('Sprints cerrados'));
+    expect(openPart).not.toContain('Sprint 6');
+  });
+
+  it('bloque «Sprints cerrados» del más reciente al más antiguo, plegable, con su resumen', () => {
+    const older: SprintSectionSprint = {
+      id: 's-older', name: 'Sprint 5', goal: null, status: 'cerrado',
+      startDate: '2026-10-06', endDate: '2026-10-19', summary: null,
+    };
+    const html = render({ sprints: [older, { ...closed, summary: null }, active] });
+    expect(html).toContain('Sprints cerrados');
+    const block = html.slice(html.indexOf('Sprints cerrados'));
+    expect(block.indexOf('Sprint 6')).toBeGreaterThan(-1);
+    expect(block.indexOf('Sprint 6')).toBeLessThan(block.indexOf('Sprint 5'));
+    expect(block).toContain('<details');
+    expect(block).toContain('<summary');
+    expect(block).toContain('Sin resumen: este sprint se cerró antes de la retrospectiva automática');
+  });
+
+  it('sin sprints cerrados no hay bloque', () => {
+    const html = render({ sprints: [active] });
+    expect(html).not.toContain('Sprints cerrados');
+  });
+
+  it('los sprints abiertos con capacity pintan la tabla y el aviso de sobrecarga', () => {
+    const html = render({
+      sprints: [{
+        ...active,
+        capacity: [{ personId: 'p1', name: 'Ana', points: 5, isDefault: false, assigned: 8, overloaded: true }],
+      }],
+    });
+    expect(html).toContain('Capacidad del equipo');
+    expect(html).toContain('Supera su capacidad en 3 puntos');
+    expect(html).toMatch(/<input[^>]*aria-label="Capacidad de Ana en Sprint 7"/);
+  });
+
+  it('sin canEdit la capacidad es de sólo lectura', () => {
+    const html = render({
+      canEdit: false,
+      sprints: [{
+        ...active,
+        capacity: [{ personId: 'p1', name: 'Ana', points: 5, isDefault: false, assigned: 2, overloaded: false }],
+      }],
+    });
+    expect(html).toContain('Capacidad del equipo');
+    expect(html).not.toMatch(/<input[^>]*aria-label="Capacidad de Ana/);
+  });
+
+  it('casilla «Contar sólo días hábiles (RD)»: marcada según el ajuste y deshabilitada sin canEdit', () => {
+    const editable = render({ businessDaysOnly: true });
+    expect(editable).toContain('Contar sólo días hábiles (RD)');
+    expect(editable).toMatch(/<input[^>]*type="checkbox"[^>]*checked=""/);
+    expect(editable).not.toMatch(/<input[^>]*type="checkbox"[^>]*disabled=""/);
+
+    const readOnly = render({ canEdit: false, businessDaysOnly: false });
+    expect(readOnly).toContain('Contar sólo días hábiles (RD)');
+    expect(readOnly).toMatch(/<input[^>]*type="checkbox"[^>]*disabled=""/);
+    expect(readOnly).not.toMatch(/<input[^>]*type="checkbox"[^>]*checked=""/);
+  });
+
+  it('el diálogo de cierre no se pinta hasta pulsar «Cerrar sprint»', () => {
+    const html = render({ sprints: [active] });
+    expect(html).toContain('Cerrar sprint');
+    expect(html).not.toContain('role="dialog"');
   });
 
   it('con canEdit=false no hay selectores, botones ni formulario', () => {

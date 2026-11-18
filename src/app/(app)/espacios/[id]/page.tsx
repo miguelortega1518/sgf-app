@@ -65,6 +65,8 @@ type SpaceData = {
     spaceTemplateId: string | null;
     /** jsonb de spaces.wip_limits; se lee con parseWipLimits. */
     wipLimits?: unknown;
+    /** «Contar sólo días hábiles (RD)» (spaces.business_days_only). */
+    businessDaysOnly?: boolean;
   };
   members: { personId: string; spaceRole: string; name: string }[];
   tasks: TaskItem[];
@@ -289,6 +291,13 @@ export default function SpaceDetailPage() {
   const wipCounts: Partial<Record<TaskStatus, number>> = {};
   for (const t of spaceTasks) wipCounts[t.status as TaskStatus] = (wipCounts[t.status as TaskStatus] ?? 0) + 1;
   const canEditWipLimits = user?.role !== 'observador' && space.status !== 'cerrado';
+  // Sprints (capacidad, cierre con arrastre, días hábiles): con el rol del proyecto,
+  // como requireProjectAccess(..., 'write'). Mientras la sesión carga, sin permiso.
+  const projectRole = members.find(m => m.personId === user?.id)?.spaceRole;
+  const canEditSprints = user != null
+    && user.role !== 'observador'
+    && (isAdmin || projectRole !== 'observador')
+    && space.status !== 'cerrado';
 
   return (
     <div className="p-6 max-w-[88rem]">
@@ -471,7 +480,8 @@ export default function SpaceDetailPage() {
         <SprintsPanel
           spaceId={space.id}
           tasks={spaceTasks}
-          canEdit={user?.role !== 'observador' && space.status !== 'cerrado'}
+          canEdit={canEditSprints}
+          businessDaysOnly={space.businessDaysOnly ?? true}
           onChanged={fetchData}
           forecast={forecast}
         />
@@ -916,15 +926,29 @@ type MilestoneItem = {
 };
 
 // Contenedor de la sección «Sprints»: carga y mutaciones; la presentación es SprintsSection.
-function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
+function SprintsPanel({ spaceId, tasks, canEdit, businessDaysOnly, onChanged, forecast }: {
   spaceId: string;
   tasks: TaskItem[];
   canEdit: boolean;
+  businessDaysOnly: boolean;
   onChanged: () => void;
   forecast: ProjectForecast | null;
 }) {
   const [sprints, setSprints] = useState<SprintSectionSprint[]>([]);
+  const [holidays, setHolidays] = useState<Set<string>>(() => new Set());
   const { toast } = useToast();
+
+  // Feriados para la duración por defecto en días hábiles: se cargan una vez.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/holidays')
+      .then(r => (r.ok ? r.json() : null))
+      .then((rows: { date: string }[] | null) => {
+        if (!cancelled && Array.isArray(rows)) setHolidays(new Set(rows.map(h => h.date)));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const fetchSprints = useCallback(async () => {
     try {
@@ -945,7 +969,7 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
   }, [spaceId]);
 
   // Llama a la API; si falla, muestra el error. Tras un éxito recarga sprints y proyecto.
-  async function mutate(url: string, method: 'POST' | 'PATCH', body: unknown, fallback: string, okMessage?: string) {
+  async function mutate(url: string, method: 'POST' | 'PATCH' | 'PUT', body: unknown, fallback: string, okMessage?: string) {
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -984,16 +1008,23 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
         tasks={sectionTasks}
         sprints={sprints}
         canEdit={canEdit}
-        defaultDates={defaultSprintDates(today)}
+        defaultDates={defaultSprintDates(today, { businessDaysOnly, holidays })}
         activeForecast={activeForecast}
+        businessDaysOnly={businessDaysOnly}
         onMoveTask={(taskId, sprintId) => {
           mutate(`/api/tasks/${taskId}`, 'PATCH', { sprintId }, 'No se pudo mover la tarea');
         }}
         onStartSprint={id => {
           mutate(`/api/sprints/${id}`, 'PATCH', { status: 'activo' }, 'No se pudo iniciar el sprint', 'Sprint iniciado');
         }}
-        onCloseSprint={id => {
-          mutate(`/api/sprints/${id}`, 'PATCH', { status: 'cerrado' }, 'No se pudo cerrar el sprint', 'Sprint cerrado');
+        onCloseSprint={(id, carryOverTo) => {
+          mutate(`/api/sprints/${id}`, 'PATCH', { status: 'cerrado', carryOverTo }, 'No se pudo cerrar el sprint', 'Sprint cerrado');
+        }}
+        onSaveCapacity={(sprintId, personId, points) => {
+          mutate(`/api/sprints/${sprintId}/capacity`, 'PUT', { personId, points }, 'No se pudo guardar la capacidad', 'Capacidad guardada');
+        }}
+        onToggleBusinessDays={value => {
+          mutate(`/api/spaces/${spaceId}/business-days`, 'PUT', { businessDaysOnly: value }, 'No se pudo guardar el ajuste', 'Ajuste guardado');
         }}
         onCreateSprint={(payload: NewSprintPayload) =>
           mutate(`/api/spaces/${spaceId}/sprints`, 'POST', payload, 'No se pudo crear el sprint', 'Sprint creado')}
