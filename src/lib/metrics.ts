@@ -1,6 +1,11 @@
 // Métricas de entrega del equipo. Funciones puras: reciben filas y devuelven números.
 
+import { startedAt, type StatusSegment } from '@/lib/status-history';
+
 export type MetricTask = {
+  id: string;
+  number: number;
+  title: string;
   status: string;
   kind: string;
   estimate: number | null;
@@ -46,17 +51,88 @@ export function percentile(sorted: number[], p: number): number | null {
   return sorted[idx];
 }
 
-export type CycleStats = { count: number; median: number | null; p85: number | null };
+const round = (n: number | null) => (n === null ? null : Math.round(n * 10) / 10);
 
-/** Días entre la creación y el cierre de las tareas terminadas en los últimos `windowDays`. */
-export function cycleTime(tasks: MetricTask[], windowDays: number, now = new Date()): CycleStats {
+/** Terminadas (status 'completada') cuyo cierre cae en los últimos `windowDays`. */
+function doneInWindow(tasks: MetricTask[], windowDays: number, now: Date): (MetricTask & { completedAt: Date })[] {
   const since = now.getTime() - windowDays * DAY;
-  const days = tasks
-    .filter(t => t.status === 'completada' && t.completedAt && t.completedAt.getTime() >= since)
-    .map(t => Math.max(0, (t.completedAt!.getTime() - t.createdAt.getTime()) / DAY))
+  return tasks.filter((t): t is MetricTask & { completedAt: Date } =>
+    t.status === 'completada' && t.completedAt !== null && t.completedAt.getTime() >= since);
+}
+
+export type LeadStats = { count: number; median: number | null; p85: number | null };
+export type CycleStats = LeadStats & { withoutStart: number };
+
+/** Lead time: días entre la creación y el cierre de las tareas terminadas en los últimos `windowDays`. */
+export function leadTime(tasks: MetricTask[], windowDays: number, now = new Date()): LeadStats {
+  const days = doneInWindow(tasks, windowDays, now)
+    .map(t => Math.max(0, (t.completedAt.getTime() - t.createdAt.getTime()) / DAY))
     .sort((a, b) => a - b);
-  const round = (n: number | null) => (n === null ? null : Math.round(n * 10) / 10);
   return { count: days.length, median: round(percentile(days, 50)), p85: round(percentile(days, 85)) };
+}
+
+/**
+ * Tiempo de ciclo real: días entre el inicio del trabajo (primer paso a en_proceso o
+ * en_revision, ver startedAt) y el cierre. Las tareas sin inicio registrado usan
+ * `createdAt` y se cuentan en `withoutStart`. En una reapertura cuenta el primer
+ * inicio y el último cierre, así que incluye el tiempo que estuvo «hecha» entre medias.
+ */
+export function cycleTime(
+  tasks: MetricTask[], histories: Map<string, StatusSegment[]>, windowDays: number, now = new Date(),
+): CycleStats {
+  let withoutStart = 0;
+  const days = doneInWindow(tasks, windowDays, now)
+    .map(t => {
+      const start = startedAt(histories.get(t.id) ?? []);
+      if (!start) withoutStart += 1;
+      return Math.max(0, (t.completedAt.getTime() - (start ?? t.createdAt).getTime()) / DAY);
+    })
+    .sort((a, b) => a - b);
+  return { count: days.length, median: round(percentile(days, 50)), p85: round(percentile(days, 85)), withoutStart };
+}
+
+const WIP_STATUSES: ReadonlySet<string> = new Set(['en_proceso', 'en_revision', 'bloqueada']);
+
+/** ¿La tarea es trabajo en curso (en progreso, en revisión o bloqueada)? */
+export function isWip(status: string): boolean {
+  return WIP_STATUSES.has(status);
+}
+
+export type WipAgingRow = {
+  id: string;
+  number: number;
+  title: string;
+  status: string;
+  responsibleName: string;
+  days: number;
+  aged: boolean;
+  withoutStart: boolean;
+};
+
+/**
+ * Antigüedad del trabajo en curso: días desde el inicio (o desde la creación si no
+ * hay inicio registrado), de más a menos antigua. Una tarea está «envejecida» si
+ * supera estrictamente el p85 del ciclo de los últimos 60 días.
+ */
+export function wipAging(tasks: MetricTask[], histories: Map<string, StatusSegment[]>, now = new Date()): WipAgingRow[] {
+  const threshold = cycleTime(tasks, histories, 60, now).p85;
+  return tasks
+    .filter(t => isWip(t.status))
+    .map(t => {
+      const start = startedAt(histories.get(t.id) ?? []);
+      const days = round(Math.max(0, (now.getTime() - (start ?? t.createdAt).getTime()) / DAY))!;
+      return {
+        id: t.id,
+        number: t.number,
+        title: t.title,
+        status: t.status,
+        responsibleName: t.responsibleName,
+        days,
+        aged: threshold !== null && days > threshold,
+        withoutStart: start === null,
+      };
+    })
+    .sort((a, b) => b.days - a.days);
 }
 
 export type WipRow = { personId: string; name: string; inProgress: number; inReview: number; blocked: number };
