@@ -22,6 +22,7 @@ import type { NewSprintPayload } from '@/components/sprints/new-sprint-form';
 import { ForecastSummary } from '@/components/forecast/forecast-summary';
 import { defaultSprintDates } from '@/lib/sprints';
 import type { ProjectForecast } from '@/lib/forecast';
+import type { ProjectSprintMetrics } from '@/lib/sprint-metrics';
 import { SPACE_TYPE_LABEL, type TaskStatus } from '@/lib/labels';
 
 type TaskItem = {
@@ -924,7 +925,23 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
   forecast: ProjectForecast | null;
 }) {
   const [sprints, setSprints] = useState<SprintSectionSprint[]>([]);
+  const [metrics, setMetrics] = useState<ProjectSprintMetrics | null>(null);
+  const metricsRequest = useRef(0);
   const { toast } = useToast();
+
+  // Burndowns y velocidad. Sólo cuenta la última petición (como fetchForecast); si
+  // falla, no hay toast: se omiten los bloques.
+  const fetchMetrics = useCallback(async () => {
+    const request = ++metricsRequest.current;
+    const next: ProjectSprintMetrics | null = await fetch(`/api/spaces/${spaceId}/sprint-metrics`)
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null);
+    if (request === metricsRequest.current) setMetrics(next);
+  }, [spaceId]);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [fetchMetrics]);
 
   const fetchSprints = useCallback(async () => {
     try {
@@ -944,7 +961,7 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
     return () => { cancelled = true; };
   }, [spaceId]);
 
-  // Llama a la API; si falla, muestra el error. Tras un éxito recarga sprints y proyecto.
+  // Llama a la API; si falla, muestra el error. Tras un éxito recarga sprints, métricas y proyecto.
   async function mutate(url: string, method: 'POST' | 'PATCH', body: unknown, fallback: string, okMessage?: string) {
     const res = await fetch(url, {
       method,
@@ -958,6 +975,7 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
     }
     if (okMessage) toast(okMessage);
     fetchSprints();
+    fetchMetrics();
     onChanged();
     return true;
   }
@@ -986,6 +1004,8 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged, forecast }: {
         canEdit={canEdit}
         defaultDates={defaultSprintDates(today)}
         activeForecast={activeForecast}
+        burndowns={metrics?.burndowns}
+        velocity={metrics?.velocity}
         onMoveTask={(taskId, sprintId) => {
           mutate(`/api/tasks/${taskId}`, 'PATCH', { sprintId }, 'No se pudo mover la tarea');
         }}

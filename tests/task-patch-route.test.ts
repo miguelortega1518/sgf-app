@@ -301,6 +301,7 @@ describe('PATCH /api/tasks/[id] (campos): sprint de la tarea', () => {
         spaceId,
         previousValue: 'Backlog',
         newValue: 'Sprint 7',
+        reason: JSON.stringify({ from: null, to: sprintA.id }),
       },
       mocks.tx,
     ]]);
@@ -315,8 +316,13 @@ describe('PATCH /api/tasks/[id] (campos): sprint de la tarea', () => {
     expect(res.status).toBe(200);
     expect(sprintAudits()).toHaveLength(1);
     expect(sprintAudits()[0][0]).toMatchObject({ previousValue: 'Sprint 7', newValue: 'Sprint 8' });
-    expect(JSON.stringify(sprintAudits())).not.toContain(sprintA.id);
-    expect(JSON.stringify(sprintAudits())).not.toContain(sprintB.id);
+    // Los UUID sólo van en `reason` (referencia interna); los valores visibles son nombres.
+    const { previousValue, newValue, reason } = sprintAudits()[0][0];
+    for (const sprintId of [sprintA.id, sprintB.id]) {
+      expect(previousValue).not.toContain(sprintId);
+      expect(newValue).not.toContain(sprintId);
+    }
+    expect(JSON.parse(reason)).toEqual({ from: sprintA.id, to: sprintB.id });
   });
 
   it('sprintId null desde un sprint → newValue Backlog', async () => {
@@ -328,7 +334,11 @@ describe('PATCH /api/tasks/[id] (campos): sprint de la tarea', () => {
     expect(res.status).toBe(200);
     expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({ sprintId: null }));
     expect(sprintAudits()).toHaveLength(1);
-    expect(sprintAudits()[0][0]).toMatchObject({ previousValue: 'Sprint 7', newValue: 'Backlog' });
+    expect(sprintAudits()[0][0]).toMatchObject({
+      previousValue: 'Sprint 7',
+      newValue: 'Backlog',
+      reason: JSON.stringify({ from: sprintA.id, to: null }),
+    });
   });
 
   it('el mismo sprintId que ya tiene → sin auditoría', async () => {

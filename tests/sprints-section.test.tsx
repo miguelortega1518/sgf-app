@@ -98,7 +98,63 @@ describe('SprintsSection', () => {
     expect(html).toContain('<option value="backlog">Backlog</option>');
     expect(html).toContain(`<option value="${planned.id}">Sprint 8</option>`);
     expect(html).not.toContain(`<option value="${closed.id}"`);
-    // El sprint de un cerrado no se pinta como tarjeta.
+    // El cerrado no se pinta como tarjeta con tareas ni sale en el selector.
+    expect(html).not.toMatch(/<option[^>]*>Sprint 6<\/option>/);
+    expect(html).not.toMatch(/<article[^>]*><header[^>]*><h3[^>]*>Sprint 6<\/h3>/);
+  });
+
+  it('con burndowns, el activo muestra su burndown y los cerrados salen en «Sprints cerrados»', () => {
+    const older: SprintSectionSprint = {
+      id: 's-older', name: 'Sprint 5', goal: null, status: 'cerrado',
+      startDate: '2026-10-06', endDate: '2026-10-19',
+    };
+    const burndown = (remaining: number) => ({
+      kind: 'data' as const,
+      unit: 'tareas' as const,
+      points: [
+        { date: '2026-11-03', isStart: true, remaining, scope: remaining, ideal: remaining },
+        { date: '2026-11-03', isStart: false, remaining, scope: remaining, ideal: 0 },
+      ],
+    });
+    const html = render({
+      sprints: [active, older, closed, planned],
+      tasks: [
+        task({ number: 12, title: 'Guardar filtro', sprintId: active.id }),
+        task({ number: 13, title: 'Tarea del cerrado', sprintId: closed.id }),
+      ],
+      burndowns: { [active.id]: burndown(4), [closed.id]: burndown(2), [older.id]: { kind: 'empty' } },
+    });
+
+    const activeCard = html.slice(html.indexOf('Sprint 7'), html.indexOf('Sprint 8'));
+    expect(activeCard).toMatch(/<svg[^>]*aria-label="[^"]*Burndown/);
+
+    const closedBlock = html.slice(html.indexOf('Sprints cerrados'));
+    expect(html).toContain('Sprints cerrados');
+    expect(closedBlock).toMatch(/<details[^>]*><summary[^>]*>[\s\S]*?Sprint 6[\s\S]*?20\/10\/2026[\s\S]*?02\/11\/2026[\s\S]*?<\/summary>/);
+    expect(closedBlock).toContain('No hay tareas en este sprint');
+    // Del más reciente al más antiguo.
+    expect(closedBlock.indexOf('Sprint 6')).toBeLessThan(closedBlock.indexOf('Sprint 5'));
+    // Las tareas de un cerrado siguen sin listarse ni moverse.
+    expect(html).not.toContain('Tarea del cerrado');
+    expect(html).not.toContain(`<option value="${closed.id}"`);
+    expect(closedBlock).not.toContain('Mover a…');
+  });
+
+  it('con velocity aparece el bloque «Velocidad»', () => {
+    const html = render({
+      sprints: [active, closed],
+      velocity: { enough: false, closedCount: 1, rows: [] },
+    });
+    expect(html).toContain('Velocidad');
+    expect(html).toContain('Aún no hay datos suficientes');
+  });
+
+  it('sin burndowns ni velocity no aparecen esos bloques', () => {
+    const html = render({ sprints: [active, closed, planned], tasks: [task({ sprintId: active.id })] });
+    expect(html).not.toContain('Sprints cerrados');
+    expect(html).not.toContain('Velocidad');
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('<details');
     expect(html).not.toContain('Sprint 6');
   });
 

@@ -295,3 +295,37 @@ describe('readable task_created / space_created values', () => {
     expect(html).toBe('');
   });
 });
+
+describe('task_sprint_changed: el reason con ids no se muestra', () => {
+  const from = crypto.randomUUID();
+  const to = crypto.randomUUID();
+  const reason = JSON.stringify({ from, to });
+  const props = { action: 'task_sprint_changed', previousValue: 'Sprint 7', newValue: 'Sprint 8', reason };
+
+  it('AuditLogDetail muestra los nombres sin el JSON ni los UUID', () => {
+    const html = renderLog(props);
+    expect(html).toBe('<span class="text-xs text-gray-500">Sprint 7 → Sprint 8</span>');
+    expect(html).not.toContain(from);
+    expect(html).not.toContain(to);
+    expect(html).not.toContain('{');
+  });
+
+  it('TaskAuditDetail muestra los nombres sin el JSON ni los UUID', () => {
+    const html = renderTask(props);
+    expect(html).toBe('<span class="text-gray-400 ml-1">(Sprint 7 → Sprint 8)</span>');
+    expect(html).not.toContain(from);
+    expect(html).not.toContain(to);
+  });
+
+  it('sin valores y sólo con el reason no muestra nada del reason', () => {
+    expect(renderLog({ ...props, previousValue: null, newValue: null })).toBe('<span class="text-xs text-gray-300">—</span>');
+    expect(renderTask({ ...props, previousValue: null, newValue: null })).toBe('');
+  });
+
+  it('con otra acción el reason se sigue mostrando', () => {
+    const log = renderLog({ ...props, action: 'status_changed' });
+    const task = renderTask({ ...props, action: 'status_changed' });
+    expect(log).toContain(from);
+    expect(task).toContain(from);
+  });
+});

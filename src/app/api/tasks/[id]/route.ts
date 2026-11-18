@@ -207,8 +207,11 @@ export async function PATCH(
           previousSprintName = previous?.name ?? null;
         }
         // Valores legibles en la Bitácora: nombres de sprint o «Backlog», nunca UUID.
+        // Los ids van en `reason` como referencia interna para el burndown y la velocidad
+        // (src/lib/sprint-metrics.ts): la Bitácora y la Actividad no lo muestran.
         await logAudit({ actorId: session.id, action: 'task_sprint_changed', taskId: id, spaceId: current.spaceId,
-          previousValue: previousSprintName ?? 'Backlog', newValue: newSprintName ?? 'Backlog' }, tx);
+          previousValue: previousSprintName ?? 'Backlog', newValue: newSprintName ?? 'Backlog',
+          reason: JSON.stringify({ from: current.sprintId ?? null, to: input.sprintId ?? null }) }, tx);
       }
       const intents = buildAssignmentNotifications({
         actorId: session.id,
