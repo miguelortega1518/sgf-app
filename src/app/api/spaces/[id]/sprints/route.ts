@@ -70,7 +70,7 @@ export async function POST(
       const [created] = await tx.insert(sprints).values({
         spaceId: id,
         name: input.name,
-        goal: input.goal ?? null,
+        goal: input.goal?.trim() || null,
         startDate: input.startDate,
         endDate: input.endDate,
         status: 'planificado',

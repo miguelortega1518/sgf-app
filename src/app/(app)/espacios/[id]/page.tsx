@@ -540,7 +540,7 @@ function SpaceHeader({
                 <button onClick={onActivate} className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"><Play size={14} />Activar</button>
               )}
               {space.status === 'activo' && (
-                <button onClick={onClose} className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"><XCircle size={14} />Cerrar sprint</button>
+                <button onClick={onClose} className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"><XCircle size={14} />Cerrar {(SPACE_TYPE_LABEL[space.type] ?? 'proyecto').toLowerCase()}</button>
               )}
             </div>
           )}
@@ -851,8 +851,12 @@ function SprintsPanel({ spaceId, tasks, canEdit, onChanged }: {
   const { toast } = useToast();
 
   const fetchSprints = useCallback(async () => {
-    const res = await fetch(`/api/spaces/${spaceId}/sprints`);
-    if (res.ok) setSprints(await res.json());
+    try {
+      const res = await fetch(`/api/spaces/${spaceId}/sprints`);
+      if (res.ok) setSprints(await res.json());
+    } catch {
+      // Error de red: se conserva la lista actual; la próxima carga la refresca.
+    }
   }, [spaceId]);
 
   useEffect(() => {

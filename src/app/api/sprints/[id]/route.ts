@@ -24,6 +24,8 @@ export async function PATCH(
     const { id } = await params;
     assertValidUuid(id, 'ID de sprint');
     const input = updateSprintSchema.parse(await req.json());
+    // Un objetivo vacío equivale a «sin objetivo» (null), igual que al crear.
+    const goal = input.goal === undefined ? undefined : (input.goal?.trim() || null);
 
     const [sprint] = await db.select().from(sprints).where(eq(sprints.id, id)).limit(1);
     if (!sprint) return error('Sprint no encontrado', 404);
@@ -56,7 +58,7 @@ export async function PATCH(
 
       const setValues: Partial<typeof sprints.$inferInsert> = { updatedAt: new Date() };
       if (input.name !== undefined) setValues.name = input.name;
-      if (input.goal !== undefined) setValues.goal = input.goal;
+      if (goal !== undefined) setValues.goal = goal;
       if (input.startDate !== undefined) setValues.startDate = input.startDate;
       if (input.endDate !== undefined) setValues.endDate = input.endDate;
       if (nextStatus !== undefined) setValues.status = nextStatus;
@@ -100,13 +102,13 @@ export async function PATCH(
         }, tx);
       }
 
-      if (input.goal !== undefined && input.goal !== current.goal) {
+      if (goal !== undefined && goal !== (current.goal || null)) {
         await logAudit({
           actorId: session.id,
           action: 'sprint_updated',
           spaceId,
           previousValue: `${current.name} · Objetivo: ${current.goal || 'sin objetivo'}`,
-          newValue: `${row.name} · Objetivo: ${input.goal || 'sin objetivo'}`,
+          newValue: `${row.name} · Objetivo: ${goal || 'sin objetivo'}`,
         }, tx);
       }
 
