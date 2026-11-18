@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TaskCardBoard, type BoardTask } from '../src/components/tasks/kanban-board';
+import { KanbanBoard, TaskCardBoard, type BoardTask } from '../src/components/tasks/kanban-board';
 
 const baseTask: BoardTask = {
   id: 'task-1',
@@ -74,5 +74,42 @@ describe('TaskCardBoard: fecha límite relativa', () => {
     const html = render({ status: 'completada', dueDate: '2026-11-13' });
     expect(html).toContain('13/11/2026');
     expect(html).not.toContain('Mañana');
+  });
+});
+
+describe('KanbanBoard: límites de trabajo en curso', () => {
+  const tasks: BoardTask[] = [
+    { ...baseTask, id: 'a', number: 1, status: 'en_proceso' },
+    { ...baseTask, id: 'b', number: 2, status: 'en_revision' },
+    { ...baseTask, id: 'c', number: 3, status: 'no_iniciada' },
+  ];
+  const renderBoard = (props: Record<string, unknown>) =>
+    renderToStaticMarkup(createElement(KanbanBoard, { tasks, readOnly: true, onMove: async () => true, ...props }));
+  const section = (html: string, label: string) =>
+    html.match(new RegExp(`<section[^>]*aria-label="${label}[^"]*"[^>]*>[\\s\\S]*?</header>`))?.[0] ?? '';
+
+  it('con límite superado muestra «3/2» en rojo y el aviso en el aria-label de la columna', () => {
+    const html = renderBoard({ wipLimits: { en_proceso: 2, en_revision: null }, wipCounts: { en_proceso: 3 } });
+    const col = section(html, 'En progreso');
+    expect(col).toContain('data-wip-state="over"');
+    expect(col).toContain('3/2');
+    expect(col).toContain('bg-red-100');
+    // Las tarjetas visibles (1, p. ej. con filtros) y el recuento WIP del proyecto (3) pueden diferir.
+    expect(col).toMatch(/aria-label="En progreso, 1 tarea\. Límite de trabajo en curso superado: 3 de 2"/);
+    // En code review no tiene límite: sólo el número de tarjetas.
+    const review = section(html, 'En code review');
+    expect(review).not.toContain('data-wip-state');
+    expect(review).toMatch(/aria-label="En code review, 1 tarea"/);
+  });
+
+  it('sin límites las cabeceras no cambian', () => {
+    const html = renderBoard({});
+    expect(html).not.toContain('data-wip-state');
+    expect(section(html, 'En progreso')).toMatch(/aria-label="En progreso, 1 tarea"/);
+  });
+
+  it('Por hacer nunca muestra límite', () => {
+    const html = renderBoard({ wipLimits: { en_proceso: 1, en_revision: 1 }, wipCounts: { no_iniciada: 9 } });
+    expect(section(html, 'Por hacer')).not.toContain('data-wip-state');
   });
 });

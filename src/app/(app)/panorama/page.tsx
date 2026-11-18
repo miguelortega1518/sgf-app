@@ -5,6 +5,7 @@ import { useSession } from '@/lib/hooks/use-session';
 import { useRouter } from 'next/navigation';
 import { formatDateRD } from '@/lib/date-utils';
 import { DeliveryMetrics } from '@/components/dashboard/delivery-metrics';
+import { FlowMetrics } from '@/components/dashboard/flow-metrics';
 import {
   FolderOpen, AlertTriangle, Lock, RefreshCw,
   Target, Layers, TrendingUp, Users, Building2, CheckCircle, Download,
@@ -128,6 +129,7 @@ export default function PanoramaPage() {
       </div>
 
       <DeliveryMetrics />
+      <FlowMetrics />
 
       {tab === 'kpis' && dashboard && (
         <div className="space-y-6 mb-6">

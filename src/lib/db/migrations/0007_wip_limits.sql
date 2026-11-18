@@ -1,0 +1,1 @@
+ALTER TABLE "spaces" ADD COLUMN "wip_limits" jsonb DEFAULT '{}'::jsonb NOT NULL;

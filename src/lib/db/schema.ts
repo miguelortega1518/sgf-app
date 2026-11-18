@@ -171,6 +171,11 @@ export const spaces = pgTable('spaces', {
   templateSnapshot: jsonb('template_snapshot'),
   openDate: date('open_date', { mode: 'string' }).notNull(),
   closeDate: date('close_date', { mode: 'string' }),
+  // Límites de trabajo en curso por columna (src/lib/wip-limits.ts). Sólo avisan.
+  wipLimits: jsonb('wip_limits')
+    .$type<{ en_proceso?: number | null; en_revision?: number | null }>()
+    .notNull()
+    .default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [

@@ -9,6 +9,8 @@ import {
   type TaskStatus, type TaskKind,
 } from '@/lib/labels';
 import { formatDateRD, isOverdue, relativeDueRD } from '@/lib/date-utils';
+import type { WipLimits } from '@/lib/wip-limits';
+import { WipColumnCount, wipAriaSuffix } from './wip-column-count';
 
 export type BoardTask = {
   id: string;
@@ -34,9 +36,15 @@ type Props = {
   readOnly?: boolean;
   /** Devuelve true si el cambio se aplicó. */
   onMove: (taskId: string, status: TaskStatus, extra?: { blockedByArea?: string; blockedByAreaText?: string }) => Promise<boolean>;
+  /** Límites de trabajo en curso del proyecto. Sólo avisan: mover tareas nunca se bloquea. */
+  wipLimits?: WipLimits;
+  /** Recuentos por estado de TODAS las tareas del proyecto (sin filtros), para los límites. */
+  wipCounts?: Partial<Record<TaskStatus, number>>;
 };
 
-export function KanbanBoard({ tasks, readOnly = false, onMove }: Props) {
+const isWipLimited = (s: TaskStatus): s is keyof WipLimits => s === 'en_proceso' || s === 'en_revision';
+
+export function KanbanBoard({ tasks, readOnly = false, onMove, wipLimits, wipCounts }: Props) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [overCol, setOverCol] = useState<TaskStatus | null>(null);
   const [pendingBlock, setPendingBlock] = useState<string | null>(null);
@@ -74,11 +82,14 @@ export function KanbanBoard({ tasks, readOnly = false, onMove }: Props) {
           const items = columns[status];
           const points = items.reduce((s, t) => s + (t.estimate ?? 0), 0);
           const isOver = overCol === status && dragId !== null;
+          const limited = isWipLimited(status);
+          const wipCount = wipCounts?.[status] ?? items.length;
+          const wipLimit = limited ? wipLimits?.[status] ?? null : null;
           return (
             <section
               key={status}
               role="listitem"
-              aria-label={`${STATUS_LABEL[status]}, ${items.length} tareas`}
+              aria-label={`${STATUS_LABEL[status]}, ${items.length} ${items.length === 1 ? 'tarea' : 'tareas'}${limited ? wipAriaSuffix(wipCount, wipLimit) : ''}`}
               onDragOver={e => { if (readOnly) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOverCol(status); }}
               onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOverCol(null); }}
               onDrop={e => {
@@ -94,7 +105,9 @@ export function KanbanBoard({ tasks, readOnly = false, onMove }: Props) {
               <header className="flex items-center gap-2 px-3 pt-3 pb-2 text-xs font-medium text-[var(--text-secondary)]">
                 <span className={`w-2 h-2 rounded-full ${STATUS_DOT[status]}`} aria-hidden="true" />
                 <h3 className="font-medium text-[var(--text-primary)]">{STATUS_LABEL[status]}</h3>
-                <span className="tabular text-[var(--text-muted)]">{items.length}</span>
+                {limited
+                  ? <WipColumnCount count={wipCount} limit={wipLimit} />
+                  : <span className="tabular text-[var(--text-muted)]">{items.length}</span>}
                 {points > 0 && <span className="ml-auto tabular text-[var(--text-muted)]">{points} pts</span>}
               </header>
 
