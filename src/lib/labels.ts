@@ -313,6 +313,11 @@ export const DIGEST_SECTION_LABEL = {
   news: 'Novedades',
 } as const;
 
+// --- Métricas de entrega (src/components/dashboard/wip-aging-list.tsx) ---
+
+/** Chip «Envejecida»: tarea en curso que supera el p85 del tiempo de ciclo. */
+export const WIP_AGED_CHIP = 'bg-amber-100 text-amber-800';
+
 /** Clave legible de una tarea: FOR-142. */
 export function taskKey(n: number | null | undefined): string {
   return n ? `FOR-${n}` : '';
