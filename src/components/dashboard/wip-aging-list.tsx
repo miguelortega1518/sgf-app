@@ -15,7 +15,7 @@ function statusLabel(s: string): string {
 }
 
 function statusChip(s: string): string {
-  return Object.hasOwn(STATUS_CHIP, s) ? STATUS_CHIP[s as TaskStatus] : 'bg-gray-100 text-gray-700';
+  return Object.hasOwn(STATUS_CHIP, s) ? STATUS_CHIP[s as TaskStatus] : STATUS_CHIP.no_iniciada;
 }
 
 export function CycleTimeSummary({ cycle, lead, openTasks }: { cycle: CycleStats; lead: LeadStats; openTasks: number }) {
