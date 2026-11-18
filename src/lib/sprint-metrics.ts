@@ -24,6 +24,8 @@ import { shiftDateRD, toDateRD } from '@/lib/date-utils';
 export const VELOCITY_SPRINTS = 6;
 /** Ventana de la media móvil de la velocidad (suavizado de la tendencia). */
 export const MOVING_AVERAGE_WINDOW = 3;
+/** Días máximos de un sprint para calcular su burndown (acota el coste O(días × tareas)). */
+export const MAX_BURNDOWN_DAYS = 366;
 
 /** Fila de audit_log con action='task_sprint_changed'. */
 export type SprintEvent = {
@@ -193,7 +195,22 @@ export type BurndownPoint = {
 
 export type BurndownResult =
   | { kind: 'empty' }
+  /** El sprint supera MAX_BURNDOWN_DAYS: no se calcula para acotar el coste. */
+  | { kind: 'too_long' }
   | { kind: 'data'; unit: BurndownUnit; points: BurndownPoint[] };
+
+const DAY_MS = 86_400_000;
+
+/** Fecha 'YYYY-MM-DD' como número de día (aritmética de calendario, sin zona horaria). */
+function dayNumber(date: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  return Math.round(Date.UTC(y, m - 1, d) / DAY_MS);
+}
+
+/** Días del sprint (startDate..endDate inclusive) calculados sin recorrerlos. */
+function sprintLength(sprint: MetricsSprint): number {
+  return dayNumber(sprint.endDate) - dayNumber(sprint.startDate) + 1;
+}
 
 /** Días RD del sprint, de startDate a endDate inclusive. */
 function sprintDays(sprint: MetricsSprint): string[] {
@@ -207,6 +224,10 @@ function closedAt(sprint: MetricsSprint): Date | null {
 }
 
 function burndownFromTimelines(sprint: MetricsSprint, timelines: TaskTimeline[], now: Date): BurndownResult {
+  // El coste es O(días × tareas): un sprint desmesurado no se recorre.
+  const length = sprintLength(sprint);
+  if (!Number.isFinite(length)) return { kind: 'empty' };
+  if (length > MAX_BURNDOWN_DAYS) return { kind: 'too_long' };
   const days = sprintDays(sprint);
   const n = days.length;
   if (n === 0) return { kind: 'empty' };

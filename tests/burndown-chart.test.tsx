@@ -111,4 +111,12 @@ describe('BurndownChart', () => {
     expect(html).not.toContain('<svg');
     expect(html.toLowerCase()).not.toContain('terminad');
   });
+
+  it("con kind 'too_long' muestra el aviso sin svg ni tabla", () => {
+    const html = render({ kind: 'too_long' });
+    expect(html).toContain('El sprint es demasiado largo para mostrar su burndown');
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('<table');
+    expect(html).not.toContain('No hay tareas en este sprint');
+  });
 });

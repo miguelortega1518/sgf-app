@@ -65,6 +65,9 @@ export function BurndownChart({ burndown }: { burndown: BurndownResult }) {
   if (burndown.kind === 'empty') {
     return <p className="text-xs text-[var(--text-muted)]">No hay tareas en este sprint</p>;
   }
+  if (burndown.kind === 'too_long') {
+    return <p className="text-xs text-[var(--text-muted)]">El sprint es demasiado largo para mostrar su burndown</p>;
+  }
 
   const { unit, points } = burndown;
   const values = points.flatMap(p => [p.remaining, p.scope, p.ideal]).filter((v): v is number => v !== null);

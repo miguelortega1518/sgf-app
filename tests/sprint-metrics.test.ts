@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  MAX_BURNDOWN_DAYS,
   MOVING_AVERAGE_WINDOW,
   VELOCITY_SPRINTS,
   projectSprintMetrics,
@@ -15,6 +16,12 @@ import {
 import { rdDayStart } from '../src/lib/flow-metrics';
 import { buildStatusHistory, type StatusEvent, type StatusSegment } from '../src/lib/status-history';
 import { shiftDateRD } from '../src/lib/date-utils';
+
+// shiftDateRD real, pero espiable: el tope de días se comprueba sin recorrerlos.
+vi.mock('../src/lib/date-utils', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/lib/date-utils')>();
+  return { ...actual, shiftDateRD: vi.fn(actual.shiftDateRD) };
+});
 
 /** Instante `hh:mm` hora RD del día `date`. */
 function rdAt(date: string, hh: number, mm = 0): Date {
@@ -331,6 +338,42 @@ describe('sprintBurndown', () => {
       statusHistories: new Map(), sprintEvents: new Map(),
     });
     expect(r).toEqual({ kind: 'empty' });
+  });
+
+  it('un sprint más largo que MAX_BURNDOWN_DAYS devuelve too_long sin generar días', () => {
+    const s = sprint({ startDate: '2026-01-01', endDate: '2099-12-31', updatedAt: rdAt('2099-12-31', 18) });
+    const t = task({ sprintId: s.id });
+    const statusHistories = histories([t]);
+    vi.mocked(shiftDateRD).mockClear();
+    const r = sprintBurndown({
+      sprint: s, sprints: [s], tasks: [t], now: rdAt('2026-11-20', 12),
+      statusHistories, sprintEvents: new Map(),
+    });
+    expect(r).toEqual({ kind: 'too_long' });
+    // No recorre los días: ni un solo shiftDateRD.
+    expect(shiftDateRD).not.toHaveBeenCalled();
+  });
+
+  it('un sprint de exactamente MAX_BURNDOWN_DAYS días sí se calcula', () => {
+    const endDate = shiftDateRD('2026-01-01', MAX_BURNDOWN_DAYS - 1);
+    const s = sprint({ startDate: '2026-01-01', endDate, updatedAt: rdAt(endDate, 18) });
+    const t = task({ sprintId: s.id, createdAt: rdAt('2025-12-30', 9) });
+    const r = sprintBurndown({
+      sprint: s, sprints: [s], tasks: [t], now: rdAt('2027-02-01', 12),
+      statusHistories: histories([t]), sprintEvents: new Map(),
+    });
+    expect(data(r).points).toHaveLength(MAX_BURNDOWN_DAYS + 1);
+  });
+
+  it('un sprint de MAX_BURNDOWN_DAYS + 1 días devuelve too_long', () => {
+    const endDate = shiftDateRD('2026-01-01', MAX_BURNDOWN_DAYS);
+    const s = sprint({ startDate: '2026-01-01', endDate, updatedAt: rdAt(endDate, 18) });
+    const t = task({ sprintId: s.id, createdAt: rdAt('2025-12-30', 9) });
+    const r = sprintBurndown({
+      sprint: s, sprints: [s], tasks: [t], now: rdAt('2027-02-01', 12),
+      statusHistories: histories([t]), sprintEvents: new Map(),
+    });
+    expect(r).toEqual({ kind: 'too_long' });
   });
 
   it('una tarea que sólo estuvo en el sprint antes de su inicio no cuenta', () => {
