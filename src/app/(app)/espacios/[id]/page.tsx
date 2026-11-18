@@ -15,6 +15,9 @@ import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { CsvImportDialog } from '@/components/tasks/csv-import-dialog';
+import { SprintsSection, type SprintSectionSprint } from '@/components/sprints/sprints-section';
+import type { NewSprintPayload } from '@/components/sprints/new-sprint-form';
+import { defaultSprintDates } from '@/lib/sprints';
 import { SPACE_TYPE_LABEL, type TaskStatus } from '@/lib/labels';
 
 type TaskItem = {
@@ -22,6 +25,7 @@ type TaskItem = {
   number?: number | null;
   kind?: string | null;
   estimate?: number | null;
+  sprintId?: string | null;
   branch?: string | null;
   prUrl?: string | null;
   labels?: string[] | null;
@@ -394,6 +398,15 @@ export default function SpaceDetailPage() {
         />
       )}
 
+      {(space.type === 'proyecto' || space.type === 'continuo') && (
+        <SprintsPanel
+          spaceId={space.id}
+          tasks={spaceTasks}
+          canEdit={user?.role !== 'observador' && space.status !== 'cerrado'}
+          onChanged={fetchData}
+        />
+      )}
+
       <MilestonesSection spaceId={space.id} canEdit={user?.role !== 'observador' && space.status !== 'cerrado'} />
 
       <SpaceCommentsSection spaceId={space.id} canComment={user?.role !== 'observador'} userId={user?.id || ''} isAdmin={isAdmin ?? false} />
@@ -527,7 +540,7 @@ function SpaceHeader({
                 <button onClick={onActivate} className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium"><Play size={14} />Activar</button>
               )}
               {space.status === 'activo' && (
-                <button onClick={onClose} className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"><XCircle size={14} />Cerrar sprint</button>
+                <button onClick={onClose} className="inline-flex items-center gap-1.5 px-3 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 font-medium"><XCircle size={14} />Cerrar {(SPACE_TYPE_LABEL[space.type] ?? 'proyecto').toLowerCase()}</button>
               )}
             </div>
           )}
@@ -826,6 +839,84 @@ type MilestoneItem = {
   id: string; name: string; targetDate: string; targetDateOriginal: string;
   completed: boolean; order: number; taskCount: number;
 };
+
+// Contenedor de la sección «Sprints»: carga y mutaciones; la presentación es SprintsSection.
+function SprintsPanel({ spaceId, tasks, canEdit, onChanged }: {
+  spaceId: string;
+  tasks: TaskItem[];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [sprints, setSprints] = useState<SprintSectionSprint[]>([]);
+  const { toast } = useToast();
+
+  const fetchSprints = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/spaces/${spaceId}/sprints`);
+      if (res.ok) setSprints(await res.json());
+    } catch {
+      // Error de red: se conserva la lista actual; la próxima carga la refresca.
+    }
+  }, [spaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/spaces/${spaceId}/sprints`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((rows: SprintSectionSprint[] | null) => { if (!cancelled && rows) setSprints(rows); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [spaceId]);
+
+  // Llama a la API; si falla, muestra el error. Tras un éxito recarga sprints y proyecto.
+  async function mutate(url: string, method: 'POST' | 'PATCH', body: unknown, fallback: string, okMessage?: string) {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      const payload = await res?.json().catch(() => null);
+      toast(payload?.error || fallback, 'error');
+      return false;
+    }
+    if (okMessage) toast(okMessage);
+    fetchSprints();
+    onChanged();
+    return true;
+  }
+
+  const sectionTasks = tasks.map(t => ({
+    id: t.id,
+    number: t.number ?? 0,
+    title: t.title,
+    status: t.status,
+    estimate: t.estimate ?? null,
+    sprintId: t.sprintId ?? null,
+  }));
+
+  return (
+    <div className="mt-8 mb-4">
+      <SprintsSection
+        tasks={sectionTasks}
+        sprints={sprints}
+        canEdit={canEdit}
+        defaultDates={defaultSprintDates(todayRD())}
+        onMoveTask={(taskId, sprintId) => {
+          mutate(`/api/tasks/${taskId}`, 'PATCH', { sprintId }, 'No se pudo mover la tarea');
+        }}
+        onStartSprint={id => {
+          mutate(`/api/sprints/${id}`, 'PATCH', { status: 'activo' }, 'No se pudo iniciar el sprint', 'Sprint iniciado');
+        }}
+        onCloseSprint={id => {
+          mutate(`/api/sprints/${id}`, 'PATCH', { status: 'cerrado' }, 'No se pudo cerrar el sprint', 'Sprint cerrado');
+        }}
+        onCreateSprint={(payload: NewSprintPayload) =>
+          mutate(`/api/spaces/${spaceId}/sprints`, 'POST', payload, 'No se pudo crear el sprint', 'Sprint creado')}
+      />
+    </div>
+  );
+}
 
 function MilestonesSection({ spaceId, canEdit }: { spaceId: string; canEdit: boolean }) {
   const [milestones, setMilestones] = useState<MilestoneItem[]>([]);

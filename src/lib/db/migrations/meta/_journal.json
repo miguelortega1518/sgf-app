@@ -43,6 +43,13 @@
       "when": 1794947179547,
       "tag": "0005_resumen_diario",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794951781228,
+      "tag": "0006_sprints",
+      "breakpoints": true
     }
   ]
 }

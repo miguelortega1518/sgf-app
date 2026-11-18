@@ -81,6 +81,21 @@ export const SPACE_TYPE_LABEL: Record<string, string> = {
   recurrente: 'Sprint', proyecto: 'Iniciativa', continuo: 'Backlog',
 };
 
+// --- Sprints (src/lib/sprints.ts) ---
+// No confundir con SPACE_TYPE_LABEL.recurrente: aquí son iteraciones dentro de un proyecto.
+
+export const SPRINT_STATUS_LABEL: Record<'planificado' | 'activo' | 'cerrado', string> = {
+  planificado: 'Planificado',
+  activo: 'Activo',
+  cerrado: 'Cerrado',
+};
+
+export const SPRINT_STATUS_CHIP: Record<'planificado' | 'activo' | 'cerrado', string> = {
+  planificado: 'bg-gray-100 text-gray-700',
+  activo: 'bg-blue-100 text-blue-700',
+  cerrado: 'bg-green-100 text-green-700',
+};
+
 // --- Auditoría ---
 // Acciones que registra logAudit (src/lib/audit.ts). 'space' se muestra como 'Proyecto'.
 
@@ -117,6 +132,11 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   pr_linked: 'PR enlazado',
   tasks_imported: 'Tareas importadas',
   email_preferences_changed: 'Preferencias de correo cambiadas',
+  sprint_created: 'Sprint creado',
+  sprint_updated: 'Sprint actualizado',
+  sprint_started: 'Sprint iniciado',
+  sprint_closed: 'Sprint cerrado',
+  task_sprint_changed: 'Cambio de sprint',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
@@ -153,6 +173,11 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   pr_linked: 'bg-sky-100 text-sky-700',
   tasks_imported: 'bg-sky-100 text-sky-700',
   email_preferences_changed: 'bg-amber-100 text-amber-700',
+  sprint_created: 'bg-sky-100 text-sky-700',
+  sprint_updated: 'bg-amber-100 text-amber-700',
+  sprint_started: 'bg-blue-100 text-blue-700',
+  sprint_closed: 'bg-green-100 text-green-700',
+  task_sprint_changed: 'bg-purple-100 text-purple-700',
 };
 
 const AUDIT_ACTION_FALLBACK = 'Acción registrada';

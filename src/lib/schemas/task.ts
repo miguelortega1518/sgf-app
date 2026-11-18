@@ -68,6 +68,7 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().refine(isValidIsoDate, 'Fecha inválida').nullable().optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
   milestoneId: z.string().uuid().nullable().optional(),
+  sprintId: z.string().uuid().nullable().optional(),
   kind: taskKind.optional(),
   estimate: estimate.optional(),
   branch: branch.optional(),

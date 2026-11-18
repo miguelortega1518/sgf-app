@@ -43,6 +43,11 @@ const KNOWN_ACTIONS = [
   'pr_linked',
   'tasks_imported',
   'email_preferences_changed',
+  'sprint_created',
+  'sprint_updated',
+  'sprint_started',
+  'sprint_closed',
+  'task_sprint_changed',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -198,6 +203,19 @@ describe('acciones de auditoría', () => {
     ['pr_linked', 'PR enlazado', 'bg-sky-100 text-sky-700'],
     ['tasks_imported', 'Tareas importadas', 'bg-sky-100 text-sky-700'],
     ['email_preferences_changed', 'Preferencias de correo cambiadas', 'bg-amber-100 text-amber-700'],
+  ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
+    expect(AUDIT_ACTION_LABEL[action]).toBe(label);
+    expect(auditActionLabel(action)).toBe(label);
+    expect(auditActionLabel(action)).not.toBe(auditActionLabel('accion_inexistente'));
+    expect(auditActionChip(action)).toBe(chip);
+  });
+
+  it.each([
+    ['sprint_created', 'Sprint creado', 'bg-sky-100 text-sky-700'],
+    ['sprint_updated', 'Sprint actualizado', 'bg-amber-100 text-amber-700'],
+    ['sprint_started', 'Sprint iniciado', 'bg-blue-100 text-blue-700'],
+    ['sprint_closed', 'Sprint cerrado', 'bg-green-100 text-green-700'],
+    ['task_sprint_changed', 'Cambio de sprint', 'bg-purple-100 text-purple-700'],
   ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
     expect(AUDIT_ACTION_LABEL[action]).toBe(label);
     expect(auditActionLabel(action)).toBe(label);

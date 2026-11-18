@@ -59,8 +59,13 @@ describe('diffSchema', () => {
 describe('esquema real del proyecto', () => {
   const fromCode = expectedFromModule(appSchema);
 
-  it('el código declara las 21 tablas esperadas y los campos de Forja', () => {
-    expect(Object.keys(fromCode.tables)).toHaveLength(21);
+  it('el código declara las 22 tablas esperadas y los campos de Forja', () => {
+    expect(Object.keys(fromCode.tables)).toHaveLength(22);
+    expect(fromCode.tables.sprints).toEqual([
+      'id', 'space_id', 'name', 'goal', 'start_date', 'end_date', 'status', 'created_at', 'updated_at',
+    ]);
+    expect(fromCode.tables.tasks).toContain('sprint_id');
+    expect(fromCode.enums.sprint_status).toEqual(['planificado', 'activo', 'cerrado']);
     expect(fromCode.tables.digest_runs).toEqual(expect.arrayContaining(['person_id', 'day', 'created_at']));
     expect(fromCode.tables.github_deliveries).toEqual(expect.arrayContaining(['delivery_id', 'event', 'received_at', 'outcome']));
     expect(fromCode.tables.github_pull_requests).toEqual(expect.arrayContaining(['url', 'task_id', 'head_sha', 'reviewers', 'checks', 'first_review_at']));

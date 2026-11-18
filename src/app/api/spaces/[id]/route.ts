@@ -59,6 +59,7 @@ export async function GET(
         title: tasks.title,
         kind: tasks.kind,
         estimate: tasks.estimate,
+        sprintId: tasks.sprintId,
         branch: tasks.branch,
         prUrl: tasks.prUrl,
         labels: tasks.labels,

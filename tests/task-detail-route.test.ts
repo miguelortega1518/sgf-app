@@ -27,6 +27,7 @@ vi.mock('@/lib/db/schema', () => ({
   auditLog: { id: 'auditLog.id', action: 'auditLog.action', previousValue: 'auditLog.previousValue', newValue: 'auditLog.newValue', reason: 'auditLog.reason', timestamp: 'auditLog.timestamp', actorId: 'auditLog.actorId', taskId: 'auditLog.taskId' },
   taskDependencies: { taskId: 'taskDependencies.taskId', predecessorId: 'taskDependencies.predecessorId' },
   githubPullRequests: { taskId: 'githubPullRequests.taskId', openedAt: 'githubPullRequests.openedAt' },
+  sprints: { id: 'sprints.id', name: 'sprints.name', status: 'sprints.status' },
 }));
 vi.mock('drizzle-orm', () => ({
   eq: (left: unknown, right: unknown) => ({ operator: 'eq', left, right }),
@@ -283,5 +284,52 @@ describe('GET /api/tasks/[id]: panel del pull request', () => {
     const response = await GET(getRequest(), ctx());
     expect(response.status).toBe(200);
     expect((await response.json()).pullRequest).toBeNull();
+  });
+});
+
+describe('GET /api/tasks/[id]: sprint de la tarea', () => {
+  const sprintId = crypto.randomUUID();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requireSession.mockResolvedValue({ id: userId, role: 'miembro' });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('con sprintId hace una consulta más y devuelve task.sprint = {id, name, status}', async () => {
+    mocks.requireTaskAccess.mockResolvedValue({
+      id: taskId, spaceId: crypto.randomUUID(), responsibleId: userId,
+      status: 'en_proceso', dueDateOriginal: null, sprintId,
+    });
+    queueResults([
+      [{ name: 'Ana', email: 'ana@example.com' }],
+      [{ name: 'Proyecto' }],
+      [], [], [], [], [], [], [],
+      [{ id: sprintId, name: 'Sprint 7', status: 'activo' }],
+    ]);
+
+    const response = await GET(getRequest(), ctx());
+
+    expect(response.status).toBe(200);
+    expect(mocks.select).toHaveBeenCalledTimes(10);
+    expect(fromCalls[9]).toEqual({ id: 'sprints.id', name: 'sprints.name', status: 'sprints.status' });
+    expect((await response.json()).task.sprint).toEqual({ id: sprintId, name: 'Sprint 7', status: 'activo' });
+  });
+
+  it('sin sprint mantiene las 9 consultas y task.sprint es null', async () => {
+    mocks.requireTaskAccess.mockResolvedValue({
+      id: taskId, spaceId: crypto.randomUUID(), responsibleId: userId,
+      status: 'en_proceso', dueDateOriginal: null, sprintId: null,
+    });
+    setupDb();
+
+    const response = await GET(getRequest(), ctx());
+
+    expect(response.status).toBe(200);
+    expect(mocks.select).toHaveBeenCalledTimes(9);
+    expect((await response.json()).task.sprint).toBeNull();
   });
 });

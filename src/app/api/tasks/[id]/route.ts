@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { tasks, spaces, evidence, subtasks, comments, persons, auditLog, taskDependencies, githubPullRequests } from '@/lib/db/schema';
+import { tasks, spaces, evidence, subtasks, comments, persons, auditLog, taskDependencies, githubPullRequests, sprints } from '@/lib/db/schema';
 import { pullRequestView } from '@/lib/github-pull-request';
 import { requireSession } from '@/lib/auth';
 import { canChangeDueDate } from '@/lib/permissions';
@@ -13,7 +13,7 @@ import { isOverdue } from '@/lib/date-utils';
 import { requireTaskAccess, requireProjectAccess, validateTaskReferences } from '@/lib/project-access';
 import { applyStatusTransition } from '@/lib/task-transitions';
 import { buildAssignmentNotifications } from '@/lib/assignment-notifications';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 
 export async function GET(
   _req: NextRequest,
@@ -95,12 +95,24 @@ export async function GET(
       .orderBy(desc(githubPullRequests.openedAt))
       .limit(1);
 
+    // Décima consulta, sólo si la tarea está en un sprint (sin `and`: basta el id).
+    let sprint: { id: string; name: string; status: string } | null = null;
+    if (task.sprintId) {
+      const [row] = await db
+        .select({ id: sprints.id, name: sprints.name, status: sprints.status })
+        .from(sprints)
+        .where(eq(sprints.id, task.sprintId))
+        .limit(1);
+      sprint = row ?? null;
+    }
+
     return success({
       task: {
         ...task,
         overdue: isOverdue(task.dueDateOriginal, task.status),
         responsibleName: responsible?.name,
         spaceName: space?.name,
+        sprint,
       },
       subtasks: taskSubtasks,
       evidence: taskEvidence,
@@ -164,6 +176,20 @@ export async function PATCH(
       await requireProjectAccess(session, current.spaceId, 'write', tx);
       await validateTaskReferences(current.spaceId, input, tx);
       if (!Object.keys(input).length) return { row: current, intents: [] };
+
+      // El sprint destino debe ser del mismo proyecto y no estar cerrado.
+      let newSprintName: string | null = null;
+      if (input.sprintId) {
+        const [target] = await tx
+          .select({ id: sprints.id, name: sprints.name, status: sprints.status })
+          .from(sprints)
+          .where(and(eq(sprints.id, input.sprintId), eq(sprints.spaceId, current.spaceId)))
+          .limit(1);
+        if (!target) throw Object.assign(new Error('El sprint no pertenece al proyecto'), { httpStatus: 400 });
+        if (target.status === 'cerrado') throw Object.assign(new Error('El sprint está cerrado'), { httpStatus: 409 });
+        newSprintName = target.name;
+      }
+
       const [row] = await tx.update(tasks).set(input).where(eq(tasks.id, id)).returning();
       if (input.dueDate !== undefined && input.dueDate !== current.dueDate) {
         await logAudit({ actorId: session.id, action: 'due_date_changed', taskId: id,
@@ -172,6 +198,17 @@ export async function PATCH(
       if (input.responsibleId && input.responsibleId !== current.responsibleId) {
         await logAudit({ actorId: session.id, action: 'responsible_changed', taskId: id,
           previousValue: current.responsibleId, newValue: input.responsibleId }, tx);
+      }
+      if (input.sprintId !== undefined && input.sprintId !== current.sprintId) {
+        let previousSprintName: string | null = null;
+        if (current.sprintId) {
+          const [previous] = await tx.select({ name: sprints.name }).from(sprints)
+            .where(eq(sprints.id, current.sprintId)).limit(1);
+          previousSprintName = previous?.name ?? null;
+        }
+        // Valores legibles en la Bitácora: nombres de sprint o «Backlog», nunca UUID.
+        await logAudit({ actorId: session.id, action: 'task_sprint_changed', taskId: id, spaceId: current.spaceId,
+          previousValue: previousSprintName ?? 'Backlog', newValue: newSprintName ?? 'Backlog' }, tx);
       }
       const intents = buildAssignmentNotifications({
         actorId: session.id,
