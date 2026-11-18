@@ -1,10 +1,20 @@
-# Cada hora relanza los issues que la fábrica dejó
-# «en espera» por el límite de uso de la suscripción (etiqueta ai-factory-en-espera), cuando la
-# cuota ya se restableció. No usa la suscripción: sólo consulta GitHub y lanza ai-factory.yml con
-# workflow_dispatch, que GITHUB_TOKEN sí puede disparar.
+# Relanza los issues que la fábrica dejó «en espera» por el límite de uso de la suscripción
+# (etiqueta ai-factory-en-espera) cuando la cuota ya se restableció. No usa la suscripción: sólo
+# consulta GitHub y lanza ai-factory.yml con workflow_dispatch, que GITHUB_TOKEN sí puede disparar.
+#
+# Se dispara de tres formas:
+#   - al terminar cada ejecución de la fábrica (workflow_run): si queda algo en espera, vigila cada
+#     10 minutos hasta relanzarlo (como mucho ~6 h, el máximo de un job). Es el camino principal:
+#     el `schedule` de GitHub se retrasa o se salta en horas de carga;
+#   - cada hora (schedule), como respaldo;
+#   - a mano (workflow_dispatch).
+# El repositorio es público, así que la espera no consume minutos de pago de Actions.
 name: AI Factory · reintentos por límite de uso
 
 on:
+  workflow_run:
+    workflows: ["AI Factory"]
+    types: [completed]
   schedule:
     - cron: "7 * * * *"
   workflow_dispatch:
@@ -13,14 +23,17 @@ permissions:
   actions: write   # workflow_dispatch de ai-factory.yml
   issues: write    # quitar la etiqueta de espera y comentar
 
+# Una sola vigilancia a la vez: la que corre revisa todos los issues en espera en cada vuelta.
 concurrency:
   group: ai-factory-retry
   cancel-in-progress: false
 
 jobs:
   retry:
+    # Las ejecuciones de la fábrica que GitHub omite (p. ej. etiquetas que no son ai-factory) no cuentan.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,4 +43,16 @@ jobs:
       - name: Relanzar las tareas en espera
         env:
           GH_TOKEN: ${{ github.token }}
-        run: factory retry-paused
+        run: |
+          deadline=$((SECONDS + 340 * 60))
+          while :; do
+            out=$(factory retry-paused)
+            echo "$out"
+            # Nada más que esperar: termina. Si algo sigue en espera, vuelve a mirar en 10 minutos.
+            echo "$out" | grep -q ": wait (" || break
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "Sigue habiendo tareas en espera; las recogerá la próxima vigilancia."
+              break
+            fi
+            sleep 600
+          done
