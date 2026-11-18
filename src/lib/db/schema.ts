@@ -4,6 +4,7 @@ import {
   primaryKey, serial,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { SprintSummary } from '../sprint-summary';
 
 // ─── Enums ────────────────────────────────────────────
 
@@ -176,6 +177,8 @@ export const spaces = pgTable('spaces', {
     .$type<{ en_proceso?: number | null; en_revision?: number | null }>()
     .notNull()
     .default({}),
+  // «Contar sólo días hábiles (RD)»: duración por defecto de los sprints y ciclo de la retrospectiva.
+  businessDaysOnly: boolean('business_days_only').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
@@ -212,12 +215,28 @@ export const sprints = pgTable('sprints', {
   startDate: date('start_date', { mode: 'string' }).notNull(),
   endDate: date('end_date', { mode: 'string' }).notNull(),
   status: sprintStatusEnum('status').notNull().default('planificado'),
+  // Momento real de inicio (al pasar a 'activo'); null en los iniciados antes de guardarlo.
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  // Retrospectiva automática (src/lib/sprint-summary.ts); se guarda al cerrar.
+  summary: jsonb('summary').$type<SprintSummary | null>(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('idx_sprint_space').on(t.spaceId),
   uniqueIndex('uq_sprint_active_per_space').on(t.spaceId).where(sql`status = 'activo'`),
   check('chk_sprint_dates', sql`${t.endDate} >= ${t.startDate}`),
+]);
+
+// Capacidad en puntos de cada persona en un sprint. Sin fila: se usa la media de los últimos sprints.
+export const sprintCapacity = pgTable('sprint_capacity', {
+  sprintId: uuid('sprint_id').notNull().references(() => sprints.id),
+  personId: uuid('person_id').notNull().references(() => persons.id),
+  points: integer('points').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.sprintId, t.personId] }),
+  check('chk_sprint_capacity_points', sql`${t.points} >= 0`),
 ]);
 
 export const tasks = pgTable('tasks', {
@@ -447,6 +466,8 @@ export type NewMilestone = typeof milestones.$inferInsert;
 
 export type Sprint = typeof sprints.$inferSelect;
 export type NewSprint = typeof sprints.$inferInsert;
+
+export type SprintCapacity = typeof sprintCapacity.$inferSelect;
 
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;

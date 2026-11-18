@@ -30,13 +30,20 @@ vi.mock('@/lib/project-access', async importOriginal => ({
 }));
 vi.mock('@/lib/db/schema', () => ({
   sprints: { id: 'sprints.id', spaceId: 'sprints.spaceId', startDate: 'sprints.startDate', status: 'sprints.status' },
-  tasks: { spaceId: 'tasks.spaceId', sprintId: 'tasks.sprintId', estimate: 'tasks.estimate', archived: 'tasks.archived' },
+  tasks: {
+    spaceId: 'tasks.spaceId', sprintId: 'tasks.sprintId', estimate: 'tasks.estimate', archived: 'tasks.archived',
+    responsibleId: 'tasks.responsibleId', status: 'tasks.status',
+  },
+  spaceMembers: { spaceId: 'spaceMembers.spaceId', personId: 'spaceMembers.personId', spaceRole: 'spaceMembers.spaceRole' },
+  persons: { id: 'persons.id', name: 'persons.name' },
+  sprintCapacity: { sprintId: 'sprintCapacity.sprintId', personId: 'sprintCapacity.personId', points: 'sprintCapacity.points' },
 }));
 vi.mock('drizzle-orm', () => ({
   and: (...conditions: unknown[]) => ({ operator: 'and', conditions }),
   eq: (left: unknown, right: unknown) => ({ operator: 'eq', left, right }),
   asc: (column: unknown) => ({ operator: 'asc', column }),
   count: () => ({ operator: 'count' }),
+  isNotNull: (column: unknown) => ({ operator: 'isNotNull', column }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ operator: 'sql', strings: [...strings], values }),
 }));
 
@@ -76,7 +83,7 @@ function queueResults(results: unknown[][]) {
   mocks.select.mockImplementation(() => {
     const result = queue.shift() ?? [];
     const builder: Record<string, unknown> = {};
-    for (const method of ['from', 'groupBy', 'limit']) builder[method] = () => builder;
+    for (const method of ['from', 'groupBy', 'limit', 'innerJoin']) builder[method] = () => builder;
     builder.where = (cond: unknown) => { whereCalls.push(cond); return builder; };
     builder.orderBy = (order: unknown) => { orderByCalls.push(order); return builder; };
     builder.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
@@ -151,6 +158,74 @@ describe('GET /api/spaces/[id]/sprints', () => {
         { operator: 'eq', left: 'tasks.archived', right: false },
       ],
     });
+  });
+
+  it('capacity en planificados y activos (en bloque); summary en los cerrados', async () => {
+    const ana = crypto.randomUUID();
+    const beto = crypto.randomUUID();
+    const olga = crypto.randomUUID();
+    const withSummary = sprintRow({
+      name: 'Sprint 1', status: 'cerrado', startDate: '2026-10-01', endDate: '2026-10-15',
+      summary: {
+        version: 1,
+        byPerson: [{ personId: ana, name: 'Ana', committedTasks: 2, committedPoints: 9, completedTasks: 1, completedPoints: 8 }],
+      },
+    });
+    const legacy = sprintRow({ name: 'Sprint 2', status: 'cerrado', startDate: '2026-10-16', endDate: '2026-10-29', summary: null });
+    const active = sprintRow({ name: 'Sprint 3', status: 'activo', startDate: '2026-10-30', endDate: '2026-11-12', summary: null });
+    const planned = sprintRow({ name: 'Sprint 4', status: 'planificado', startDate: '2026-11-13', endDate: '2026-11-26', summary: null });
+
+    queueResults([
+      [withSummary, legacy, active, planned],
+      [],
+      // Miembros del proyecto.
+      [
+        { personId: beto, name: 'Beto', spaceRole: 'dueño' },
+        { personId: ana, name: 'Ana', spaceRole: 'colaborador' },
+        { personId: olga, name: 'Olga', spaceRole: 'observador' },
+      ],
+      // Capacidades guardadas de los sprints del proyecto.
+      [{ sprintId: planned.id, personId: beto, points: 4 }],
+      // Tareas no archivadas con sprint.
+      [
+        { sprintId: legacy.id, responsibleId: ana, responsibleName: 'Ana', status: 'completada', estimate: 12 },
+        { sprintId: legacy.id, responsibleId: beto, responsibleName: 'Beto', status: 'completada', estimate: 5 },
+        { sprintId: legacy.id, responsibleId: beto, responsibleName: 'Beto', status: 'en_proceso', estimate: 3 },
+        { sprintId: active.id, responsibleId: ana, responsibleName: 'Ana', status: 'en_proceso', estimate: 13 },
+        { sprintId: active.id, responsibleId: beto, responsibleName: 'Beto', status: 'no_iniciada', estimate: 2 },
+      ],
+    ]);
+
+    const res = await GET(getRequest(), ctx());
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>[];
+    expect(mocks.select).toHaveBeenCalledTimes(5);
+    const byId = new Map(body.map(s => [s.id, s]));
+
+    // Ana: media de 12 (Sprint 2, heredado) y 8 (Sprint 1, summary) = 10. Beto: sólo Sprint 2 = 5.
+    expect(byId.get(active.id)!.capacity).toEqual([
+      { personId: ana, name: 'Ana', points: 10, isDefault: true, assigned: 13, overloaded: true },
+      { personId: beto, name: 'Beto', points: 5, isDefault: true, assigned: 2, overloaded: false },
+    ]);
+    expect(byId.get(planned.id)!.capacity).toEqual([
+      { personId: ana, name: 'Ana', points: 10, isDefault: true, assigned: 0, overloaded: false },
+      { personId: beto, name: 'Beto', points: 4, isDefault: false, assigned: 0, overloaded: false },
+    ]);
+    expect(byId.get(withSummary.id)).not.toHaveProperty('capacity');
+    expect(byId.get(withSummary.id)!.summary).toEqual(withSummary.summary);
+    expect(byId.get(legacy.id)).not.toHaveProperty('capacity');
+    expect(byId.get(legacy.id)!.summary).toBeNull();
+  });
+
+  it('sin sprints abiertos no consulta miembros, capacidades ni tareas', async () => {
+    const closed = sprintRow({ status: 'cerrado', summary: null });
+    queueResults([[closed], []]);
+
+    const res = await GET(getRequest(), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.select).toHaveBeenCalledTimes(2);
   });
 
   it('un observador puede leer', async () => {

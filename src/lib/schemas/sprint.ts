@@ -26,8 +26,17 @@ export const updateSprintSchema = z.object({
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
   status: z.enum(['activo', 'cerrado']).optional(),
+  // Destino de las tareas no terminadas al cerrar: 'backlog' o el id de un sprint
+  // planificado. Si se omite, el siguiente sprint planificado (o el backlog).
+  carryOverTo: z.union(
+    [z.literal('backlog'), z.string().uuid()],
+    { error: 'El destino de las tareas pendientes debe ser «backlog» o un sprint válido' },
+  ).optional(),
 }).refine(v => Object.values(v).some(x => x !== undefined), {
   message: 'Debe proporcionar al menos un campo para actualizar',
+}).refine(v => v.carryOverTo === undefined || v.status === 'cerrado', {
+  message: 'El destino de las tareas pendientes sólo se indica al cerrar el sprint',
+  path: ['carryOverTo'],
 });
 
 export type CreateSprintInput = z.infer<typeof createSprintSchema>;

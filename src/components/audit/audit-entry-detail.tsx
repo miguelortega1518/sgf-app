@@ -7,8 +7,11 @@
 // Con `action`, los valores JSON heredados de task_created ({ title, responsible }) y
 // space_created ({ name, type }) se muestran legibles: el título, o «nombre (tipo)»;
 // el UUID del responsable se omite. Si el valor no tiene la forma esperada, se muestra tal cual.
+// En task_sprint_changed, el reason con los ids `{"from","to"}` (src/lib/sprint-history.ts)
+// es interno y no se muestra; cualquier otro reason se muestra como siempre.
 
 import { delayReasonLabel, SPACE_TYPE_LABEL } from '@/lib/labels';
+import { parseSprintChangeReason } from '@/lib/sprint-history';
 
 export type AuditEntryDetailProps = {
   previousValue: string | null;
@@ -52,6 +55,12 @@ function readableAuditValue(action: string | undefined, value: string | null): s
   return `${name} (${label})`;
 }
 
+/** Reason visible: null si es el JSON de ids de un task_sprint_changed. */
+function visibleReason(action: string | undefined, reason: string | null): string | null {
+  if (action === 'task_sprint_changed' && parseSprintChangeReason(reason)) return null;
+  return reason;
+}
+
 /**
  * Texto de los valores de una entrada: «antes → después» si existen los dos, el único
  * valor si solo hay uno, o null si no hay ninguno. La cadena vacía cuenta como ausente.
@@ -65,8 +74,9 @@ function formatAuditValues(previousValue: string | null, newValue: string | null
  * Celda «Detalle» de la bitácora: «antes → después» (o el único valor, si solo hay uno)
  * y, si existe, el reason (traducido) debajo.
  */
-export function AuditLogDetail({ previousValue, newValue, reason, action }: AuditEntryDetailProps) {
+export function AuditLogDetail({ previousValue, newValue, reason: rawReason, action }: AuditEntryDetailProps) {
   const detail = formatAuditValues(readableAuditValue(action, previousValue), readableAuditValue(action, newValue));
+  const reason = visibleReason(action, rawReason);
 
   if (!detail && !reason) {
     return <span className="text-xs text-gray-300">—</span>;
@@ -93,11 +103,12 @@ export type TaskAuditDetailProps = AuditEntryDetailProps & {
  * Historial «Actividad» de la tarea: «(antes → después)» (o «(valor)» si solo hay uno)
  * y el reason (traducido) como texto secundario.
  */
-export function TaskAuditDetail({ previousValue, newValue, reason, redacted, action }: TaskAuditDetailProps) {
+export function TaskAuditDetail({ previousValue, newValue, reason: rawReason, redacted, action }: TaskAuditDetailProps) {
   // Debe ir antes de cualquier rama de render: un registro redactado no muestra valores ni reason.
   if (redacted) return null;
 
   const detail = formatAuditValues(readableAuditValue(action, previousValue), readableAuditValue(action, newValue));
+  const reason = visibleReason(action, rawReason);
 
   if (!detail && !reason) return null;
 
