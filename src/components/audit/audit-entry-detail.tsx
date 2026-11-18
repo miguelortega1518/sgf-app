@@ -7,8 +7,18 @@
 // Con `action`, los valores JSON heredados de task_created ({ title, responsible }) y
 // space_created ({ name, type }) se muestran legibles: el título, o «nombre (tipo)»;
 // el UUID del responsable se omite. Si el valor no tiene la forma esperada, se muestra tal cual.
+// En task_sprint_changed el reason es una referencia interna ({ from, to } con los ids de
+// sprint, para el burndown y la velocidad): no se muestra.
 
 import { delayReasonLabel, SPACE_TYPE_LABEL } from '@/lib/labels';
+
+/** Acciones cuyo reason es una referencia interna y no se muestra. */
+const HIDDEN_REASON_ACTIONS: ReadonlySet<string> = new Set(['task_sprint_changed']);
+
+/** Reason que se muestra al usuario, o null si la acción lo usa como referencia interna. */
+function visibleReason(action: string | undefined, reason: string | null): string | null {
+  return action !== undefined && HIDDEN_REASON_ACTIONS.has(action) ? null : reason;
+}
 
 export type AuditEntryDetailProps = {
   previousValue: string | null;
@@ -65,7 +75,8 @@ function formatAuditValues(previousValue: string | null, newValue: string | null
  * Celda «Detalle» de la bitácora: «antes → después» (o el único valor, si solo hay uno)
  * y, si existe, el reason (traducido) debajo.
  */
-export function AuditLogDetail({ previousValue, newValue, reason, action }: AuditEntryDetailProps) {
+export function AuditLogDetail({ previousValue, newValue, reason: rawReason, action }: AuditEntryDetailProps) {
+  const reason = visibleReason(action, rawReason);
   const detail = formatAuditValues(readableAuditValue(action, previousValue), readableAuditValue(action, newValue));
 
   if (!detail && !reason) {
@@ -93,10 +104,11 @@ export type TaskAuditDetailProps = AuditEntryDetailProps & {
  * Historial «Actividad» de la tarea: «(antes → después)» (o «(valor)» si solo hay uno)
  * y el reason (traducido) como texto secundario.
  */
-export function TaskAuditDetail({ previousValue, newValue, reason, redacted, action }: TaskAuditDetailProps) {
+export function TaskAuditDetail({ previousValue, newValue, reason: rawReason, redacted, action }: TaskAuditDetailProps) {
   // Debe ir antes de cualquier rama de render: un registro redactado no muestra valores ni reason.
   if (redacted) return null;
 
+  const reason = visibleReason(action, rawReason);
   const detail = formatAuditValues(readableAuditValue(action, previousValue), readableAuditValue(action, newValue));
 
   if (!detail && !reason) return null;

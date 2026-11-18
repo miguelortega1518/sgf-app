@@ -3,6 +3,9 @@ import { SPRINT_STATUS_CHIP, SPRINT_STATUS_LABEL, STATUS_CHIP, STATUS_LABEL, tas
 import { groupTasksBySprint, type SprintStatus } from '@/lib/sprints';
 import { NewSprintForm, type NewSprintPayload } from './new-sprint-form';
 import { ForecastSummary, type ForecastSummaryProps } from '@/components/forecast/forecast-summary';
+import type { BurndownResult, VelocityReport } from '@/lib/sprint-metrics';
+import { BurndownChart } from './burndown-chart';
+import { VelocityChart } from './velocity-chart';
 
 export type SprintSectionSprint = {
   id: string;
@@ -34,6 +37,10 @@ export type SprintsSectionProps = {
   onCreateSprint: (payload: NewSprintPayload) => boolean | void | Promise<boolean | void>;
   /** Pronóstico del sprint activo; si no llega, no se pinta nada. */
   activeForecast?: ForecastSummaryProps;
+  /** Burndown por id de sprint (activo y cerrados); si no llega, no se pintan los burndowns. */
+  burndowns?: Record<string, BurndownResult>;
+  /** Velocidad de los últimos sprints cerrados; si no llega, no se pinta el bloque. */
+  velocity?: VelocityReport;
 };
 
 const BACKLOG_VALUE = 'backlog';
@@ -113,18 +120,28 @@ function TaskList({
   );
 }
 
+const sprintDates = (s: SprintSectionSprint) => `${formatDateRD(s.startDate)} – ${formatDateRD(s.endDate)}`;
+
 /**
  * Sección «Sprints» del detalle de un proyecto (presentación pura, sin fetch):
- * sprint activo, sprints planificados, backlog y formulario de nuevo sprint.
- * Los sprints cerrados no se pintan.
+ * sprint activo (con pronóstico y burndown), sprints planificados, backlog, sprints
+ * cerrados (sólo su burndown, plegado), velocidad y formulario de nuevo sprint.
+ * Los sprints cerrados no salen como tarjeta con tareas ni en el selector «Mover a…».
  */
 export function SprintsSection({
   tasks, sprints, canEdit, defaultDates, onMoveTask, onStartSprint, onCloseSprint, onCreateSprint, activeForecast,
+  burndowns, velocity,
 }: SprintsSectionProps) {
   const { backlog, active, planned } = groupTasksBySprint(tasks, sprints);
   const targets = sprints.filter(s => s.status !== 'cerrado');
 
   const groups = [...(active ? [active] : []), ...planned];
+  // Del más reciente al más antiguo; sólo los que tienen burndown calculado.
+  const closed = burndowns
+    ? sprints
+      .filter(s => s.status === 'cerrado' && burndowns[s.id])
+      .sort((a, b) => b.endDate.localeCompare(a.endDate) || b.startDate.localeCompare(a.startDate))
+    : [];
 
   return (
     <section className="space-y-4" aria-labelledby="sprints-heading">
@@ -137,13 +154,17 @@ export function SprintsSection({
             <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${SPRINT_STATUS_CHIP[sprint.status]}`}>
               {SPRINT_STATUS_LABEL[sprint.status]}
             </span>
-            <span className="text-xs text-[var(--text-muted)]">
-              {`${formatDateRD(sprint.startDate)} – ${formatDateRD(sprint.endDate)}`}
-            </span>
+            <span className="text-xs text-[var(--text-muted)]">{sprintDates(sprint)}</span>
             <span className="ml-auto"><Totals tasks={sprintTasks} estimateTotal={estimateTotal} /></span>
           </header>
           {sprint.goal && <p className="mt-1 text-xs text-[var(--text-secondary)]">{sprint.goal}</p>}
           {sprint.status === 'activo' && activeForecast && <ForecastSummary {...activeForecast} />}
+          {sprint.status === 'activo' && burndowns?.[sprint.id] && (
+            <div className="mt-3">
+              <h4 className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Burndown</h4>
+              <BurndownChart burndown={burndowns[sprint.id]} />
+            </div>
+          )}
           <div className="mt-2">
             <TaskList
               tasks={sprintTasks}
@@ -191,6 +212,32 @@ export function SprintsSection({
           />
         </div>
       </article>
+
+      {closed.length > 0 && burndowns && (
+        <article className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Sprints cerrados</h3>
+          <div className="mt-2 divide-y divide-[var(--border)]">
+            {closed.map(sprint => (
+              <details key={sprint.id} className="py-2">
+                <summary className="cursor-pointer text-sm text-[var(--text-primary)]">
+                  <span className="font-medium">{sprint.name}</span>
+                  <span className="ml-2 text-xs text-[var(--text-muted)]">{sprintDates(sprint)}</span>
+                </summary>
+                <div className="mt-3">
+                  <BurndownChart burndown={burndowns[sprint.id]} />
+                </div>
+              </details>
+            ))}
+          </div>
+        </article>
+      )}
+
+      {velocity && (
+        <article className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
+          <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">Velocidad</h3>
+          <VelocityChart velocity={velocity} />
+        </article>
+      )}
 
       {canEdit && (
         <article className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">

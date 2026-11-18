@@ -43,6 +43,16 @@ export const STATUS_CHART_VAR: Record<TaskStatus, string> = {
   bloqueada: 'var(--chart-blocked)',
 };
 
+/**
+ * Colores de los gráficos de sprint (src/components/sprints): burndown (real e ideal)
+ * y velocidad (barras y media móvil). Variables CSS de los tres bloques de tema.
+ */
+export const SPRINT_CHART_VAR = {
+  actual: 'var(--chart-bar)',
+  ideal: 'var(--chart-marker)',
+  average: 'var(--chart-review)',
+} as const;
+
 export const KIND_ORDER =['feature', 'bug', 'mejora', 'deuda', 'chore'] as const;
 export type TaskKind = (typeof KIND_ORDER)[number];
 
