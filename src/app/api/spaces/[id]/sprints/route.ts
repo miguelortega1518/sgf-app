@@ -92,11 +92,14 @@ export async function GET(
       .orderBy(asc(sprints.startDate));
 
     // Las tareas archivadas no cuentan. La fila de sprintId null (backlog) se ignora.
+    // Lo completado sirve de velocidad a los cerrados antes de la retrospectiva (sin summary).
     const totals = await db
       .select({
         sprintId: tasks.sprintId,
         taskCount: count(),
         estimateTotal: sql<string>`coalesce(sum(${tasks.estimate}), 0)`,
+        completedCount: sql<string>`count(*) filter (where ${tasks.status} = 'completada')`,
+        completedPoints: sql<string>`coalesce(sum(${tasks.estimate}) filter (where ${tasks.status} = 'completada'), 0)`,
       })
       .from(tasks)
       .where(and(eq(tasks.spaceId, id), eq(tasks.archived, false)))
@@ -105,16 +108,26 @@ export async function GET(
     const totalsMap = new Map(
       totals
         .filter(t => t.sprintId != null)
-        .map(t => [t.sprintId, { taskCount: Number(t.taskCount), estimateTotal: Number(t.estimateTotal) }]),
+        .map(t => [t.sprintId, {
+          taskCount: Number(t.taskCount),
+          estimateTotal: Number(t.estimateTotal),
+          completed: { tasks: Number(t.completedCount) || 0, points: Number(t.completedPoints) || 0 },
+        }]),
     );
 
     const capacityBySprint = await loadCapacity(id, rows);
+
+    const completedOf = (s: Sprint) => (s.summary
+      ? { tasks: Number(s.summary.completed?.tasks) || 0, points: Number(s.summary.completed?.points) || 0 }
+      : totalsMap.get(s.id)?.completed ?? { tasks: 0, points: 0 });
 
     return success(rows.map(s => ({
       ...s,
       taskCount: totalsMap.get(s.id)?.taskCount ?? 0,
       estimateTotal: totalsMap.get(s.id)?.estimateTotal ?? 0,
-      ...(s.status === 'cerrado' ? {} : { capacity: capacityBySprint.get(s.id) ?? [] }),
+      ...(s.status === 'cerrado'
+        ? { completed: completedOf(s) }
+        : { capacity: capacityBySprint.get(s.id) ?? [] }),
     })));
   } catch (err) {
     return handleError(err);

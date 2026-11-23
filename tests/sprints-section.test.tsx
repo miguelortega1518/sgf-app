@@ -215,6 +215,62 @@ describe('SprintsSection', () => {
     expect(html).not.toContain('Acierto');
   });
 
+  it('el artículo «Velocidad» se ve siempre; sin cerrados suficientes, con el mensaje', () => {
+    const html = render({ sprints: [active] });
+    expect(html).toContain('>Velocidad</h3>');
+    expect(html).toContain('Aún no hay datos suficientes');
+  });
+
+  it('la velocidad usa `completed` de los cerrados y va antes de «Sprints cerrados»', () => {
+    const older: SprintSectionSprint = {
+      id: 's-older', name: 'Sprint 5', goal: null, status: 'cerrado',
+      startDate: '2026-10-06', endDate: '2026-10-19', summary: null, completed: { tasks: 2, points: 8 },
+    };
+    const html = render({ sprints: [older, { ...closed, summary: null, completed: { tasks: 3, points: 13 } }, active] });
+    expect(html).not.toContain('Aún no hay datos suficientes');
+    expect(html).toContain('Sprint 5: 8 puntos');
+    expect(html).toContain('Sprint 6: 13 puntos (media 10,5 puntos)');
+    expect(html.indexOf('>Velocidad</h3>')).toBeLessThan(html.indexOf('Sprints cerrados'));
+  });
+
+  const burndownData = {
+    unit: 'tasks' as const, businessDaysOnly: false, startDate: '2026-11-03', endDate: '2026-11-04',
+    entries: [
+      { date: '2026-11-03', kind: 'start' as const, remaining: 2, scope: 2, ideal: 2 },
+      { date: '2026-11-03', kind: 'day' as const, remaining: 1, scope: 2, ideal: 1 },
+      { date: '2026-11-04', kind: 'day' as const, remaining: null, scope: null, ideal: 0 },
+    ],
+  };
+
+  it('el sprint activo muestra el burndown: cargando, gráfico o error', () => {
+    const loading = render({ sprints: [active, planned] });
+    const activeCard = loading.slice(loading.indexOf('Sprint 7'), loading.indexOf('Sprint 8'));
+    expect(activeCard).toContain('Burndown');
+    expect(activeCard).toContain('Cargando burndown…');
+    expect(loading.slice(loading.indexOf('Sprint 8'))).not.toContain('Cargando burndown…');
+
+    const withData = render({ sprints: [active], burndowns: { [active.id]: burndownData } });
+    expect(withData).not.toContain('Cargando burndown…');
+    expect(withData).toContain('data-series="remaining"');
+
+    const failed = render({ sprints: [active], burndowns: { [active.id]: 'error' } });
+    expect(failed).toContain('No se pudo cargar el burndown');
+    expect(failed).not.toContain('Cargando burndown…');
+  });
+
+  it('los cerrados incluyen el burndown dentro de su <details> si está cargado', () => {
+    const html = render({
+      sprints: [{ ...closed, summary: null }],
+      burndowns: { [closed.id]: burndownData },
+    });
+    const block = html.slice(html.indexOf('Sprints cerrados'));
+    expect(block).toContain('data-series="remaining"');
+    expect(block).toContain('Sin resumen');
+
+    const notLoaded = render({ sprints: [{ ...closed, summary: null }] });
+    expect(notLoaded.slice(notLoaded.indexOf('Sprints cerrados'))).not.toContain('data-series="remaining"');
+  });
+
   it('una tarea completada sin sprint no sale en el backlog', () => {
     const html = render({
       tasks: [

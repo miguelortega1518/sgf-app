@@ -6,10 +6,14 @@ import { SPRINT_STATUS_CHIP, SPRINT_STATUS_LABEL, STATUS_CHIP, STATUS_LABEL, tas
 import { groupTasksBySprint, nextPlannedSprint, type SprintStatus } from '@/lib/sprints';
 import type { CapacityRow } from '@/lib/sprint-capacity';
 import type { SprintSummary } from '@/lib/sprint-summary';
+import type { SprintBurndown } from '@/lib/sprint-burndown';
+import { buildSprintVelocity } from '@/lib/sprint-velocity';
 import { NewSprintForm, type NewSprintPayload } from './new-sprint-form';
 import { SprintCapacityTable } from './sprint-capacity-table';
 import { CloseSprintDialog } from './close-sprint-dialog';
 import { SprintSummaryView } from './sprint-summary-view';
+import { SprintBurndownChart } from './sprint-burndown-chart';
+import { SprintVelocityChart } from './sprint-velocity-chart';
 import { BusinessDaysToggle } from './business-days-toggle';
 import { ForecastSummary, type ForecastSummaryProps } from '@/components/forecast/forecast-summary';
 
@@ -26,7 +30,12 @@ export type SprintSectionSprint = {
   capacity?: CapacityRow[];
   /** Sólo en cerrados; null si se cerró antes de la retrospectiva automática. */
   summary?: SprintSummary | null;
+  /** Sólo en cerrados: lo completado (de summary o, si no hay, de sus tareas actuales). */
+  completed?: { tasks: number; points: number };
 };
+
+/** Burndown cargado de un sprint o 'error' si falló la carga. */
+export type SprintBurndownState = SprintBurndown | 'error';
 
 export type SprintSectionTask = {
   id: string;
@@ -55,6 +64,10 @@ export type SprintsSectionProps = {
   onToggleBusinessDays: (businessDaysOnly: boolean) => void;
   /** Pronóstico del sprint activo; si no llega, no se pinta nada. */
   activeForecast?: ForecastSummaryProps;
+  /** Burndowns ya cargados por id de sprint (el activo y los cerrados abiertos). */
+  burndowns?: Record<string, SprintBurndownState>;
+  /** Al desplegar un sprint cerrado: el contenedor carga su burndown. */
+  onOpenClosedSprint?: (sprintId: string) => void;
 };
 
 const BACKLOG_VALUE = 'backlog';
@@ -134,7 +147,44 @@ function TaskList({
   );
 }
 
-function ClosedSprints({ sprints }: { sprints: SprintSectionSprint[] }) {
+function BurndownBlock({ state, showLoading }: { state: SprintBurndownState | undefined; showLoading: boolean }) {
+  if (state === undefined && !showLoading) return null;
+  return (
+    <div className="mt-3">
+      <h4 className="mb-1 text-xs font-semibold text-[var(--text-secondary)]">Burndown</h4>
+      {state === undefined && <p className="text-xs text-[var(--text-muted)]">Cargando burndown…</p>}
+      {state === 'error' && <p className="text-xs text-[var(--text-muted)]">No se pudo cargar el burndown</p>}
+      {state !== undefined && state !== 'error' && <SprintBurndownChart burndown={state} />}
+    </div>
+  );
+}
+
+function Velocity({ sprints }: { sprints: SprintSectionSprint[] }) {
+  const velocity = buildSprintVelocity(sprints.map(s => ({
+    id: s.id,
+    name: s.name,
+    startDate: s.startDate,
+    endDate: s.endDate,
+    completed: s.completed ?? s.summary?.completed ?? { tasks: 0, points: 0 },
+  })));
+  return (
+    <article className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
+      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Velocidad</h3>
+      <p className="mb-2 text-[11px] text-[var(--text-muted)]">
+        Lo completado en los últimos sprints cerrados y su media móvil de 3 sprints.
+      </p>
+      <SprintVelocityChart velocity={velocity} />
+    </article>
+  );
+}
+
+function ClosedSprints({
+  sprints, burndowns, onOpenClosedSprint,
+}: {
+  sprints: SprintSectionSprint[];
+  burndowns: Record<string, SprintBurndownState>;
+  onOpenClosedSprint?: (sprintId: string) => void;
+}) {
   if (sprints.length === 0) return null;
   // Del más reciente al más antiguo (fechas 'YYYY-MM-DD': la comparación de cadenas vale).
   const ordered = [...sprints].sort((a, b) => b.endDate.localeCompare(a.endDate) || b.startDate.localeCompare(a.startDate));
@@ -143,7 +193,11 @@ function ClosedSprints({ sprints }: { sprints: SprintSectionSprint[] }) {
       <h3 className="text-sm font-semibold text-[var(--text-primary)]">Sprints cerrados</h3>
       <div className="mt-2 divide-y divide-[var(--border)]">
         {ordered.map(s => (
-          <details key={s.id} className="py-1.5">
+          <details
+            key={s.id}
+            className="py-1.5"
+            onToggle={e => { if (e.currentTarget.open) onOpenClosedSprint?.(s.id); }}
+          >
             <summary className="cursor-pointer text-sm text-[var(--text-primary)]">
               <span className="font-medium">{s.name}</span>
               <span className="ml-2 text-xs text-[var(--text-muted)]">
@@ -151,6 +205,7 @@ function ClosedSprints({ sprints }: { sprints: SprintSectionSprint[] }) {
               </span>
             </summary>
             <SprintSummaryView summary={s.summary ?? null} />
+            <BurndownBlock state={burndowns[s.id]} showLoading={onOpenClosedSprint !== undefined} />
           </details>
         ))}
       </div>
@@ -160,13 +215,14 @@ function ClosedSprints({ sprints }: { sprints: SprintSectionSprint[] }) {
 
 /**
  * Sección «Sprints» del detalle de un proyecto (presentación pura, sin fetch):
- * ajuste de días hábiles, sprint activo y planificados (con su capacidad),
- * backlog, formulario de nuevo sprint y retrospectiva de los cerrados. Sólo
- * guarda qué diálogo de cierre está abierto.
+ * ajuste de días hábiles, sprint activo (con su burndown) y planificados (con su
+ * capacidad), backlog, formulario de nuevo sprint, velocidad y retrospectiva y
+ * burndown de los cerrados. Los burndowns llegan ya cargados en `burndowns`.
+ * Sólo guarda qué diálogo de cierre está abierto.
  */
 export function SprintsSection({
   tasks, sprints, canEdit, defaultDates, onMoveTask, onStartSprint, onCloseSprint, onCreateSprint,
-  onSaveCapacity, businessDaysOnly, onToggleBusinessDays, activeForecast,
+  onSaveCapacity, businessDaysOnly, onToggleBusinessDays, activeForecast, burndowns = {}, onOpenClosedSprint,
 }: SprintsSectionProps) {
   const [closingId, setClosingId] = useState<string | null>(null);
   const { backlog, active, planned } = groupTasksBySprint(tasks, sprints);
@@ -199,6 +255,7 @@ export function SprintsSection({
           </header>
           {sprint.goal && <p className="mt-1 text-xs text-[var(--text-secondary)]">{sprint.goal}</p>}
           {sprint.status === 'activo' && activeForecast && <ForecastSummary {...activeForecast} />}
+          {sprint.status === 'activo' && <BurndownBlock state={burndowns[sprint.id]} showLoading />}
           <div className="mt-2">
             <TaskList
               tasks={sprintTasks}
@@ -280,7 +337,9 @@ export function SprintsSection({
         </article>
       )}
 
-      <ClosedSprints sprints={closed} />
+      <Velocity sprints={closed} />
+
+      <ClosedSprints sprints={closed} burndowns={burndowns} onOpenClosedSprint={onOpenClosedSprint} />
     </section>
   );
 }

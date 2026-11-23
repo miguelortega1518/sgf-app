@@ -25,7 +25,7 @@ export function rdDayEnd(date: string): Date {
 }
 
 /** Instante inicial (00:00 −04:00) del día RD `date`. */
-function rdDayStart(date: string): Date {
+export function rdDayStart(date: string): Date {
   const [y, m, d] = date.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d, RD_OFFSET_HOURS));
 }
