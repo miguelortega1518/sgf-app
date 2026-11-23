@@ -152,6 +152,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   wip_limit_changed: 'Límite WIP cambiado',
   sprint_capacity_changed: 'Capacidad de sprint cambiada',
   business_days_changed: 'Días hábiles cambiados',
+  share_link_created: 'Enlace público creado',
+  share_link_revoked: 'Enlace público revocado',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
@@ -196,6 +198,8 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   wip_limit_changed: 'bg-amber-100 text-amber-700',
   sprint_capacity_changed: 'bg-amber-100 text-amber-700',
   business_days_changed: 'bg-amber-100 text-amber-700',
+  share_link_created: 'bg-sky-100 text-sky-700',
+  share_link_revoked: 'bg-red-100 text-red-700',
 };
 
 const AUDIT_ACTION_FALLBACK = 'Acción registrada';
@@ -330,6 +334,64 @@ export const DIGEST_SECTION_LABEL = {
   blocked: 'Bloqueadas',
   news: 'Novedades',
 } as const;
+
+// --- Vista pública para no técnicos (/compartido/[token], src/lib/share-view.ts) ---
+// Sin jerga de desarrollo: no reutilizar STATUS_LABEL («En code review», «En progreso»).
+
+export const PUBLIC_STATUS_LABEL: Record<TaskStatus, string> = {
+  no_iniciada: 'Pendiente',
+  en_proceso: 'En curso',
+  en_revision: 'Esperando revisión',
+  completada: 'Terminado',
+  bloqueada: 'Bloqueado',
+};
+
+export type HealthCode = 'verde' | 'amarillo' | 'rojo';
+
+export const HEALTH_LABEL: Record<HealthCode, string> = {
+  verde: 'En buen estado',
+  amarillo: 'Requiere atención',
+  rojo: 'Crítico',
+};
+
+/** Salud sin declarar (spaces.declared_health null). */
+export const HEALTH_UNDECLARED_LABEL = 'Sin declarar';
+
+/** Etiqueta de la salud declarada; null o desconocida → «Sin declarar». */
+export function healthLabel(health: string | null | undefined): string {
+  return health && Object.hasOwn(HEALTH_LABEL, health) ? HEALTH_LABEL[health as HealthCode] : HEALTH_UNDECLARED_LABEL;
+}
+
+/** Áreas de bloqueo con nombre público. 'otro' no tiene: el riesgo dice sólo «Bloqueado». */
+export const PUBLIC_BLOCK_AREA_LABEL: Record<string, string> = {
+  infraestructura: 'Infraestructura',
+  diseno: 'Diseño',
+  producto: 'Producto',
+  qa: 'Pruebas',
+  seguridad: 'Seguridad',
+  terceros: 'un proveedor externo',
+  // Valores heredados de la versión anterior
+  compras: 'Compras',
+  operaciones: 'Operaciones',
+  tesoreria: 'Tesorería',
+  contabilidad: 'Contabilidad',
+  administracion: 'Administración',
+  presupuesto: 'Presupuesto',
+};
+
+export type PublicMilestoneStatus = 'cumplido' | 'atrasado' | 'en_curso';
+
+export const PUBLIC_MILESTONE_STATUS_LABEL: Record<PublicMilestoneStatus, string> = {
+  cumplido: 'Cumplido',
+  atrasado: 'Atrasado',
+  en_curso: 'En curso',
+};
+
+export const SPACE_STATUS_PUBLIC_LABEL: Record<'borrador' | 'activo' | 'cerrado', string> = {
+  borrador: 'En preparación',
+  activo: 'Activo',
+  cerrado: 'Cerrado',
+};
 
 // --- Métricas de entrega (src/components/dashboard/wip-aging-list.tsx) ---
 

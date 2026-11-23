@@ -51,6 +51,8 @@ const KNOWN_ACTIONS = [
   'wip_limit_changed',
   'sprint_capacity_changed',
   'business_days_changed',
+  'share_link_created',
+  'share_link_revoked',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -174,6 +176,15 @@ describe('acciones de auditoría', () => {
     expect(AUDIT_ACTION_LABEL[action]).toBe(label);
     expect(auditActionLabel(action)).toBe(label);
     expect(auditActionLabel(action)).not.toBe(auditActionLabel('accion_inexistente'));
+    expect(auditActionChip(action)).toBe(chip);
+  });
+
+  it.each([
+    ['share_link_created', 'Enlace público creado', 'bg-sky-100 text-sky-700'],
+    ['share_link_revoked', 'Enlace público revocado', 'bg-red-100 text-red-700'],
+  ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
+    expect(AUDIT_ACTION_LABEL[action]).toBe(label);
+    expect(auditActionLabel(action)).toBe(label);
     expect(auditActionChip(action)).toBe(chip);
   });
 

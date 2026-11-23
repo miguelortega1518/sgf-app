@@ -20,6 +20,7 @@ import { CsvImportDialog } from '@/components/tasks/csv-import-dialog';
 import { SprintsSection, type SprintSectionSprint } from '@/components/sprints/sprints-section';
 import type { NewSprintPayload } from '@/components/sprints/new-sprint-form';
 import { ForecastSummary } from '@/components/forecast/forecast-summary';
+import { ShareLinkPanel } from '@/components/share/share-link-panel';
 import { defaultSprintDates } from '@/lib/sprints';
 import type { ProjectForecast } from '@/lib/forecast';
 import { SPACE_TYPE_LABEL, type TaskStatus } from '@/lib/labels';
@@ -298,6 +299,11 @@ export default function SpaceDetailPage() {
     && user.role !== 'observador'
     && (isAdmin || projectRole !== 'observador')
     && space.status !== 'cerrado';
+  // Enlace público: mismo permiso que canEditSprints pero también con el proyecto cerrado,
+  // porque revocar se permite siempre (crear no: lo decide ShareLinkPanel con spaceClosed).
+  const canManageShareLink = user != null
+    && user.role !== 'observador'
+    && (isAdmin || projectRole !== 'observador');
 
   return (
     <div className="p-6 max-w-[88rem]">
@@ -493,6 +499,10 @@ export default function SpaceDetailPage() {
         forecast={forecast}
         onChanged={fetchForecast}
       />
+
+      {canManageShareLink && (
+        <ShareLinkSection spaceId={space.id} spaceClosed={space.status === 'cerrado'} />
+      )}
 
       <SpaceCommentsSection spaceId={space.id} canComment={user?.role !== 'observador'} userId={user?.id || ''} isAdmin={isAdmin ?? false} />
 
@@ -1030,6 +1040,94 @@ function SprintsPanel({ spaceId, tasks, canEdit, businessDaysOnly, onChanged, fo
           mutate(`/api/spaces/${spaceId}/sprints`, 'POST', payload, 'No se pudo crear el sprint', 'Sprint creado')}
       />
     </div>
+  );
+}
+
+// Contenedor de «Enlace para no técnicos»: carga y mutaciones; la presentación es ShareLinkPanel.
+// La URL recién creada sólo vive en este estado local (nunca en localStorage).
+function ShareLinkSection({ spaceId, spaceClosed }: { spaceId: string; spaceClosed: boolean }) {
+  const [active, setActive] = useState(false);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const [createdUrl, setCreatedUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/spaces/${spaceId}/share-link`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((data: { active: boolean; createdAt: string | null } | null) => {
+        if (cancelled || !data) return;
+        setActive(data.active);
+        setCreatedAt(data.createdAt);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [spaceId]);
+
+  async function call(method: 'POST' | 'DELETE', fallback: string) {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/spaces/${spaceId}/share-link`, { method }).catch(() => null);
+    const payload = await res?.json().catch(() => null);
+    setBusy(false);
+    if (!res || !res.ok) {
+      setError(payload?.error || fallback);
+      return null;
+    }
+    return payload;
+  }
+
+  async function create() {
+    const data: { path: string; url: string | null; createdAt: string } | null =
+      await call('POST', 'No se pudo crear el enlace');
+    if (!data) return;
+    setActive(true);
+    setCreatedAt(data.createdAt);
+    setCreatedUrl(data.url ?? `${window.location.origin}${data.path}`);
+  }
+
+  async function revoke() {
+    const data = await call('DELETE', 'No se pudo revocar el enlace');
+    setConfirmingRevoke(false);
+    if (!data) return;
+    setActive(false);
+    setCreatedAt(null);
+    setCreatedUrl(null);
+    toast('Enlace revocado');
+  }
+
+  function copy() {
+    if (!createdUrl) return;
+    const failed = 'No se pudo copiar: selecciónelo y cópielo a mano';
+    if (!navigator.clipboard) {
+      toast(failed, 'error');
+      return;
+    }
+    navigator.clipboard.writeText(createdUrl)
+      .then(() => toast('Enlace copiado'))
+      .catch(() => toast(failed, 'error'));
+  }
+
+  return (
+    <ShareLinkPanel
+      canManage
+      spaceClosed={spaceClosed}
+      active={active}
+      createdAt={createdAt}
+      createdUrl={createdUrl}
+      busy={busy}
+      error={error}
+      confirmingRevoke={confirmingRevoke}
+      today={todayRD()}
+      onCreate={create}
+      onRevoke={revoke}
+      onCopy={copy}
+      onAskRevoke={() => setConfirmingRevoke(true)}
+      onCancelRevoke={() => setConfirmingRevoke(false)}
+    />
   );
 }
 
