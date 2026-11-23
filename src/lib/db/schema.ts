@@ -194,6 +194,18 @@ export const spaceMembers = pgTable('space_members', {
   primaryKey({ columns: [t.spaceId, t.personId] }),
 ]);
 
+// Enlaces públicos de sólo lectura (/compartido/<token>). Sólo se guarda el SHA-256 del
+// token (src/lib/share-links.ts). Como mucho un enlace activo (sin revocar) por proyecto.
+export const spaceShareLinks = pgTable('space_share_links', {
+  spaceId: uuid('space_id').notNull().references(() => spaces.id),
+  tokenHash: text('token_hash').primaryKey(),
+  createdBy: uuid('created_by').notNull().references(() => persons.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+}, (t) => [
+  uniqueIndex('uq_share_link_active_per_space').on(t.spaceId).where(sql`revoked_at IS NULL`),
+]);
+
 export const milestones = pgTable('milestones', {
   id: uuid('id').defaultRandom().primaryKey(),
   spaceId: uuid('space_id').notNull().references(() => spaces.id),
@@ -460,6 +472,8 @@ export type Space = typeof spaces.$inferSelect;
 export type NewSpace = typeof spaces.$inferInsert;
 
 export type SpaceMember = typeof spaceMembers.$inferSelect;
+
+export type SpaceShareLink = typeof spaceShareLinks.$inferSelect;
 
 export type Milestone = typeof milestones.$inferSelect;
 export type NewMilestone = typeof milestones.$inferInsert;

@@ -30,6 +30,15 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Vista pública de sólo lectura: no se indexa y no envía el token en el Referer.
+      // Va después de la regla general para que su Referrer-Policy prevalezca.
+      {
+        source: '/compartido/:path*',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+        ],
+      },
     ];
   },
 };
