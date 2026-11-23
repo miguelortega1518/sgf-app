@@ -17,7 +17,7 @@ import { WipLimitsForm } from '@/components/tasks/wip-limits-form';
 import { parseWipLimits, type WipLimits } from '@/lib/wip-limits';
 import { NewTaskForm } from '@/components/tasks/new-task-form';
 import { CsvImportDialog } from '@/components/tasks/csv-import-dialog';
-import { SprintsSection, type SprintSectionSprint } from '@/components/sprints/sprints-section';
+import { SprintsSection, type SprintBurndownState, type SprintSectionSprint } from '@/components/sprints/sprints-section';
 import type { NewSprintPayload } from '@/components/sprints/new-sprint-form';
 import { ForecastSummary } from '@/components/forecast/forecast-summary';
 import { defaultSprintDates } from '@/lib/sprints';
@@ -950,23 +950,56 @@ function SprintsPanel({ spaceId, tasks, canEdit, businessDaysOnly, onChanged, fo
     return () => { cancelled = true; };
   }, []);
 
+  // Burndowns por sprint: el del activo se recarga con los sprints; los de los
+  // cerrados se piden una sola vez, al desplegarlos. Un fallo deja 'error' sin toast.
+  const [burndowns, setBurndowns] = useState<Record<string, SprintBurndownState>>({});
+  const requestedClosed = useRef<Set<string>>(new Set());
+
+  const loadBurndown = useCallback(async (sprintId: string) => {
+    let state: SprintBurndownState = 'error';
+    try {
+      const res = await fetch(`/api/sprints/${sprintId}/burndown`);
+      if (res.ok) state = await res.json();
+    } catch {
+      // Error de red o JSON inválido: queda 'error'.
+    }
+    setBurndowns(prev => ({ ...prev, [sprintId]: state }));
+  }, []);
+
+  // Tras cargar los sprints se descartan los burndowns que no son del activo ni de
+  // cerrados ya pedidos (p. ej. el del sprint que se acaba de cerrar, que se
+  // volverá a pedir al desplegarlo) y se recarga el del activo.
+  const applySprints = useCallback((rows: SprintSectionSprint[]) => {
+    setSprints(rows);
+    const activeSprint = rows.find(s => s.status === 'activo');
+    setBurndowns(prev => Object.fromEntries(Object.entries(prev)
+      .filter(([sid]) => sid === activeSprint?.id || requestedClosed.current.has(sid))));
+    if (activeSprint) loadBurndown(activeSprint.id);
+  }, [loadBurndown]);
+
+  const openClosedSprint = useCallback((sprintId: string) => {
+    if (requestedClosed.current.has(sprintId)) return;
+    requestedClosed.current.add(sprintId);
+    loadBurndown(sprintId);
+  }, [loadBurndown]);
+
   const fetchSprints = useCallback(async () => {
     try {
       const res = await fetch(`/api/spaces/${spaceId}/sprints`);
-      if (res.ok) setSprints(await res.json());
+      if (res.ok) applySprints(await res.json());
     } catch {
       // Error de red: se conserva la lista actual; la próxima carga la refresca.
     }
-  }, [spaceId]);
+  }, [spaceId, applySprints]);
 
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/spaces/${spaceId}/sprints`)
       .then(r => (r.ok ? r.json() : null))
-      .then((rows: SprintSectionSprint[] | null) => { if (!cancelled && rows) setSprints(rows); })
+      .then((rows: SprintSectionSprint[] | null) => { if (!cancelled && rows) applySprints(rows); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [spaceId]);
+  }, [spaceId, applySprints]);
 
   // Llama a la API; si falla, muestra el error. Tras un éxito recarga sprints y proyecto.
   async function mutate(url: string, method: 'POST' | 'PATCH' | 'PUT', body: unknown, fallback: string, okMessage?: string) {
@@ -1010,6 +1043,8 @@ function SprintsPanel({ spaceId, tasks, canEdit, businessDaysOnly, onChanged, fo
         canEdit={canEdit}
         defaultDates={defaultSprintDates(today, { businessDaysOnly, holidays })}
         activeForecast={activeForecast}
+        burndowns={burndowns}
+        onOpenClosedSprint={openClosedSprint}
         businessDaysOnly={businessDaysOnly}
         onMoveTask={(taskId, sprintId) => {
           mutate(`/api/tasks/${taskId}`, 'PATCH', { sprintId }, 'No se pudo mover la tarea');

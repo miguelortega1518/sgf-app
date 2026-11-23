@@ -218,6 +218,54 @@ describe('GET /api/spaces/[id]/sprints', () => {
     expect(byId.get(legacy.id)!.summary).toBeNull();
   });
 
+  it('completed en los cerrados: del summary o, sin él, de los agregados de totales', async () => {
+    const withSummary = sprintRow({
+      name: 'Sprint 1', status: 'cerrado', startDate: '2026-10-01', endDate: '2026-10-15',
+      summary: { version: 1, completed: { tasks: 4, points: 11 }, byPerson: [] },
+    });
+    const legacy = sprintRow({ name: 'Sprint 2', status: 'cerrado', startDate: '2026-10-16', endDate: '2026-10-29', summary: null });
+    const legacyEmpty = sprintRow({ name: 'Sprint 0', status: 'cerrado', startDate: '2026-09-16', endDate: '2026-09-29', summary: null });
+    const active = sprintRow({ name: 'Sprint 3', status: 'activo', startDate: '2026-10-30', endDate: '2026-11-12', summary: null });
+    const planned = sprintRow({ name: 'Sprint 4', status: 'planificado', startDate: '2026-11-13', endDate: '2026-11-26', summary: null });
+
+    queueResults([
+      [legacyEmpty, withSummary, legacy, active, planned],
+      [
+        { sprintId: withSummary.id, taskCount: 1, estimateTotal: '2', completedCount: 0, completedPoints: '0' },
+        { sprintId: legacy.id, taskCount: 3, estimateTotal: '20', completedCount: '2', completedPoints: '17' },
+        { sprintId: active.id, taskCount: 2, estimateTotal: '15', completedCount: 1, completedPoints: '13' },
+      ],
+      [], [], [],
+    ]);
+
+    const res = await GET(getRequest(), ctx());
+
+    expect(res.status).toBe(200);
+    const byId = new Map((await res.json() as Record<string, unknown>[]).map(s => [s.id, s]));
+    expect(byId.get(withSummary.id)!.completed).toEqual({ tasks: 4, points: 11 });
+    expect(byId.get(legacy.id)!.completed).toEqual({ tasks: 2, points: 17 });
+    expect(byId.get(legacyEmpty.id)!.completed).toEqual({ tasks: 0, points: 0 });
+    expect(byId.get(active.id)).not.toHaveProperty('completed');
+    expect(byId.get(planned.id)).not.toHaveProperty('completed');
+    // Sin consultas por sprint: sprints, totales y las tres de capacidad.
+    expect(mocks.select).toHaveBeenCalledTimes(5);
+  });
+
+  it('la consulta de totales agrega lo completado con filter', async () => {
+    const select = vi.fn();
+    queueResults([[], []]);
+    const original = mocks.select.getMockImplementation()!;
+    mocks.select.mockImplementation((fields: unknown) => { select(fields); return original(); });
+
+    await GET(getRequest(), ctx());
+
+    const fields = select.mock.calls[1][0] as Record<string, { strings: string[]; values: unknown[] }>;
+    expect(fields.completedCount.strings.join('?')).toBe("count(*) filter (where ? = 'completada')");
+    expect(fields.completedCount.values).toEqual(['tasks.status']);
+    expect(fields.completedPoints.strings.join('?')).toBe("coalesce(sum(?) filter (where ? = 'completada'), 0)");
+    expect(fields.completedPoints.values).toEqual(['tasks.estimate', 'tasks.status']);
+  });
+
   it('sin sprints abiertos no consulta miembros, capacidades ni tareas', async () => {
     const closed = sprintRow({ status: 'cerrado', summary: null });
     queueResults([[closed], []]);
