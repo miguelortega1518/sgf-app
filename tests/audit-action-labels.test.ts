@@ -49,6 +49,8 @@ const KNOWN_ACTIONS = [
   'sprint_closed',
   'task_sprint_changed',
   'wip_limit_changed',
+  'sprint_capacity_changed',
+  'business_days_changed',
 ];
 
 // Ruta relativa a la raíz del repo, siempre con '/'.
@@ -217,6 +219,8 @@ describe('acciones de auditoría', () => {
     ['sprint_started', 'Sprint iniciado', 'bg-blue-100 text-blue-700'],
     ['sprint_closed', 'Sprint cerrado', 'bg-green-100 text-green-700'],
     ['task_sprint_changed', 'Cambio de sprint', 'bg-purple-100 text-purple-700'],
+    ['sprint_capacity_changed', 'Capacidad de sprint cambiada', 'bg-amber-100 text-amber-700'],
+    ['business_days_changed', 'Días hábiles cambiados', 'bg-amber-100 text-amber-700'],
   ])('%s tiene etiqueta y chip propios', (action, label, chip) => {
     expect(AUDIT_ACTION_LABEL[action]).toBe(label);
     expect(auditActionLabel(action)).toBe(label);

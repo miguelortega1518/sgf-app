@@ -13,6 +13,7 @@ import { isOverdue } from '@/lib/date-utils';
 import { requireTaskAccess, requireProjectAccess, validateTaskReferences } from '@/lib/project-access';
 import { applyStatusTransition } from '@/lib/task-transitions';
 import { buildAssignmentNotifications } from '@/lib/assignment-notifications';
+import { sprintChangeReason } from '@/lib/sprint-history';
 import { and, eq, desc } from 'drizzle-orm';
 
 export async function GET(
@@ -207,8 +208,10 @@ export async function PATCH(
           previousSprintName = previous?.name ?? null;
         }
         // Valores legibles en la Bitácora: nombres de sprint o «Backlog», nunca UUID.
+        // Los ids van en `reason` (la UI no lo muestra) para la retrospectiva del sprint.
         await logAudit({ actorId: session.id, action: 'task_sprint_changed', taskId: id, spaceId: current.spaceId,
-          previousValue: previousSprintName ?? 'Backlog', newValue: newSprintName ?? 'Backlog' }, tx);
+          previousValue: previousSprintName ?? 'Backlog', newValue: newSprintName ?? 'Backlog',
+          reason: sprintChangeReason(current.sprintId, input.sprintId ?? null) }, tx);
       }
       const intents = buildAssignmentNotifications({
         actorId: session.id,

@@ -2,10 +2,14 @@
  * Lógica pura de sprints (sin BD ni hooks): sirve en servidor y en cliente.
  */
 
+import { addBusinessDays, isBusinessDay } from './business-days';
+
 export const SPRINT_NAME_MAX = 200;
 export const SPRINT_GOAL_MAX = 2000;
 /** Duración por defecto de un sprint nuevo: 2 semanas, contando el día de inicio. */
 export const SPRINT_DEFAULT_DAYS = 14;
+/** Duración por defecto en días hábiles RD (proyectos con «Contar sólo días hábiles»). */
+export const SPRINT_DEFAULT_BUSINESS_DAYS = 10;
 
 export const SPRINT_STATUSES = ['planificado', 'activo', 'cerrado'] as const;
 export type SprintStatus = (typeof SPRINT_STATUSES)[number];
@@ -20,9 +24,48 @@ function addDaysToIso(isoDate: string, days: number): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Fechas por defecto de un sprint nuevo que empieza `today` (fecha RD 'YYYY-MM-DD'). */
-export function defaultSprintDates(today: string): { startDate: string; endDate: string } {
-  return { startDate: today, endDate: addDaysToIso(today, SPRINT_DEFAULT_DAYS - 1) };
+export type DefaultSprintDatesOptions = {
+  /** Ajuste del proyecto (spaces.business_days_only). */
+  businessDaysOnly?: boolean;
+  /** Feriados 'YYYY-MM-DD'. */
+  holidays?: Set<string>;
+};
+
+/**
+ * Fechas por defecto de un sprint nuevo que empieza `today` (fecha RD 'YYYY-MM-DD').
+ * - Sin opciones o con businessDaysOnly false: 14 días naturales.
+ * - Con businessDaysOnly: termina el 10.º día hábil (sin sábados, domingos ni
+ *   feriados), contando el día de inicio si es hábil.
+ */
+export function defaultSprintDates(
+  today: string,
+  opts?: DefaultSprintDatesOptions,
+): { startDate: string; endDate: string } {
+  if (!opts?.businessDaysOnly) {
+    return { startDate: today, endDate: addDaysToIso(today, SPRINT_DEFAULT_DAYS - 1) };
+  }
+  const holidays = opts.holidays ?? new Set<string>();
+  const remaining = isBusinessDay(today, holidays) ? SPRINT_DEFAULT_BUSINESS_DAYS - 1 : SPRINT_DEFAULT_BUSINESS_DAYS;
+  return { startDate: today, endDate: addBusinessDays(today, remaining, holidays) };
+}
+
+export type PlannableSprint = {
+  id: string;
+  status: SprintStatus;
+  startDate: string;
+  createdAt: string | Date;
+};
+
+/**
+ * Siguiente sprint planificado: el de menor startDate y, a igualdad, el creado
+ * antes. Lo comparten el cierre (servidor) y el diálogo de cierre (cliente).
+ */
+export function nextPlannedSprint<S extends PlannableSprint>(sprints: S[]): S | null {
+  const time = (v: string | Date) => new Date(v).getTime();
+  const planned = sprints
+    .filter(s => s.status === 'planificado')
+    .sort((a, b) => a.startDate.localeCompare(b.startDate) || time(a.createdAt) - time(b.createdAt));
+  return planned[0] ?? null;
 }
 
 /** Sólo se permite planificado → activo y activo → cerrado. */

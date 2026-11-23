@@ -82,6 +82,15 @@ Velocidad semanal en puntos, tiempo de ciclo (mediana y percentil 85), trabajo e
 ## 19. Identidad visual
 Neutros grafito fríos y un único acento ámbar ("brasa"). Azul cielo para "En progreso" y "Feature" (distinto del acento y del rojo de Bug). Tipografía Geist. Los colores salen de variables en `globals.css`, que reasigna las paletas de Tailwind: el modo claro, el oscuro y el del sistema salen de un único sitio. Contraste comprobado en claro y oscuro.
 
+## 20. Capacidad, cierre con arrastre y retrospectiva de sprint
+- **Capacidad** (`sprint_capacity`): puntos por persona y sprint. Sin valor guardado se usa la **media** de puntos completados en los 3 últimos sprints cerrados en los que la persona participó (`src/lib/sprint-capacity.ts`); sin historial queda «Sin datos». La planificación avisa si lo asignado supera la capacidad.
+- **Cierre con arrastre**: al cerrar, las tareas no completadas pasan al siguiente sprint planificado (o al que se elija) o al backlog, en la misma transacción que el cierre y con un `task_sprint_changed` por tarea. Las tareas de sprints cerrados antes de este cambio no se recuperan solas.
+- **Retrospectiva** (`sprints.summary`, versión 1, `src/lib/sprint-summary.ts`): comprometido, completado, arrastrado, añadido a mitad de sprint (entradas posteriores a `started_at`), bloqueos por área al cierre y tiempo de ciclo con mediana y p85.
+- **Ids en `reason`**: `task_sprint_changed` guarda `{"from","to"}` en `reason` para distinguir sprints homónimos. `previousValue`/`newValue` siguen siendo nombres legibles y la Bitácora oculta ese JSON.
+- **Días hábiles** (`spaces.business_days_only`, activo por defecto): un sprint nuevo dura 10 días hábiles RD (sin fines de semana ni feriados) en lugar de 14 naturales, y el ciclo de la retrospectiva se cuenta en días hábiles.
+
+**Razón:** la capacidad por defecto usa la media porque es un valor inicial editable, no una métrica (las métricas siguen en mediana y p85, §18). Arrastrar dentro del cierre evita que las tareas pendientes queden invisibles en un sprint cerrado.
+
 ## Pendiente (no incluido en esta rama)
 - Integración con GitHub: la fase 1 usa un webhook de repositorio firmado (`/api/integrations/github/webhook`, ver `docs/OPERACIONES.md` §10) que enlaza el PR y mueve el estado. La GitHub App con permisos mínimos queda para la fase 5; GitLab sigue sin definir.
 - Las plantillas de sprint siguen usando "días hábiles" y feriados de RD.

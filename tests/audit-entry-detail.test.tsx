@@ -189,6 +189,45 @@ describe('TaskAuditDetail', () => {
   });
 });
 
+describe('task_sprint_changed: el reason con ids no se muestra', () => {
+  const from = '3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d5e6f';
+  const to = '8b1d2c3e-4f5a-4b6c-8d7e-9f0a1b2c3d4e';
+  const idsReason = JSON.stringify({ from, to });
+
+  it('AuditLogDetail muestra sólo los nombres', () => {
+    const html = renderLog({ action: 'task_sprint_changed', previousValue: 'Sprint 3', newValue: 'Sprint 4', reason: idsReason });
+    expect(html).toBe('<span class="text-xs text-gray-500">Sprint 3 → Sprint 4</span>');
+    expect(html).not.toContain(from);
+    expect(html).not.toContain('{');
+  });
+
+  it('TaskAuditDetail muestra sólo los nombres', () => {
+    const html = renderTask({ action: 'task_sprint_changed', previousValue: 'Backlog', newValue: 'Sprint 4', reason: JSON.stringify({ from: null, to }) });
+    expect(html).toBe('<span class="text-gray-400 ml-1">(Backlog → Sprint 4)</span>');
+    expect(html).not.toContain(to);
+  });
+
+  it('sin valores y con reason de ids: AuditLogDetail muestra «—» y TaskAuditDetail nada', () => {
+    expect(renderLog({ action: 'task_sprint_changed', previousValue: null, newValue: null, reason: idsReason }))
+      .toBe('<span class="text-xs text-gray-300">—</span>');
+    expect(renderTask({ action: 'task_sprint_changed', previousValue: null, newValue: null, reason: idsReason })).toBe('');
+  });
+
+  it('un reason que no es el JSON de ids se muestra como hasta ahora', () => {
+    const html = renderLog({ action: 'task_sprint_changed', previousValue: 'Sprint 3', newValue: 'Sprint 4', reason: 'otro' });
+    expect(html).toContain('>Otro<');
+    const invalid = renderTask({ action: 'task_sprint_changed', previousValue: 'a', newValue: 'b', reason: '{"from":1,"to":2}' });
+    expect(invalid).toContain('{&quot;from&quot;:1');
+  });
+
+  it('el mismo JSON en otra acción sí se pinta (sin regresión)', () => {
+    const log = renderLog({ action: 'status_changed', previousValue: 'a', newValue: 'b', reason: idsReason });
+    expect(log).toContain(from);
+    const task = renderTask({ previousValue: 'a', newValue: 'b', reason: idsReason });
+    expect(task).toContain(from);
+  });
+});
+
 describe('readable task_created / space_created values', () => {
   const uuid = '3f2a9c1e-7b4d-4e8a-9c2f-1a2b3c4d5e6f';
   const taskJson = JSON.stringify({ title: 'T1', responsible: uuid });

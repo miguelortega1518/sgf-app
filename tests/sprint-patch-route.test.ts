@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => {
     requireSession: vi.fn(),
     requireProjectAccess: vi.fn(),
     logAudit: vi.fn(),
+    loadStatusEvents: vi.fn(),
+    loadSprintChangeEvents: vi.fn(),
     select: vi.fn(),
     update: vi.fn(),
     transaction: vi.fn(),
@@ -30,13 +32,22 @@ vi.mock('@/lib/project-access', async importOriginal => ({
 }));
 vi.mock('@/lib/db/schema', () => ({
   sprints: { id: 'sprints.id', spaceId: 'sprints.spaceId', status: 'sprints.status' },
-  tasks: { sprintId: 'tasks.sprintId' },
+  tasks: {
+    id: 'tasks.id', sprintId: 'tasks.sprintId', archived: 'tasks.archived', status: 'tasks.status',
+    estimate: 'tasks.estimate', responsibleId: 'tasks.responsibleId', blockedByArea: 'tasks.blockedByArea',
+    createdAt: 'tasks.createdAt', completedAt: 'tasks.completedAt',
+  },
+  persons: { id: 'persons.id', name: 'persons.name' },
+  holidays: { date: 'holidays.date' },
 }));
 vi.mock('drizzle-orm', () => ({
   and: (...conditions: unknown[]) => ({ operator: 'and', conditions }),
   eq: (left: unknown, right: unknown) => ({ operator: 'eq', left, right }),
   ne: (left: unknown, right: unknown) => ({ operator: 'ne', left, right }),
+  inArray: (left: unknown, right: unknown) => ({ operator: 'inArray', left, right }),
 }));
+vi.mock('@/lib/status-history-query', () => ({ loadStatusEvents: mocks.loadStatusEvents }));
+vi.mock('@/lib/sprint-history-query', () => ({ loadSprintChangeEvents: mocks.loadSprintChangeEvents }));
 
 import { PATCH } from '../src/app/api/sprints/[id]/route';
 import { logger } from '../src/lib/logger';
@@ -53,6 +64,7 @@ type SprintRow = {
 let current: SprintRow;
 let txForCalls: unknown[];
 let txUpdateTables: unknown[];
+let txUpdateWheres: unknown[];
 
 function ctx(id = sprintId) {
   return { params: Promise.resolve({ id }) };
@@ -72,7 +84,7 @@ function httpError(message: string, httpStatus: number) {
 
 function chain(result: unknown, onFor?: (arg: unknown) => void) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['from', 'where', 'limit']) builder[method] = () => builder;
+  for (const method of ['from', 'where', 'limit', 'innerJoin', 'orderBy']) builder[method] = () => builder;
   builder.for = (arg: unknown) => { onFor?.(arg); return builder; };
   builder.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
     Promise.resolve(result).then(resolve, reject);
@@ -96,14 +108,22 @@ beforeEach(() => {
   };
   txForCalls = [];
   txUpdateTables = [];
+  txUpdateWheres = [];
   mocks.requireSession.mockResolvedValue({ id: userId, role: 'miembro' });
-  mocks.requireProjectAccess.mockResolvedValue({ id: spaceId, type: 'proyecto', status: 'activo' });
+  mocks.requireProjectAccess.mockResolvedValue({ id: spaceId, type: 'proyecto', status: 'activo', businessDaysOnly: false });
   mocks.logAudit.mockResolvedValue(undefined);
+  mocks.loadStatusEvents.mockResolvedValue(new Map());
+  mocks.loadSprintChangeEvents.mockResolvedValue(new Map());
   mocks.select.mockImplementation(() => chain([{ ...current }]));
   queueTx([[{ ...current }], []]);
   mocks.txUpdate.mockImplementation((table: unknown) => { txUpdateTables.push(table); return { set: mocks.txSet }; });
   mocks.txSet.mockImplementation((input: Record<string, unknown>) => {
-    const builder = { where: () => builder, returning: async () => [{ ...current, ...input }] };
+    const builder = {
+      where: (cond: unknown) => { txUpdateWheres.push(cond); return builder; },
+      returning: async () => [{ ...current, ...input }],
+      then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+        Promise.resolve([]).then(resolve, reject),
+    };
     return builder;
   });
   mocks.transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(mocks.tx));
@@ -276,16 +296,72 @@ describe('PATCH /api/sprints/[id]: transiciones de estado', () => {
     expect(mocks.logAudit).not.toHaveBeenCalled();
   });
 
-  it('activo → cerrado registra sprint_closed y no toca tareas', async () => {
+  it('planificado → activo guarda startedAt en el mismo update', async () => {
+    const res = await PATCH(patchRequest({ status: 'activo' }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSet).toHaveBeenCalledTimes(1);
+    expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({ status: 'activo', startedAt: expect.any(Date) }));
+  });
+
+  it('editar sin cambiar de estado no toca startedAt ni summary', async () => {
+    const res = await PATCH(patchRequest({ name: 'Otro' }), ctx());
+
+    expect(res.status).toBe(200);
+    const set = mocks.txSet.mock.calls[0][0] as Record<string, unknown>;
+    expect(set).not.toHaveProperty('startedAt');
+    expect(set).not.toHaveProperty('summary');
+  });
+});
+
+const SPRINTS_TABLE = { id: 'sprints.id', spaceId: 'sprints.spaceId', status: 'sprints.status' };
+const TASKS_TABLE_ID = 'tasks.id';
+
+function scopeTask(overrides: Record<string, unknown> = {}) {
+  return {
+    id: crypto.randomUUID(),
+    status: 'en_proceso',
+    estimate: 3,
+    responsibleId: userId,
+    responsibleName: 'Ana',
+    blockedByArea: null,
+    createdAt: new Date('2026-11-10T12:00:00Z'),
+    completedAt: null,
+    ...overrides,
+  };
+}
+
+describe('PATCH /api/sprints/[id]: cierre con arrastre', () => {
+  const nextId = crypto.randomUUID();
+  const next = () => ({
+    id: nextId, spaceId, name: 'Sprint 4', goal: null, startDate: '2026-12-01', endDate: '2026-12-14',
+    status: 'planificado', createdAt: new Date('2026-11-01T00:00:00Z'),
+  });
+
+  beforeEach(() => {
     current.status = 'activo';
-    queueTx([[{ ...current }]]);
+  });
+
+  it('sin pendientes: sólo actualiza sprints, guarda summary y no emite task_sprint_changed', async () => {
+    const done = scopeTask({ status: 'completada', estimate: 5, completedAt: new Date('2026-11-20T15:00:00Z') });
+    // current, planificados, pendientes FOR UPDATE, alcance.
+    queueTx([[{ ...current }], [], [], [done]]);
 
     const res = await PATCH(patchRequest({ status: 'cerrado' }), ctx());
 
     expect(res.status).toBe(200);
     expect((await res.json()).status).toBe('cerrado');
     expect(mocks.txUpdate).toHaveBeenCalledTimes(1);
-    expect(txUpdateTables).toEqual([{ id: 'sprints.id', spaceId: 'sprints.spaceId', status: 'sprints.status' }]);
+    expect(txUpdateTables).toEqual([SPRINTS_TABLE]);
+    expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'cerrado',
+      summary: expect.objectContaining({
+        version: 1,
+        committed: { tasks: 1, points: 5 },
+        completed: { tasks: 1, points: 5 },
+        carriedOver: { tasks: 0, points: 0, to: { sprintId: null, name: 'Backlog' } },
+      }),
+    }));
     expect(mocks.logAudit).toHaveBeenCalledTimes(1);
     expect(mocks.logAudit).toHaveBeenCalledWith(
       {
@@ -297,6 +373,184 @@ describe('PATCH /api/sprints/[id]: transiciones de estado', () => {
       },
       mocks.tx,
     );
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('con 2 pendientes y un planificado: un único update de tareas y un task_sprint_changed por tarea', async () => {
+    const t1 = scopeTask({ estimate: 2 });
+    const t2 = scopeTask({ estimate: null, status: 'bloqueada', blockedByArea: 'legal' });
+    const done = scopeTask({ status: 'completada', estimate: 5, completedAt: new Date('2026-11-20T15:00:00Z') });
+    queueTx([[{ ...current }], [next()], [{ id: t1.id }, { id: t2.id }], [t1, t2, done]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado' }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(txForCalls).toEqual(['update', 'update', 'update']);
+    expect(mocks.txUpdate).toHaveBeenCalledTimes(2);
+    expect(txUpdateTables[0]).toEqual(expect.objectContaining({ id: TASKS_TABLE_ID }));
+    expect(txUpdateTables[1]).toEqual(SPRINTS_TABLE);
+    expect(mocks.txSet.mock.calls[0][0]).toEqual({ sprintId: nextId, updatedAt: expect.any(Date) });
+    expect(txUpdateWheres[0]).toEqual({
+      operator: 'and',
+      conditions: [
+        { operator: 'inArray', left: TASKS_TABLE_ID, right: [t1.id, t2.id] },
+        { operator: 'eq', left: 'tasks.sprintId', right: sprintId },
+      ],
+    });
+    const sprintChanges = mocks.logAudit.mock.calls.filter(([e]) => e.action === 'task_sprint_changed');
+    expect(sprintChanges).toHaveLength(2);
+    for (const [i, t] of [t1, t2].entries()) {
+      expect(sprintChanges[i]).toEqual([
+        {
+          actorId: userId,
+          action: 'task_sprint_changed',
+          taskId: t.id,
+          spaceId,
+          previousValue: 'Sprint 3',
+          newValue: 'Sprint 4',
+          reason: JSON.stringify({ from: sprintId, to: nextId }),
+        },
+        mocks.tx,
+      ]);
+    }
+    expect(mocks.txSet.mock.calls[1][0]).toEqual(expect.objectContaining({
+      status: 'cerrado',
+      summary: expect.objectContaining({
+        carriedOver: { tasks: 2, points: 2, to: { sprintId: nextId, name: 'Sprint 4' } },
+        blockersByArea: [{ area: 'legal', count: 1 }],
+      }),
+    }));
+    expect(mocks.logAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'sprint_closed' }), mocks.tx);
+    // Los eventos se cargan en bloque con el tx y filtrados por el proyecto.
+    expect(mocks.loadStatusEvents).toHaveBeenCalledWith([t1.id, t2.id, done.id], mocks.tx);
+    expect(mocks.loadSprintChangeEvents).toHaveBeenCalledWith([t1.id, t2.id, done.id], spaceId, mocks.tx);
+  });
+
+  it("carryOverTo 'backlog' → sprintId null, newValue 'Backlog' y to null", async () => {
+    const t1 = scopeTask();
+    queueTx([[{ ...current }], [{ id: t1.id }], [t1]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado', carryOverTo: 'backlog' }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSet.mock.calls[0][0]).toEqual({ sprintId: null, updatedAt: expect.any(Date) });
+    expect(mocks.logAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'task_sprint_changed',
+      taskId: t1.id,
+      newValue: 'Backlog',
+      reason: JSON.stringify({ from: sprintId, to: null }),
+    }), mocks.tx);
+  });
+
+  it('carryOverTo con el id de un sprint planificado del proyecto lo usa como destino', async () => {
+    const t1 = scopeTask();
+    queueTx([[{ ...current }], [next()], [{ id: t1.id }], [t1]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado', carryOverTo: nextId }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSet.mock.calls[0][0]).toEqual({ sprintId: nextId, updatedAt: expect.any(Date) });
+  });
+
+  it('sin carryOverTo y sin planificados → backlog', async () => {
+    const t1 = scopeTask();
+    queueTx([[{ ...current }], [], [{ id: t1.id }], [t1]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado' }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSet.mock.calls[0][0]).toEqual({ sprintId: null, updatedAt: expect.any(Date) });
+    expect(mocks.logAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'task_sprint_changed', newValue: 'Backlog',
+    }), mocks.tx);
+  });
+
+  it('sin carryOverTo elige el planificado de menor startDate', async () => {
+    const t1 = scopeTask();
+    const later = { ...next(), id: crypto.randomUUID(), name: 'Sprint 9', startDate: '2027-01-01' };
+    queueTx([[{ ...current }], [later, next()], [{ id: t1.id }], [t1]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado' }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSet.mock.calls[0][0]).toEqual({ sprintId: nextId, updatedAt: expect.any(Date) });
+  });
+
+  it('destino de otro proyecto → 400 sin updates ni auditoría', async () => {
+    queueTx([[{ ...current }], [{ ...next(), spaceId: crypto.randomUUID() }]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado', carryOverTo: nextId }), ctx());
+
+    expect(res.status).toBe(400);
+    expect(mocks.txUpdate).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+    expect(loggerError).not.toHaveBeenCalled();
+  });
+
+  it('destino inexistente → 400 sin escrituras', async () => {
+    queueTx([[{ ...current }], []]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado', carryOverTo: nextId }), ctx());
+
+    expect(res.status).toBe(400);
+    expect(mocks.txUpdate).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+  });
+
+  it.each(['activo', 'cerrado'])('destino %s → 409 sin escrituras', async status => {
+    queueTx([[{ ...current }], [{ ...next(), status }]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado', carryOverTo: nextId }), ctx());
+
+    expect(res.status).toBe(409);
+    expect(mocks.txUpdate).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['sin status', { carryOverTo: 'backlog' }],
+    ['con status activo', { status: 'activo', carryOverTo: 'backlog' }],
+    ['con un valor inválido', { status: 'cerrado', carryOverTo: 'otro' }],
+  ])('carryOverTo %s → 400 sin transacción', async (_label, body) => {
+    const res = await PATCH(patchRequest(body), ctx());
+
+    expect(res.status).toBe(400);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(loggerError).not.toHaveBeenCalled();
+  });
+
+  it('logAudit que lanza en la 2.ª tarea → todo o nada: 500 y todo sobre el tx', async () => {
+    const t1 = scopeTask();
+    const t2 = scopeTask();
+    queueTx([[{ ...current }], [next()], [{ id: t1.id }, { id: t2.id }], [t1, t2]]);
+    let calls = 0;
+    mocks.logAudit.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 2) throw new Error('fallo de auditoría');
+    });
+
+    const res = await PATCH(patchRequest({ status: 'cerrado' }), ctx());
+
+    expect(res.status).toBe(500);
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.logAudit.mock.calls.every(([, executor]) => executor === mocks.tx)).toBe(true);
+    // El sprint no llegó a cerrarse.
+    expect(txUpdateTables).not.toContainEqual(SPRINTS_TABLE);
+  });
+
+  it('con días hábiles carga los feriados dentro del tx', async () => {
+    mocks.requireProjectAccess.mockResolvedValue({ id: spaceId, type: 'proyecto', status: 'activo', businessDaysOnly: true });
+    const done = scopeTask({ status: 'completada', completedAt: new Date('2026-11-20T15:00:00Z') });
+    queueTx([[{ ...current }], [], [], [done], [{ date: '2026-11-19' }]]);
+
+    const res = await PATCH(patchRequest({ status: 'cerrado' }), ctx());
+
+    expect(res.status).toBe(200);
+    expect(mocks.txSelect).toHaveBeenCalledTimes(5);
+    expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({
+      summary: expect.objectContaining({ businessDaysOnly: true, cycleTime: expect.objectContaining({ unit: 'business' }) }),
+    }));
   });
 });
 
