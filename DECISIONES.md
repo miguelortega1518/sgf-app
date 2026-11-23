@@ -78,6 +78,7 @@ Antes un miembro solo veía sus propias tareas dentro de un proyecto.
 ## 18. Métricas de entrega (Panorama del equipo)
 Velocidad semanal en puntos, tiempo de ciclo (mediana y percentil 85), trabajo en curso por persona y bloqueos por área. Cálculo en `src/lib/metrics.ts` con pruebas.
 **Razón:** mediana y percentil 85 en lugar de promedio, porque un par de tareas eternas distorsionan el promedio. Los bloqueos por área muestran dónde se atasca el equipo.
+_Nota:_ el trabajo en curso por persona ya no es fijo: depende del ajuste «Mostrar métricas por persona» (§22) y se sirve en `/api/metrics/people`.
 
 ## 19. Identidad visual
 Neutros grafito fríos y un único acento ámbar ("brasa"). Azul cielo para "En progreso" y "Feature" (distinto del acento y del rojo de Bug). Tipografía Geist. Los colores salen de variables en `globals.css`, que reasigna las paletas de Tailwind: el modo claro, el oscuro y el del sistema salen de un único sitio. Contraste comprobado en claro y oscuro.
@@ -97,6 +98,16 @@ Neutros grafito fríos y un único acento ámbar ("brasa"). Azul cielo para "En 
 - **Velocidad** (`src/lib/sprint-velocity.ts`): lo completado en los últimos 6 sprints cerrados (de `summary.completed` o, en los cerrados antes de la retrospectiva, de sus tareas completadas actuales) con una **media móvil de 3 sprints**, calculada sobre todo el historial y desde el 2.º sprint. Con menos de 2 cerrados se muestra «Aún no hay datos suficientes».
 
 **Razón:** la media móvil es una excepción explícita a «mediana y p85, no promedios» (§18). Aquí suaviza totales por sprint, que son pocos y comparables. No se aplica a duraciones de tareas, donde unas pocas tareas eternas sí distorsionan el promedio. Reconstruir el burndown con la auditoría reutiliza el historial que ya existe (fases 1/8 a 4/8) y evita guardar instantáneas diarias.
+
+## 22. Ética de las métricas por persona
+Mostrar métricas agregadas por persona es una **decisión explícita del equipo** (PLAN-PRODUCTO §5, «Ética de las métricas»), no un valor fijo del producto.
+- **Ajuste global** «Mostrar métricas por persona» en `team_settings` (una sola fila, `id = 1`), **activado por defecto**: sin fila vale `true` (`getTeamSettings`, `src/lib/team-settings.ts`), así nada desaparece tras el despliegue. Se cambia en `/admin/ajustes`.
+- **Sólo un admin** lo cambia (`PATCH /api/settings/team`, `requireRole('admin')`); cualquier rol lo lee. Cada cambio se **audita** como `person_metrics_setting_changed` («Métricas por persona: activadas/desactivadas»), en la misma transacción que el upsert; si el valor no cambia, no se audita.
+- **Con el ajuste apagado** desaparecen de la interfaz el «Reporte por persona» de `/reportes` y las tarjetas por persona de `/panorama` («Trabajo en curso por persona» y «Por persona»). Sus APIs (`/api/reports/persona` y `/api/metrics/people`) responden **403** con un mensaje que explica la decisión, sin consultar personas ni tareas. Los **totales del equipo siguen visibles**: `/api/metrics` y `/api/dashboard` ya no llevan datos por persona.
+- **Sin rankings**: las listas por persona se ordenan por **carga abierta** (`workInProgress`: en progreso + code review + bloqueadas; `personLoad`: no completadas), con desempate por nombre, nunca por lo completado. Sin números de posición, listas numeradas, medallas ni podios.
+- Fuera de alcance: datos con nombre que no son métricas agregadas (responsable de cada tarea, Kanban, exportes, vencimientos, «Mi equipo», capacidad del sprint §20 y retrospectiva).
+
+**Razón:** las métricas por persona sirven para equilibrar la carga, no para comparar personas. Que el equipo pueda apagarlas, y que quede auditado quién lo hizo, evita que se usen como ranking. Los totales del equipo viajan en APIs separadas para que apagar lo personal no oculte cómo va el equipo.
 
 ## Pendiente (no incluido en esta rama)
 - Integración con GitHub: la fase 1 usa un webhook de repositorio firmado (`/api/integrations/github/webhook`, ver `docs/OPERACIONES.md` §10) que enlaza el PR y mueve el estado. La GitHub App con permisos mínimos queda para la fase 5; GitLab sigue sin definir.

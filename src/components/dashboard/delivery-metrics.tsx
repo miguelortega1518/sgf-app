@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { AREA_LABEL, KIND_LABEL, type TaskKind } from '@/lib/labels';
-import type { CycleStats, LeadStats, WipAgingRow } from '@/lib/metrics';
+import type { CycleStats, LeadStats, WipAgingRow, WipRow } from '@/lib/metrics';
 import { CycleTimeSummary, WipAgingList } from './wip-aging-list';
+import { WipByPersonTable } from './person-workload';
 
-type Metrics = {
+/** Respuesta de /api/metrics: sólo totales del equipo (lo por persona está en /api/metrics/people). */
+export type Metrics = {
   velocity: { start: string; tasks: number; points: number }[];
   averagePointsPerWeek: number;
   cycleTime: CycleStats;
   leadTime: LeadStats;
   wipAging: WipAgingRow[];
   wipAgingTotal: number;
-  wip: { personId: string; name: string; inProgress: number; inReview: number; blocked: number }[];
   blockers: { area: string; count: number }[];
   doneByKind: { kind: string; count: number }[];
   openTasks: number;
@@ -20,7 +21,11 @@ type Metrics = {
 
 const fmtWeek = (iso: string) => new Date(iso + 'T12:00:00Z').toLocaleDateString('es-DO', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-export function DeliveryMetrics() {
+/**
+ * Contenedor: carga /api/metrics. `personWorkload` llega de /api/metrics/people y es null
+ * si el equipo apagó las métricas por persona (DECISIONES §22) o si no se pudieron cargar.
+ */
+export function DeliveryMetrics({ personWorkload }: { personWorkload: WipRow[] | null }) {
   const [m, setM] = useState<Metrics | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -31,6 +36,11 @@ export function DeliveryMetrics() {
   if (failed) return <p className="mb-6 text-sm text-red-700" role="alert">No se pudieron cargar las métricas de entrega.</p>;
   if (!m) return <div className="mb-6 h-64 rounded-lg bg-gray-100 animate-pulse" aria-hidden="true" />;
 
+  return <DeliveryMetricsView metrics={m} personWorkload={personWorkload} />;
+}
+
+/** Presentación pura del panel de entrega. Sin datos por persona (null) no pinta su tarjeta. */
+export function DeliveryMetricsView({ metrics: m, personWorkload }: { metrics: Metrics; personWorkload: WipRow[] | null }) {
   const maxPts = Math.max(1, ...m.velocity.map(w => w.points));
   const maxBlock = Math.max(1, ...m.blockers.map(b => b.count));
 
@@ -81,33 +91,12 @@ export function DeliveryMetrics() {
           )}
         </div>
 
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
-          <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">Trabajo en curso por persona</h3>
-          {m.wip.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">Nadie tiene tareas en curso.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-[var(--text-muted)]">
-                  <th className="font-medium pb-2">Persona</th>
-                  <th className="font-medium pb-2 text-right">En progreso</th>
-                  <th className="font-medium pb-2 text-right">Code review</th>
-                  <th className="font-medium pb-2 text-right">Bloqueadas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {m.wip.map(r => (
-                  <tr key={r.personId} className="border-t border-[var(--border)]">
-                    <td className="py-2 text-[var(--text-primary)]">{r.name}</td>
-                    <td className="py-2 text-right tabular">{r.inProgress}</td>
-                    <td className="py-2 text-right tabular">{r.inReview}</td>
-                    <td className={`py-2 text-right tabular ${r.blocked ? 'text-red-700 font-medium' : ''}`}>{r.blocked}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        {personWorkload !== null && (
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
+            <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">Trabajo en curso por persona</h3>
+            <WipByPersonTable rows={personWorkload} />
+          </div>
+        )}
 
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4">
           <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">Antigüedad del trabajo en curso</h3>

@@ -154,6 +154,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   business_days_changed: 'Días hábiles cambiados',
   share_link_created: 'Enlace público creado',
   share_link_revoked: 'Enlace público revocado',
+  person_metrics_setting_changed: 'Ajuste: métricas por persona',
   // Valores heredados: ya no se emiten, pero audit_log puede tener filas antiguas
   space_health_updated: 'Actualización de salud',
   space_closed: 'Proyecto cerrado',
@@ -200,6 +201,7 @@ export const AUDIT_ACTION_CHIP: Record<string, string> = {
   business_days_changed: 'bg-amber-100 text-amber-700',
   share_link_created: 'bg-sky-100 text-sky-700',
   share_link_revoked: 'bg-red-100 text-red-700',
+  person_metrics_setting_changed: 'bg-amber-100 text-amber-700',
 };
 
 const AUDIT_ACTION_FALLBACK = 'Acción registrada';

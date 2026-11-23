@@ -6,6 +6,7 @@ import { accessibleSpaceIds, visiblePersonIds, assertValidUuid } from '@/lib/pro
 import { handleError, error } from '@/lib/api-utils';
 import { todayRD, toDateRD } from '@/lib/date-utils';
 import { personaReportRow } from '@/lib/export-rows';
+import { assertPersonMetricsEnabled, getTeamSettings } from '@/lib/team-settings';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import * as XLSX from 'xlsx';
@@ -14,6 +15,8 @@ import PDFDocument from 'pdfkit';
 export async function GET(req: NextRequest) {
   try {
     const session = await requireSession();
+    // Ajuste del equipo (DECISIONES §22): antes de validar nada o consultar personas o tareas.
+    assertPersonMetricsEnabled(await getTeamSettings());
     const personId = req.nextUrl.searchParams.get('personId');
     const format = req.nextUrl.searchParams.get('format') || 'xlsx';
 

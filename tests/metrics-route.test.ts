@@ -115,7 +115,8 @@ describe('GET /api/metrics', () => {
     // Los campos existentes se mantienen.
     expect(body.velocity).toHaveLength(8);
     expect(body.openTasks).toBe(13);
-    expect(body.wip).toBeDefined();
+    // El trabajo en curso por persona pasó a /api/metrics/people (DECISIONES §22).
+    expect(body.wip).toBeUndefined();
     expect(body.blockers).toBeDefined();
     expect(body.doneByKind).toEqual([{ kind: 'feature', count: 1 }]);
   });

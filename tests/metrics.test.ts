@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { weekStart, weeklyVelocity, percentile, cycleTime, cycleDays, leadTime, wipAging, workInProgress, blockersByArea, doneByKind, type MetricTask } from '../src/lib/metrics';
+import { weekStart, weeklyVelocity, percentile, cycleTime, cycleDays, leadTime, wipAging, workInProgress, personLoad, blockersByArea, doneByKind, type MetricTask } from '../src/lib/metrics';
 import { buildStatusHistory, type StatusEvent, type StatusSegment } from '../src/lib/status-history';
 
 const NOW = new Date('2026-10-28T15:00:00Z'); // miércoles
@@ -157,6 +157,54 @@ test('workInProgress ignora por hacer y hechas, y ordena por carga', () => {
   const w = workInProgress(rows);
   expect(w.map(r => r.name)).toEqual(['Beto', 'Ana']);
   expect(w[0]).toEqual({ personId: 'b', name: 'Beto', inProgress: 1, inReview: 1, blocked: 1 });
+});
+
+test('workInProgress desempata por nombre a igual carga', () => {
+  const rows = [
+    t({ status: 'en_proceso', responsibleId: 'z', responsibleName: 'Zoe' }),
+    t({ status: 'en_proceso', responsibleId: 'e', responsibleName: 'Élida' }),
+    t({ status: 'bloqueada', responsibleId: 'a', responsibleName: 'Ana' }),
+  ];
+  expect(workInProgress(rows).map(r => r.name)).toEqual(['Ana', 'Élida', 'Zoe']);
+});
+
+test('workInProgress acepta filas mínimas (sin campos de ciclo)', () => {
+  const minimal = [{ status: 'en_proceso', responsibleId: 'a', responsibleName: 'Ana' }];
+  expect(workInProgress(minimal)).toEqual([{ personId: 'a', name: 'Ana', inProgress: 1, inReview: 0, blocked: 0 }]);
+});
+
+type LoadRow = Parameters<typeof personLoad>[0][number];
+const lr = (over: Partial<LoadRow>): LoadRow => ({
+  responsibleId: 'a', responsibleName: 'Ana', status: 'en_proceso', dueDateOriginal: null, ...over,
+});
+
+test('personLoad cuenta abiertas, vencidas, completadas y total por persona', () => {
+  const rows = [
+    lr({ status: 'en_proceso', dueDateOriginal: '2026-10-27' }), // vencida
+    lr({ status: 'no_iniciada', dueDateOriginal: '2026-10-28' }), // vence hoy: no vencida
+    lr({ status: 'bloqueada', dueDateOriginal: null }),
+    lr({ status: 'completada', dueDateOriginal: '2026-10-01' }), // completada: nunca vencida
+  ];
+  expect(personLoad(rows, '2026-10-28')).toEqual([
+    { personId: 'a', name: 'Ana', open: 3, overdue: 1, completed: 1, total: 4 },
+  ]);
+});
+
+test('personLoad ordena por carga abierta, no por completadas, y desempata por nombre', () => {
+  const rows = [
+    // Beto: muchas completadas, poca carga abierta.
+    ...Array.from({ length: 6 }, () => lr({ responsibleId: 'b', responsibleName: 'Beto', status: 'completada' })),
+    lr({ responsibleId: 'b', responsibleName: 'Beto', status: 'en_proceso' }),
+    // Zoe y Ana: misma carga abierta (2).
+    lr({ responsibleId: 'z', responsibleName: 'Zoe', status: 'en_proceso' }),
+    lr({ responsibleId: 'z', responsibleName: 'Zoe', status: 'en_revision' }),
+    lr({ responsibleId: 'a', responsibleName: 'Ana', status: 'no_iniciada' }),
+    lr({ responsibleId: 'a', responsibleName: 'Ana', status: 'bloqueada' }),
+  ];
+  const load = personLoad(rows, '2026-10-28');
+  expect(load.map(r => r.name)).toEqual(['Ana', 'Zoe', 'Beto']);
+  expect(load[2]).toMatchObject({ open: 1, completed: 6, total: 7 });
+  expect(personLoad([], '2026-10-28')).toEqual([]);
 });
 
 test('blockersByArea cuenta solo bloqueadas y usa "otro" si no hay área', () => {

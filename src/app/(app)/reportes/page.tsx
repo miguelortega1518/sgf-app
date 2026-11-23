@@ -3,18 +3,28 @@
 import { useState, useEffect } from 'react';
 import { useSession } from '@/lib/hooks/use-session';
 import { useToast } from '@/components/providers/toast-provider';
+import { PersonReportSection, type ReportPerson } from '@/components/reports/person-report-section';
 import {
-  FileText, Users, AlertTriangle, Building2, Download,
+  FileText, AlertTriangle, Building2, Download,
 } from 'lucide-react';
 
-type Person = { id: string; name: string };
 type Company = { id: string; name: string };
+
+/** Ajuste del equipo (DECISIONES §22). Rechaza si no se puede leer: no se asume el valor por defecto. */
+async function loadShowPersonMetrics(): Promise<boolean> {
+  const res = await fetch('/api/settings/team');
+  if (!res.ok) throw new Error(`settings ${res.status}`);
+  const body = (await res.json()) as { showPersonMetrics: boolean };
+  return body.showPersonMetrics;
+}
 
 export default function ReportesPage() {
   const { user } = useSession();
   const { toast } = useToast();
-  const [people, setPeople] = useState<Person[]>([]);
+  const [people, setPeople] = useState<ReportPerson[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [showPersonMetrics, setShowPersonMetrics] = useState(false);
+  const [settingsFailed, setSettingsFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [personId, setPersonId] = useState('');
@@ -23,15 +33,28 @@ export default function ReportesPage() {
   const [generating, setGenerating] = useState<string | null>(null);
 
   useEffect(() => {
+    // Las personas sólo se piden si el equipo mantiene activas las métricas por persona.
+    const peopleLoad = loadShowPersonMetrics()
+      .then(async enabled => {
+        if (!enabled) return { enabled, list: [] as ReportPerson[] };
+        const p = await fetch('/api/persons').then(r => r.ok ? r.json() : []);
+        return { enabled, list: (Array.isArray(p) ? p : (p.data ?? [])) as ReportPerson[] };
+      })
+      .catch((err: unknown) => {
+        console.error('No se pudo cargar el ajuste de métricas por persona', err);
+        setSettingsFailed(true);
+        return { enabled: false, list: [] as ReportPerson[] };
+      });
+
     Promise.all([
-      fetch('/api/persons').then(r => r.ok ? r.json() : []),
+      peopleLoad,
       fetch('/api/companies').then(r => r.ok ? r.json() : []),
-    ]).then(([p, c]) => {
-      const personList = Array.isArray(p) ? p : (p.data ?? []);
+    ]).then(([persons, c]) => {
       const companyList = Array.isArray(c) ? c : (c.data ?? []);
-      setPeople(personList);
+      setShowPersonMetrics(persons.enabled);
+      setPeople(persons.list);
       setCompanies(companyList);
-      if (personList.length > 0) setPersonId(personList[0].id);
+      if (persons.list.length > 0) setPersonId(persons.list[0].id);
       if (companyList.length > 0) setCompanyId(companyList[0].id);
     }).finally(() => setLoading(false));
   }, []);
@@ -85,50 +108,18 @@ export default function ReportesPage() {
       </div>
 
       <div className="space-y-6">
-        {/* Reporte por persona */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-5">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-              <Users size={20} className="text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <h2 className="text-base font-medium text-[var(--text-primary)]">Reporte por persona</h2>
-              <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-                Tareas asignadas, completadas, vencidas, tasa de cumplimiento y tiempo promedio de resolución
-              </p>
-            </div>
-          </div>
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Persona</label>
-              <select
-                value={personId}
-                onChange={e => setPersonId(e.target.value)}
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-md text-sm bg-[var(--bg-card)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {people.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={() => download(`/api/reports/persona?personId=${personId}&format=xlsx`, 'persona-xlsx')}
-              disabled={!personId || generating === 'persona-xlsx'}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-primary)] border border-[var(--border)] rounded-md hover:bg-[var(--bg-hover)] disabled:opacity-50 transition-colors"
-            >
-              <Download size={14} />
-              {generating === 'persona-xlsx' ? 'Generando...' : 'Excel'}
-            </button>
-            <button
-              onClick={() => download(`/api/reports/persona?personId=${personId}&format=pdf`, 'persona-pdf')}
-              disabled={!personId || generating === 'persona-pdf'}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--text-primary)] border border-[var(--border)] rounded-md hover:bg-[var(--bg-hover)] disabled:opacity-50 transition-colors"
-            >
-              <FileText size={14} />
-              {generating === 'persona-pdf' ? 'Generando...' : 'PDF'}
-            </button>
-          </div>
-        </div>
+        {settingsFailed && (
+          <p className="text-sm text-amber-800 dark:text-amber-300" role="alert">No se pudieron cargar las métricas por persona.</p>
+        )}
+
+        <PersonReportSection
+          enabled={showPersonMetrics}
+          people={people}
+          personId={personId}
+          generating={generating}
+          onSelect={setPersonId}
+          onDownload={format => download(`/api/reports/persona?personId=${personId}&format=${format}`, `persona-${format}`)}
+        />
 
         {/* Reporte de vencimientos */}
         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg p-5">
