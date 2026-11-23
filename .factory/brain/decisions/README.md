@@ -15,5 +15,6 @@ tarea toque una de estas áreas. Resumen de lo que más condiciona el trabajo di
 - §16 Cualquier tarea puede pasar a code review; aprobar exige ser el revisor asignado o admin.
 - §17 Los miembros ven todo el tablero del proyecto.
 - §18 Métricas: velocidad, tiempo de ciclo (mediana y p85), trabajo en curso, bloqueos por área.
+- §22 Métricas por persona opcionales: ajuste global sólo admin, activado por defecto y auditado; apagado, desaparecen de la UI y sus APIs dan 403, pero los totales del equipo siguen visibles. Listas ordenadas por carga, sin posiciones ni medallas.
 
 Las decisiones nuevas se añaden a `DECISIONES.md` y aquí. Cambiar una decisión es núcleo.

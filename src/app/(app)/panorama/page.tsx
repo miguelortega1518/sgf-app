@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation';
 import { formatDateRD } from '@/lib/date-utils';
 import { DeliveryMetrics } from '@/components/dashboard/delivery-metrics';
 import { FlowMetrics } from '@/components/dashboard/flow-metrics';
+import { PanoramaKpis, type DashboardData } from '@/components/dashboard/panorama-kpis';
+import type { PersonLoadRow, WipRow } from '@/lib/metrics';
 import {
   FolderOpen, AlertTriangle, Lock, RefreshCw,
-  Target, Layers, TrendingUp, Users, Building2, CheckCircle, Download,
+  Target, Layers, Download,
 } from 'lucide-react';
 
 type SpaceRow = {
@@ -28,12 +30,27 @@ type SpaceRow = {
   noSignal: boolean;
 };
 
-type DashboardData = {
-  totals: { total: number; completed: number; overdue: number; blocked: number; completionRate: number };
-  byStatus: { status: string; label: string; count: number; color: string }[];
-  byPerson: { personName: string; total: number; completed: number; overdue: number }[];
-  byCompany: { companyName: string; total: number; completed: number; overdue: number }[];
-};
+type PersonMetrics = { wip: WipRow[]; byPerson: PersonLoadRow[] };
+
+/** Si falla el ajuste o las métricas por persona, se ocultan sus tarjetas y se avisa. */
+const PERSON_METRICS_ERROR = 'No se pudieron cargar las métricas por persona.';
+
+/**
+ * Métricas por persona según el ajuste del equipo (DECISIONES §22): null si está apagado.
+ * Rechaza si no se puede leer el ajuste o, con él encendido, las métricas.
+ */
+async function loadPersonMetrics(): Promise<PersonMetrics | null> {
+  const settingsRes = await fetch('/api/settings/team');
+  if (!settingsRes.ok) throw new Error(`settings ${settingsRes.status}`);
+  const settings = (await settingsRes.json()) as { showPersonMetrics: boolean };
+  if (!settings.showPersonMetrics) return null;
+
+  const res = await fetch('/api/metrics/people');
+  // 403: un admin lo apagó entre las dos peticiones; es el estado «apagado», no un error.
+  if (res.status === 403) return null;
+  if (!res.ok) throw new Error(`metrics/people ${res.status}`);
+  return (await res.json()) as PersonMetrics;
+}
 
 const TYPE_ICONS: Record<string, typeof RefreshCw> = {
   recurrente: RefreshCw,
@@ -58,6 +75,8 @@ export default function PanoramaPage() {
   const router = useRouter();
   const [spaces, setSpaces] = useState<SpaceRow[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [personMetrics, setPersonMetrics] = useState<PersonMetrics | null>(null);
+  const [personMetricsFailed, setPersonMetricsFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'proyectos' | 'kpis'>('proyectos');
 
@@ -65,9 +84,15 @@ export default function PanoramaPage() {
     Promise.all([
       fetch('/api/panorama').then(r => r.ok ? r.json() : []),
       fetch('/api/dashboard').then(r => r.ok ? r.json() : null),
-    ]).then(([spacesData, dashData]) => {
+      loadPersonMetrics().catch((err: unknown) => {
+        console.error('No se pudieron cargar las métricas por persona', err);
+        setPersonMetricsFailed(true);
+        return null;
+      }),
+    ]).then(([spacesData, dashData, people]) => {
       setSpaces(spacesData);
       setDashboard(dashData);
+      setPersonMetrics(people);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -128,126 +153,15 @@ export default function PanoramaPage() {
         </div>
       </div>
 
-      <DeliveryMetrics />
+      {personMetricsFailed && (
+        <p className="mb-4 text-sm text-amber-800 dark:text-amber-300" role="alert">{PERSON_METRICS_ERROR}</p>
+      )}
+
+      <DeliveryMetrics personWorkload={personMetrics?.wip ?? null} />
       <FlowMetrics />
 
       {tab === 'kpis' && dashboard && (
-        <div className="space-y-6 mb-6">
-          <div className="grid gap-4 grid-cols-4">
-            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <CheckCircle size={16} className="text-green-500" />
-                <p className="text-sm text-gray-500">Cumplimiento</p>
-              </div>
-              <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.completionRate}%</p>
-              <p className="text-xs text-gray-400 mt-1">{dashboard.totals.completed} de {dashboard.totals.total}</p>
-            </div>
-            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingUp size={16} className="text-blue-500" />
-                <p className="text-sm text-gray-500">Total tareas</p>
-              </div>
-              <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.total}</p>
-            </div>
-            <div className={`bg-[var(--bg-card)] border rounded-lg p-4 ${dashboard.totals.overdue > 0 ? 'border-red-300' : 'border-gray-200'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <AlertTriangle size={16} className="text-red-500" />
-                <p className="text-sm text-gray-500">Vencidas</p>
-              </div>
-              <p className={`text-3xl font-semibold ${dashboard.totals.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{dashboard.totals.overdue}</p>
-            </div>
-            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Lock size={16} className="text-amber-500" />
-                <p className="text-sm text-gray-500">Bloqueadas</p>
-              </div>
-              <p className="text-3xl font-semibold text-gray-900">{dashboard.totals.blocked}</p>
-            </div>
-          </div>
-
-          <div className={`grid gap-6 ${dashboard.byPerson.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-                <div className="w-1 h-4 bg-blue-500 rounded" />
-                Por estado
-              </h3>
-              <div className="flex items-center gap-6">
-                <DonutChart segments={dashboard.byStatus} completionRate={dashboard.totals.completionRate} />
-                <div className="space-y-2 flex-1">
-                  {dashboard.byStatus.map(s => (
-                    <div key={s.status} className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                      <span className="text-sm text-gray-700 flex-1">{s.label}</span>
-                      <span className="text-sm font-semibold text-gray-900">{s.count}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {dashboard.byPerson.length > 0 && (
-              <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <Users size={16} className="text-gray-400" />
-                  Por persona
-                </h3>
-                <div className="space-y-2.5">
-                  {dashboard.byPerson.slice(0, 8).map(p => {
-                    const pct = p.total > 0 ? Math.round((p.completed / p.total) * 100) : 0;
-                    return (
-                      <div key={p.personName}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm text-gray-700 truncate">{p.personName}</span>
-                          <div className="flex items-center gap-2">
-                            {p.overdue > 0 && (
-                              <span className="text-[10px] text-red-600 font-medium">{p.overdue} venc.</span>
-                            )}
-                            <span className="text-xs text-gray-500">{p.completed}/{p.total}</span>
-                          </div>
-                        </div>
-                        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {dashboard.byCompany.length > 0 && (
-            <div className="bg-[var(--bg-card)] border border-gray-200 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-                <Building2 size={16} className="text-gray-400" />
-                Por repositorio
-              </h3>
-              <div className="grid grid-cols-3 gap-4">
-                {dashboard.byCompany.map(c => {
-                  const pct = c.total > 0 ? Math.round((c.completed / c.total) * 100) : 0;
-                  return (
-                    <div key={c.companyName} className="border border-gray-100 rounded-lg p-3">
-                      <p className="text-sm font-medium text-gray-900 truncate">{c.companyName}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-xs text-gray-500 w-8">{pct}%</span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
-                        <span>{c.completed}/{c.total} completadas</span>
-                        {c.overdue > 0 && <span className="text-red-600">{c.overdue} vencidas</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+        <PanoramaKpis dashboard={dashboard} personLoad={personMetrics?.byPerson ?? null} />
       )}
 
       {tab === 'proyectos' && (
@@ -355,59 +269,5 @@ export default function PanoramaPage() {
       </div>
       )}
     </div>
-  );
-}
-
-function DonutChart({ segments, completionRate }: {
-  segments: { count: number; color: string }[];
-  completionRate: number;
-}) {
-  const size = 140;
-  const strokeWidth = 20;
-  const center = size / 2;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const total = segments.reduce((sum, s) => sum + s.count, 0);
-
-  if (total === 0) return null;
-
-  const visible = segments.filter(s => s.count > 0);
-  // Ángulo de inicio de cada segmento, calculado sin mutar variables durante el render.
-  const rotations = visible.reduce<number[]>((acc, _s, i) => {
-    acc.push(i === 0 ? -90 : acc[i - 1] + (visible[i - 1].count / total) * 360);
-    return acc;
-  }, []);
-
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="shrink-0">
-      <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--border)" strokeWidth={strokeWidth} />
-      {visible.map((segment, i) => {
-        const fraction = segment.count / total;
-        const dashLength = fraction * circumference;
-        const gapLength = circumference - dashLength;
-        const rotation = rotations[i];
-        return (
-          <circle
-            key={i}
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            stroke={segment.color}
-            strokeWidth={strokeWidth}
-            strokeDasharray={`${dashLength} ${gapLength}`}
-            transform={`rotate(${rotation} ${center} ${center})`}
-          />
-        );
-      })}
-      <text x={center} y={center - 4} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: '24px', fontWeight: 700, fill: 'var(--text-primary)' }}>
-        {completionRate}%
-      </text>
-      <text x={center} y={center + 16} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: '10px', fill: 'var(--text-muted)' }}>
-        cumplimiento
-      </text>
-    </svg>
   );
 }

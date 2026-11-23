@@ -71,6 +71,13 @@
       "when": 1795401909513,
       "tag": "0009_enlaces_compartidos",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795419843254,
+      "tag": "0010_ajustes_del_equipo",
+      "breakpoints": true
     }
   ]
 }

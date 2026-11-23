@@ -452,6 +452,15 @@ export const githubPullRequests = pgTable('github_pull_requests', {
   index('idx_github_pr_head_sha').on(t.headSha),
 ]);
 
+// Ajustes globales del equipo (una sola fila, id = 1). Sin fila = valores por
+// defecto; el primer PATCH de /api/settings/team la crea con un upsert (DECISIONES §22).
+export const teamSettings = pgTable('team_settings', {
+  id: integer('id').primaryKey().default(1),
+  showPersonMetrics: boolean('show_person_metrics').notNull().default(true),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by').references(() => persons.id),
+});
+
 // ─── Type exports ─────────────────────────────────────
 
 export type Company = typeof companies.$inferSelect;

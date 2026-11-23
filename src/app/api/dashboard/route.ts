@@ -1,11 +1,15 @@
 import { db } from '@/lib/db';
-import { tasks, persons, companies } from '@/lib/db/schema';
+import { tasks, companies } from '@/lib/db/schema';
 import { requireSession } from '@/lib/auth';
 import { success, handleError } from '@/lib/api-utils';
 import { todayRD } from '@/lib/date-utils';
 import { eq, and, count, sql, desc, inArray } from 'drizzle-orm';
 import { accessibleSpaceIds } from '@/lib/project-access';
 
+/**
+ * KPIs de Panorama: sólo totales del equipo. La carga por persona está en
+ * /api/metrics/people, que depende del ajuste del equipo (DECISIONES §22).
+ */
 export async function GET() {
   try {
     const session = await requireSession();
@@ -29,20 +33,6 @@ export async function GET() {
       })
       .from(tasks)
       .where(baseCondition);
-
-    const byPerson = await db
-      .select({
-        personId: tasks.responsibleId,
-        personName: persons.name,
-        total: count(),
-        completed: count(sql`CASE WHEN ${tasks.status} = 'completada' THEN 1 END`),
-        overdue: count(sql`CASE WHEN ${tasks.dueDateOriginal} < ${today} AND ${tasks.status} != 'completada' THEN 1 END`),
-      })
-      .from(tasks)
-      .innerJoin(persons, eq(tasks.responsibleId, persons.id))
-      .where(baseCondition)
-      .groupBy(tasks.responsibleId, persons.name)
-      .orderBy(desc(count()));
 
     const byCompany = await db
       .select({
@@ -73,7 +63,6 @@ export async function GET() {
     return success({
       totals: { ...totals, completionRate },
       byStatus,
-      byPerson,
       byCompany,
     });
   } catch (err) {

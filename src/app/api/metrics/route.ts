@@ -5,7 +5,7 @@ import { success, handleError } from '@/lib/api-utils';
 import { eq, and, inArray } from 'drizzle-orm';
 import { accessibleSpaceIds } from '@/lib/project-access';
 import {
-  weeklyVelocity, cycleTime, leadTime, wipAging, isWip, workInProgress, blockersByArea, doneByKind, type MetricTask,
+  weeklyVelocity, cycleTime, leadTime, wipAging, isWip, blockersByArea, doneByKind, type MetricTask,
 } from '@/lib/metrics';
 import { buildStatusHistory } from '@/lib/status-history';
 import { loadStatusEvents } from '@/lib/status-history-query';
@@ -14,6 +14,10 @@ const WINDOW_DAYS = 60;
 const DAY = 86_400_000;
 const WIP_AGING_LIMIT = 10;
 
+/**
+ * Métricas de entrega del equipo (totales). El trabajo en curso por persona está en
+ * /api/metrics/people, que depende del ajuste del equipo (DECISIONES §22).
+ */
 export async function GET() {
   try {
     const session = await requireSession();
@@ -54,7 +58,6 @@ export async function GET() {
       leadTime: leadTime(rows, WINDOW_DAYS, now),
       wipAging: aging.slice(0, WIP_AGING_LIMIT),
       wipAgingTotal: aging.length,
-      wip: workInProgress(rows),
       blockers: blockersByArea(rows),
       doneByKind: doneByKind(rows, 30, now),
       openTasks: rows.filter(t => t.status !== 'completada').length,

@@ -7,7 +7,7 @@ import {
   LayoutDashboard, CheckSquare, Users, Building2,
   FolderOpen, Search, LogOut, CalendarDays,
   Bell, ChevronLeft, ChevronRight, FileText, ScrollText, Sun,
-  Menu, X, Moon, FileBarChart,
+  Menu, X, Moon, FileBarChart, Settings2,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { SearchDialog } from './search-dialog';
@@ -30,6 +30,7 @@ const ADMIN_ITEMS = [
   { href: '/admin/empresas', label: 'Repositorios', icon: Building2 },
   { href: '/admin/bitacora', label: 'Actividad', icon: ScrollText },
   { href: '/admin/feriados', label: 'Días no laborables', icon: Sun },
+  { href: '/admin/ajustes', label: 'Ajustes del equipo', icon: Settings2 },
 ] as const;
 
 const MOBILE_QUERY = '(max-width: 768px)';

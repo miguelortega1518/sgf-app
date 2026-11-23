@@ -59,8 +59,11 @@ describe('diffSchema', () => {
 describe('esquema real del proyecto', () => {
   const fromCode = expectedFromModule(appSchema);
 
-  it('el código declara las 24 tablas esperadas y los campos de Forja', () => {
-    expect(Object.keys(fromCode.tables)).toHaveLength(24);
+  it('el código declara las 25 tablas esperadas y los campos de Forja', () => {
+    expect(Object.keys(fromCode.tables)).toHaveLength(25);
+    expect(fromCode.tables.team_settings).toEqual([
+      'id', 'show_person_metrics', 'updated_at', 'updated_by',
+    ]);
     expect(fromCode.tables.space_share_links).toEqual([
       'space_id', 'token_hash', 'created_by', 'created_at', 'revoked_at',
     ]);

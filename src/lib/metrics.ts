@@ -159,8 +159,16 @@ export function wipAging(tasks: MetricTask[], histories: Map<string, StatusSegme
 
 export type WipRow = { personId: string; name: string; inProgress: number; inReview: number; blocked: number };
 
-/** Trabajo abierto por persona. Ordenado de más a menos carga. */
-export function workInProgress(tasks: MetricTask[]): WipRow[] {
+/** Campos mínimos de una tarea para agregar por persona. */
+export type PersonTask = Pick<MetricTask, 'status' | 'responsibleId' | 'responsibleName'>;
+
+const wipLoad = (r: WipRow) => r.inProgress + r.inReview + r.blocked;
+
+/**
+ * Trabajo en curso por persona (DECISIONES §22). Ordenado por carga (en progreso +
+ * en revisión + bloqueadas) para equilibrar, no por lo completado; a igual carga, por nombre.
+ */
+export function workInProgress(tasks: PersonTask[]): WipRow[] {
   const by = new Map<string, WipRow>();
   for (const t of tasks) {
     if (t.status === 'completada' || t.status === 'no_iniciada') continue;
@@ -170,7 +178,41 @@ export function workInProgress(tasks: MetricTask[]): WipRow[] {
     else if (t.status === 'bloqueada') row.blocked += 1;
     by.set(t.responsibleId, row);
   }
-  return [...by.values()].sort((a, b) => (b.inProgress + b.inReview + b.blocked) - (a.inProgress + a.inReview + a.blocked));
+  return [...by.values()].sort((a, b) => wipLoad(b) - wipLoad(a) || a.name.localeCompare(b.name, 'es'));
+}
+
+export type PersonLoadRow = {
+  personId: string;
+  name: string;
+  /** No completadas. */
+  open: number;
+  /** No completadas con fecha original anterior a hoy. */
+  overdue: number;
+  completed: number;
+  total: number;
+};
+
+/**
+ * Carga de tareas por persona (DECISIONES §22). Ordenado por carga abierta para
+ * equilibrar, no por lo completado; a igual carga, por nombre. Nunca es un ranking.
+ */
+export function personLoad(
+  tasks: (PersonTask & { dueDateOriginal: string | null })[], today: string,
+): PersonLoadRow[] {
+  const by = new Map<string, PersonLoadRow>();
+  for (const t of tasks) {
+    const row = by.get(t.responsibleId)
+      ?? { personId: t.responsibleId, name: t.responsibleName, open: 0, overdue: 0, completed: 0, total: 0 };
+    row.total += 1;
+    if (t.status === 'completada') {
+      row.completed += 1;
+    } else {
+      row.open += 1;
+      if (t.dueDateOriginal !== null && t.dueDateOriginal < today) row.overdue += 1;
+    }
+    by.set(t.responsibleId, row);
+  }
+  return [...by.values()].sort((a, b) => b.open - a.open || a.name.localeCompare(b.name, 'es'));
 }
 
 export function blockersByArea(tasks: MetricTask[]): { area: string; count: number }[] {
